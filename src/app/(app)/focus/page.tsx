@@ -202,7 +202,7 @@ export default function FocusPage() {
           onPlayPause={handlePlayPause}
           onReset={handleReset}
           onSkip={handleSkip}
-          disabled={timer.mode !== "short_break" && timer.mode !== "long_break" && !activeTask && timer.status === "idle"}
+          disabled={false}
         />
 
         {/* Session count badges */}

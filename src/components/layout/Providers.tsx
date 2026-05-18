@@ -2,17 +2,56 @@
 
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode, useEffect } from "react";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster } from "sonner";
 import { SideNav } from "@/components/layout/SideNav";
 import { WallpaperRenderer, SOLID_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { useUiStore } from "@/lib/stores/ui";
+import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const THEME_KEY = "focusspace-theme";
 
+function TimerTitle() {
+  const status = useTimerStore((s) => s.status);
+
+  useEffect(() => {
+    if (status !== "running" && status !== "paused") {
+      document.title = "FocusSpace";
+      return;
+    }
+
+    if (status === "paused") {
+      const state = useTimerStore.getState();
+      const rem = getRemainingMs(state);
+      const m = Math.floor(rem / 60);
+      const s = rem % 60;
+      document.title = `⏸ ${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} · FocusSpace`;
+      return;
+    }
+
+    let rafId: number;
+    const tick = () => {
+      const state = useTimerStore.getState();
+      const rem = getRemainingMs(state);
+      const m = Math.floor(rem / 60);
+      const s = rem % 60;
+      document.title = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} · FocusSpace`;
+      rafId = requestAnimationFrame(tick);
+    };
+    rafId = requestAnimationFrame(tick);
+    return () => {
+      cancelAnimationFrame(rafId);
+      document.title = "FocusSpace";
+    };
+  }, [status]);
+
+  return null;
+}
+
 function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: ReactNode }) {
   const supabase = createClient();
+  const { sidebarCollapsed } = useUiStore();
 
   const { data: settings } = useQuery<UserSettings | null>({
     queryKey: ["settings"],
@@ -39,8 +78,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
     queryFn: async () => {
       const id = settings?.active_wallpaper_id;
       if (!id) return null;
-      const isSolid = SOLID_WALLPAPERS.some((s) => s.id === id);
-      if (isSolid) {
+      if (SOLID_WALLPAPERS.some((s) => s.id === id)) {
         return { id, user_id: null, name: id, storage_path: id, is_builtin: true, created_at: "" } as Wallpaper;
       }
       const { data } = await supabase.from("wallpapers").select("*").eq("id", id).maybeSingle();
@@ -65,6 +103,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
 
   return (
     <>
+      <TimerTitle />
       <WallpaperRenderer
         wallpaper={wallpaper ?? null}
         supabaseUrl={supabaseUrl}
@@ -72,7 +111,10 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
         opacity={settings?.wallpaper_opacity ?? 40}
       />
       <SideNav displayName={displayName ?? null} />
-      <main className="relative z-10 md:ml-60 h-dvh overflow-y-auto flex flex-col">
+      <main
+        className="relative z-10 h-dvh overflow-y-auto flex flex-col transition-all duration-300"
+        style={{ marginLeft: sidebarCollapsed ? 64 : 240 }}
+      >
         {children}
       </main>
       <Toaster

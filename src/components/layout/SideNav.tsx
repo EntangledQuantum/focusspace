@@ -2,8 +2,9 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { Timer, FolderKanban, BarChart2, Settings, LogOut } from "lucide-react";
+import { Timer, FolderKanban, BarChart2, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTimerStore } from "@/lib/stores/timer";
+import { useUiStore } from "@/lib/stores/ui";
 import { createClient } from "@/lib/supabase/client";
 
 const NAV_LINKS = [
@@ -16,6 +17,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
   const pathname = usePathname();
   const router = useRouter();
   const { status } = useTimerStore();
+  const { sidebarCollapsed, toggleSidebar } = useUiStore();
   const isRunning = status === "running" || status === "paused";
 
   async function handleSignOut() {
@@ -25,31 +27,48 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
     router.refresh();
   }
 
+  const collapsed = sidebarCollapsed;
+
   return (
-    <nav className="hidden md:flex flex-col fixed left-0 top-0 h-dvh w-60 z-40 py-8 px-4"
+    <nav
+      className="hidden md:flex flex-col fixed left-0 top-0 h-dvh z-40 py-6 transition-all duration-300"
       style={{
+        width: collapsed ? 64 : 240,
+        padding: collapsed ? "24px 12px" : "24px 16px",
         background: "color-mix(in srgb, var(--color-surface-container-lowest) 85%, transparent)",
         backdropFilter: "blur(32px)",
         WebkitBackdropFilter: "blur(32px)",
         borderRight: "1px solid rgba(255,255,255,0.05)",
-      }}>
-
-      {/* Brand */}
-      <div className="flex items-center gap-3 mb-10 px-2">
-        <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: "var(--color-primary-container)" }}>
-          <Timer size={17} style={{ color: "var(--color-on-primary)" }} />
-        </div>
-        <div className="overflow-hidden">
-          <p className="font-bold text-sm leading-none truncate"
-            style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-            FocusSpace
-          </p>
-          <p className="text-[11px] mt-0.5 uppercase tracking-wider truncate"
-            style={{ color: "var(--color-on-surface-variant)" }}>
-            {displayName ?? "Deep Work"}
-          </p>
-        </div>
+      }}
+    >
+      {/* Brand + collapse toggle */}
+      <div className={`flex items-center mb-10 ${collapsed ? "justify-center" : "justify-between px-2"}`}>
+        {!collapsed && (
+          <div className="flex items-center gap-3 overflow-hidden">
+            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
+              style={{ background: "var(--color-primary-container)" }}>
+              <Timer size={17} style={{ color: "var(--color-on-primary)" }} />
+            </div>
+            <div className="overflow-hidden">
+              <p className="font-bold text-sm leading-none truncate"
+                style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
+                FocusSpace
+              </p>
+              <p className="text-[11px] mt-0.5 uppercase tracking-wider truncate"
+                style={{ color: "var(--color-on-surface-variant)" }}>
+                {displayName ?? "Deep Work"}
+              </p>
+            </div>
+          </div>
+        )}
+        <button
+          onClick={toggleSidebar}
+          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0"
+          style={{ color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.04)" }}
+          title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
+        >
+          {collapsed ? <ChevronRight size={14} /> : <ChevronLeft size={14} />}
+        </button>
       </div>
 
       {/* Nav links */}
@@ -60,17 +79,25 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
             <Link
               key={href}
               href={href}
-              className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
+              title={collapsed ? label : undefined}
+              className="flex items-center rounded-xl text-sm font-medium transition-all duration-200"
               style={{
+                gap: collapsed ? 0 : 12,
+                padding: collapsed ? "10px 0" : "10px 12px",
+                justifyContent: collapsed ? "center" : "flex-start",
                 background: active ? "rgba(255,255,255,0.06)" : "transparent",
                 color: active ? "var(--color-primary)" : "var(--color-on-surface-variant)",
                 border: active ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
               }}
             >
               <Icon size={17} />
-              {label}
-              {href === "/focus" && isRunning && (
+              {!collapsed && <span>{label}</span>}
+              {!collapsed && href === "/focus" && isRunning && (
                 <span className="ml-auto w-1.5 h-1.5 rounded-full animate-pulse"
+                  style={{ background: "var(--color-primary)" }} />
+              )}
+              {collapsed && href === "/focus" && isRunning && (
+                <span className="absolute right-2 top-2 w-1.5 h-1.5 rounded-full animate-pulse"
                   style={{ background: "var(--color-primary)" }} />
               )}
             </Link>
@@ -82,23 +109,33 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
       <div className="flex flex-col gap-1">
         <Link
           href="/settings"
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200"
+          title={collapsed ? "Settings" : undefined}
+          className="flex items-center rounded-xl text-sm font-medium transition-all duration-200"
           style={{
+            gap: collapsed ? 0 : 12,
+            padding: collapsed ? "10px 0" : "10px 12px",
+            justifyContent: collapsed ? "center" : "flex-start",
             color: pathname === "/settings" ? "var(--color-primary)" : "var(--color-on-surface-variant)",
             background: pathname === "/settings" ? "rgba(255,255,255,0.06)" : "transparent",
             border: pathname === "/settings" ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
           }}
         >
           <Settings size={17} />
-          Settings
+          {!collapsed && <span>Settings</span>}
         </Link>
         <button
           onClick={handleSignOut}
-          className="flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 text-left"
-          style={{ color: "var(--color-on-surface-variant)" }}
+          title={collapsed ? "Sign out" : undefined}
+          className="flex items-center rounded-xl text-sm font-medium transition-all duration-200 text-left"
+          style={{
+            gap: collapsed ? 0 : 12,
+            padding: collapsed ? "10px 0" : "10px 12px",
+            justifyContent: collapsed ? "center" : "flex-start",
+            color: "var(--color-on-surface-variant)",
+          }}
         >
           <LogOut size={17} />
-          Sign out
+          {!collapsed && <span>Sign out</span>}
         </button>
       </div>
     </nav>
