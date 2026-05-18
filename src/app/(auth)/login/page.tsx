@@ -4,7 +4,9 @@ import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Timer, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
+import Image from "next/image";
+import appIcon from "@/app/icon.png";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -59,10 +61,7 @@ export default function LoginPage() {
       <div className="glass w-full max-w-sm rounded-2xl p-8 relative z-10">
         {/* Logo */}
         <div className="flex items-center gap-2.5 mb-8">
-          <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-            style={{ background: "var(--color-primary-container)" }}>
-            <Timer size={18} style={{ color: "var(--color-on-primary)" }} />
-          </div>
+          <Image src={appIcon} alt="FocusSpace" width={36} height={36} className="rounded-xl" />
           <div>
             <p className="font-semibold text-sm leading-none" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>FocusSpace</p>
             <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>Deep Work</p>
