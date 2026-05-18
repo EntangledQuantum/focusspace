@@ -10,7 +10,7 @@ import { TimerRing } from "@/components/timer/TimerRing";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
 import { motion, AnimatePresence } from "framer-motion";
-import { Pencil, Maximize2, Minimize2 } from "lucide-react";
+import { Pencil, Maximize2, Minimize2, Check } from "lucide-react";
 import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
 import { toast } from "sonner";
 import type { Task, Project } from "@/types/database";
@@ -105,6 +105,45 @@ export default function FocusPage() {
     await timer.resetSession();
   }
 
+  async function handleFinishTask() {
+    if (!activeTask) return;
+    await supabase
+      .from("tasks")
+      .update({ status: "done", completed_at: new Date().toISOString() })
+      .eq("id", activeTask.id);
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+
+    // Find next todo task — same project first, then any
+    const { data: candidates } = await supabase
+      .from("tasks")
+      .select("*")
+      .eq("status", "todo")
+      .neq("id", activeTask.id)
+      .order("sort_order")
+      .limit(20);
+
+    const next =
+      candidates?.find((t) => t.project_id === activeTask.project_id) ??
+      candidates?.[0] ??
+      null;
+
+    if (next) {
+      let nextProject: Project | null = null;
+      if (next.project_id) {
+        const { data: p } = await supabase.from("projects").select("*").eq("id", next.project_id).single();
+        nextProject = p ?? null;
+      }
+      setActiveTask(next as Task);
+      setActiveProject(nextProject);
+      toast.success(`Done! Now: ${next.title}`);
+    } else {
+      setActiveTask(null);
+      setActiveProject(null);
+      toast.success("Task complete! No more tasks.");
+    }
+  }
+
   function selectTask(task: Task, project: Project | null) {
     setActiveTask(task);
     setActiveProject(project);
@@ -175,23 +214,39 @@ export default function FocusPage() {
             </span>
           )}
 
-          <button
-            onClick={() => setTaskPickerOpen(true)}
-            className="flex items-center gap-2 max-w-[280px] group"
-          >
-            {activeTask ? (
-              <h2 className="text-xl font-semibold leading-snug text-center"
-                style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-                {activeTask.title}
-              </h2>
-            ) : (
-              <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-                Choose a task to focus on…
-              </span>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setTaskPickerOpen(true)}
+              className="flex items-center gap-2 max-w-[260px] group"
+            >
+              {activeTask ? (
+                <h2 className="text-xl font-semibold leading-snug text-center"
+                  style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
+                  {activeTask.title}
+                </h2>
+              ) : (
+                <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
+                  Choose a task to focus on…
+                </span>
+              )}
+              <Pencil size={13} className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0"
+                style={{ color: "var(--color-on-surface-variant)" }} />
+            </button>
+            {activeTask && (
+              <button
+                onClick={handleFinishTask}
+                title="Mark done & load next task"
+                className="w-6 h-6 flex items-center justify-center rounded-full transition-all active:scale-90 shrink-0"
+                style={{
+                  background: "color-mix(in srgb, var(--color-secondary) 18%, transparent)",
+                  color: "var(--color-secondary)",
+                  border: "1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent)",
+                }}
+              >
+                <Check size={12} strokeWidth={2.5} />
+              </button>
             )}
-            <Pencil size={13} className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0"
-              style={{ color: "var(--color-on-surface-variant)" }} />
-          </button>
+          </div>
 
           {/* Custom duration input */}
           {timer.mode === "custom" && (timer.status === "idle" || timer.status === "completed") && (

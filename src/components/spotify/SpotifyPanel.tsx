@@ -224,9 +224,12 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
     window.location.href = "/api/spotify/connect?next=/focus";
   }
 
+  const isSessionActive = timerStatus === "running" || timerStatus === "paused";
+
   if (tokenLoading) return null;
 
   if (!isConnected) {
+    if (isSessionActive) return null;
     return (
       <div className="glass rounded-2xl px-6 py-4 flex items-center gap-4 w-full max-w-[420px] mt-4">
         <div

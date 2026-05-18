@@ -43,6 +43,36 @@ export function useTimer() {
     };
   }, [store.status, tick]);
 
+  // rAF pauses when the tab is hidden, so completion never fires in background.
+  // This interval kicks in when hidden and hands off back to rAF on visibility restore.
+  useEffect(() => {
+    if (store.status !== "running") return;
+
+    let bgInterval: ReturnType<typeof setInterval> | null = null;
+
+    function startBg() {
+      if (bgInterval) return;
+      bgInterval = setInterval(() => {
+        const state = useTimerStore.getState();
+        if (state.status !== "running") { clearInterval(bgInterval!); bgInterval = null; return; }
+        if (getRemainingMs(state) <= 0) {
+          useTimerStore.getState().complete();
+          onCompleteRef.current?.();
+          clearInterval(bgInterval!);
+          bgInterval = null;
+        }
+      }, 1000);
+    }
+
+    function stopBg() { if (bgInterval) { clearInterval(bgInterval); bgInterval = null; } }
+
+    function onVisibility() { document.hidden ? startBg() : stopBg(); }
+
+    if (document.hidden) startBg();
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => { document.removeEventListener("visibilitychange", onVisibility); stopBg(); };
+  }, [store.status]); // eslint-disable-line react-hooks/exhaustive-deps
+
   const startSession = useCallback(
     async ({
       mode,
