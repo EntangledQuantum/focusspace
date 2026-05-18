@@ -1,4 +1,18 @@
+![Focus Space](./src/app/icon.png)
+
 # FocusSpace
+
+### Now Deployed to Vercel !
+
+<a href="https://focusspace-three.vercel.app/focus" target="_blank" style="text-decoration:none;">
+  <div align="center">
+
+|  |  |
+|:---:|---|
+| <img src="./src/app/icon.png" width="70" style="border-radius:16px;" /> | <div align="left"> <h3>Focus Space</h3> <p>A modern productivity and focus app built to help you get things done with clarity and flow.</p> <p><code>https://focusspace-three.vercel.app/focus</code></p> </div> |
+
+  </div>
+</a>
 
 A modern Pomodoro + productivity tracker. Pick one task, run the timer, review the data. Built to keep you accountable — not entertained.
 
