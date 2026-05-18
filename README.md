@@ -31,6 +31,28 @@ Server state: TanStack Query
 Animations:   Framer Motion
 Charts:       Recharts
 ```
+## Screenshots 
+### Main Page
+<img width="2560" height="1350" alt="image" src="https://github.com/user-attachments/assets/75350872-c8ff-4953-b13c-c4dacbefbd7e" />
+
+
+### Project Tab
+<img width="2560" height="1352" alt="image" src="https://github.com/user-attachments/assets/3fc2e490-89be-4802-bb0f-1344b56619ad" />
+
+### Analytics
+<img width="2560" height="1348" alt="image" src="https://github.com/user-attachments/assets/74654b31-0adf-4f2e-ab16-7de768687ac1" />
+
+### Project Selection in Main Menu
+<img width="1221" height="717" alt="image" src="https://github.com/user-attachments/assets/f19fdb74-0e71-4821-89e3-f41feb704264" />
+
+### Settings 
+<img width="2560" height="1347" alt="image" src="https://github.com/user-attachments/assets/dd3ee24f-6208-4877-8ae4-a619b580397c" />
+
+### Wallpaper Upload
+<img width="1070" height="792" alt="image" src="https://github.com/user-attachments/assets/41fe0a9a-0dc3-421e-b1ed-88b1fa154c24" />
+
+### Login
+<img width="1883" height="997" alt="image" src="https://github.com/user-attachments/assets/6f37679a-ca52-46e4-bab9-fe293be24884" />
 
 ## Quick Start (Local Dev)
 
