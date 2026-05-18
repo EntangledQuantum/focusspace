@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import appIcon from "@/app/icon.png";
 import { usePathname, useRouter } from "next/navigation";
 import { Timer, FolderKanban, BarChart2, Settings, LogOut, ChevronLeft, ChevronRight } from "lucide-react";
 import { useTimerStore } from "@/lib/stores/timer";
@@ -45,10 +47,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
       <div className={`flex items-center mb-10 ${collapsed ? "justify-center" : "justify-between px-2"}`}>
         {!collapsed && (
           <div className="flex items-center gap-3 overflow-hidden">
-            <div className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-              style={{ background: "var(--color-primary-container)" }}>
-              <Timer size={17} style={{ color: "var(--color-on-primary)" }} />
-            </div>
+            <Image src={appIcon} alt="FocusSpace" width={36} height={36} className="rounded-xl shrink-0" />
             <div className="overflow-hidden">
               <p className="font-bold text-sm leading-none truncate"
                 style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
