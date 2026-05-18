@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchDailyFocus, fetchTagFocus, fetchRecentSessions, fetchStreak,
@@ -44,8 +44,11 @@ export default function AnalyticsPage() {
   const totalSeconds = daily.reduce((s, d) => s + d.total_seconds, 0);
   const completedSessions = sessions.filter((s) => s.completed).length;
 
-  // Heatmap — last 26 weeks
-  const heatmapDays = buildHeatmapDays(daily.map((d) => ({ date: d.day, seconds: d.total_seconds })));
+  // Heatmap — last 26 weeks (built client-side to avoid calling new Date() during pre-rendering)
+  const [heatmapDays, setHeatmapDays] = useState<(null | { date: string; seconds: number })[][]>([]);
+  useEffect(() => {
+    setHeatmapDays(buildHeatmapDays(daily.map((d) => ({ date: d.day, seconds: d.total_seconds }))));
+  }, [daily]);
   const maxSeconds = Math.max(...heatmapDays.flat().map((d) => d?.seconds ?? 0), 1);
 
   const weeklyBars = daily.map((d) => ({

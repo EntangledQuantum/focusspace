@@ -51,7 +51,12 @@ function TimerTitle() {
 
 function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: ReactNode }) {
   const supabase = createClient();
-  const { sidebarCollapsed } = useUiStore();
+  const { sidebarCollapsed, setSidebarCollapsed } = useUiStore();
+  const timerStatus = useTimerStore((s) => s.status);
+
+  useEffect(() => {
+    if (timerStatus === "running") setSidebarCollapsed(true);
+  }, [timerStatus, setSidebarCollapsed]);
 
   const { data: settings } = useQuery<UserSettings | null>({
     queryKey: ["settings"],
