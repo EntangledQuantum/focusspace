@@ -479,15 +479,7 @@ function MusicSection({
   const qc = useQueryClient();
   const isConnected = !!settings?.spotify_access_token;
 
-  async function connectSpotify() {
-    await supabase.auth.linkIdentity({
-      provider: "spotify",
-      options: {
-        scopes: "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private user-library-read",
-        redirectTo: `${window.location.origin}/auth/callback?next=/settings`,
-      },
-    });
-  }
+  function connectSpotify() { window.location.href = "/api/spotify/connect?next=/settings"; }
 
   async function disconnectSpotify() {
     const { error } = await supabase.from("user_settings").update({

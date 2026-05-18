@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { createClient } from "@/lib/supabase/client";
 import { useSpotify } from "@/lib/hooks/useSpotify";
 import { useSpotifyPlayer } from "@/lib/hooks/useSpotifyPlayer";
 import { useTimerStore } from "@/lib/stores/timer";
@@ -15,16 +14,6 @@ interface Playlist {
   uri: string;
   tracks: { total: number };
 }
-
-const SPOTIFY_SCOPES = [
-  "streaming",
-  "user-read-email",
-  "user-read-private",
-  "user-read-playback-state",
-  "user-modify-playback-state",
-  "playlist-read-private",
-  "user-library-read",
-].join(" ");
 
 function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: string }) {
   return (
@@ -161,7 +150,6 @@ interface SpotifyPanelProps {
 }
 
 export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
-  const supabase = createClient();
   const qc = useQueryClient();
   const { data, isLoading: tokenLoading, refetch: refreshToken } = useSpotify();
   const token = data?.token ?? null;
@@ -233,13 +221,7 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
   }, [pickerOpen]);
 
   function connectSpotify() {
-    supabase.auth.linkIdentity({
-      provider: "spotify",
-      options: {
-        scopes: SPOTIFY_SCOPES,
-        redirectTo: `${window.location.origin}/auth/callback?next=/focus`,
-      },
-    });
+    window.location.href = "/api/spotify/connect?next=/focus";
   }
 
   if (tokenLoading) return null;
