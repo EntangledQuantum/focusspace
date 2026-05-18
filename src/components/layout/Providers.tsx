@@ -30,18 +30,17 @@ function TimerTitle() {
       return;
     }
 
-    let rafId: number;
     const tick = () => {
       const state = useTimerStore.getState();
       const rem = getRemainingMs(state);
       const m = Math.floor(rem / 60);
       const s = rem % 60;
       document.title = `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")} · FocusSpace`;
-      rafId = requestAnimationFrame(tick);
     };
-    rafId = requestAnimationFrame(tick);
+    tick();
+    const id = setInterval(tick, 1000);
     return () => {
-      cancelAnimationFrame(rafId);
+      clearInterval(id);
       document.title = "FocusSpace";
     };
   }, [status]);
