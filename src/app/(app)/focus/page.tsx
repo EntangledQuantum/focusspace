@@ -11,6 +11,7 @@ import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
 import { motion, AnimatePresence } from "framer-motion";
 import { Pencil, Maximize2, Minimize2 } from "lucide-react";
+import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
 import { toast } from "sonner";
 import type { Task, Project } from "@/types/database";
 
@@ -244,6 +245,8 @@ export default function FocusPage() {
           </div>
         )}
       </motion.div>
+
+      <SpotifyPanel autoStart={settings?.spotify_auto_start ?? true} />
 
       <TaskPicker
         open={taskPickerOpen}

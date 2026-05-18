@@ -25,8 +25,17 @@ export async function GET(request: NextRequest) {
       }
     );
 
-    const { error } = await supabase.auth.exchangeCodeForSession(code);
-    if (!error) {
+    const { data: { session }, error } = await supabase.auth.exchangeCodeForSession(code);
+    if (!error && session) {
+      const hasSpotify = session.user.identities?.some(i => i.provider === "spotify");
+      if (hasSpotify && session.provider_token) {
+        const expiry = new Date(Date.now() + 3600 * 1000).toISOString();
+        await supabase.from("user_settings").update({
+          spotify_access_token: session.provider_token,
+          spotify_refresh_token: session.provider_refresh_token ?? null,
+          spotify_token_expires_at: expiry,
+        }).eq("user_id", session.user.id);
+      }
       return NextResponse.redirect(`${origin}${next}`);
     }
   }

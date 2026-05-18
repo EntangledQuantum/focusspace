@@ -47,6 +47,10 @@ export type Database = {
           auto_start_pomodoros: boolean;
           wallpaper_blur: number;
           wallpaper_opacity: number;
+          spotify_access_token: string | null;
+          spotify_refresh_token: string | null;
+          spotify_token_expires_at: string | null;
+          spotify_auto_start: boolean;
         };
         Insert: {
           user_id: string;
@@ -63,6 +67,10 @@ export type Database = {
           auto_start_pomodoros?: boolean;
           wallpaper_blur?: number;
           wallpaper_opacity?: number;
+          spotify_access_token?: string | null;
+          spotify_refresh_token?: string | null;
+          spotify_token_expires_at?: string | null;
+          spotify_auto_start?: boolean;
         };
         Update: {
           theme?: "dark" | "light" | "system";
@@ -78,6 +86,10 @@ export type Database = {
           auto_start_pomodoros?: boolean;
           wallpaper_blur?: number;
           wallpaper_opacity?: number;
+          spotify_access_token?: string | null;
+          spotify_refresh_token?: string | null;
+          spotify_token_expires_at?: string | null;
+          spotify_auto_start?: boolean;
         };
         Relationships: [];
       };

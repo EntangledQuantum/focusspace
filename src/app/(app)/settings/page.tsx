@@ -8,7 +8,7 @@ import { TONE_OPTIONS } from "@/lib/audio/tones";
 import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music } from "lucide-react";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -346,6 +346,9 @@ export default function SettingsPage() {
           </Field>
         </Section>
 
+        {/* Music */}
+        <MusicSection settings={settings} onSave={(patch) => save.mutate(patch)} />
+
         {/* Notifications */}
         <Section icon={<Bell size={18} />} title="Notifications">
           <Field label="Completion Tone" description="Sound played when a session completes.">
@@ -462,6 +465,80 @@ export default function SettingsPage() {
         </Section>
       </div>
     </>
+  );
+}
+
+function MusicSection({
+  settings,
+  onSave,
+}: {
+  settings: UserSettings | undefined;
+  onSave: (patch: Partial<UserSettings>) => void;
+}) {
+  const supabase = createClient();
+  const qc = useQueryClient();
+  const isConnected = !!settings?.spotify_access_token;
+
+  async function connectSpotify() {
+    await supabase.auth.linkIdentity({
+      provider: "spotify",
+      options: {
+        scopes: "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private user-library-read",
+        redirectTo: `${window.location.origin}/auth/callback?next=/settings`,
+      },
+    });
+  }
+
+  async function disconnectSpotify() {
+    const { error } = await supabase.from("user_settings").update({
+      spotify_access_token: null,
+      spotify_refresh_token: null,
+      spotify_token_expires_at: null,
+    }).eq("user_id", settings!.user_id);
+    if (!error) {
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      qc.invalidateQueries({ queryKey: ["spotify-token"] });
+      toast.success("Spotify disconnected");
+    }
+  }
+
+  return (
+    <Section icon={<Music size={18} />} title="Music">
+      <Field label="Spotify" description={isConnected ? "Spotify is connected." : "Connect to play music during focus sessions."}>
+        {isConnected ? (
+          <button
+            onClick={disconnectSpotify}
+            className="px-4 py-2 rounded-full text-sm font-medium transition-all active:scale-95"
+            style={{
+              background: "color-mix(in srgb, var(--color-error) 15%, transparent)",
+              color: "var(--color-error)",
+              border: "1px solid color-mix(in srgb, var(--color-error) 30%, transparent)",
+            }}
+          >
+            Disconnect
+          </button>
+        ) : (
+          <button
+            onClick={connectSpotify}
+            className="px-4 py-2 rounded-full text-sm font-semibold transition-all active:scale-95 flex items-center gap-2"
+            style={{ background: "#1DB954", color: "#000" }}
+          >
+            <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor">
+              <path d="M12 0C5.4 0 0 5.4 0 12s5.4 12 12 12 12-5.4 12-12S18.66 0 12 0zm5.521 17.34c-.24.359-.66.48-1.021.24-2.82-1.74-6.36-2.101-10.561-1.141-.418.122-.779-.179-.899-.539-.12-.421.18-.78.54-.9 4.56-1.021 8.52-.6 11.64 1.32.42.18.479.659.301 1.02zm1.44-3.3c-.301.42-.841.6-1.262.3-3.239-1.98-8.159-2.58-11.939-1.38-.479.12-1.02-.12-1.14-.6-.12-.48.12-1.021.6-1.141C9.6 9.9 15 10.561 18.72 12.84c.361.181.54.78.241 1.2zm.12-3.36C15.24 8.4 8.82 8.16 5.16 9.301c-.6.179-1.2-.181-1.38-.721-.18-.601.18-1.2.72-1.381 4.26-1.26 11.28-1.02 15.721 1.621.539.3.719 1.02.419 1.56-.299.421-1.02.599-1.559.3z"/>
+            </svg>
+            Connect Spotify
+          </button>
+        )}
+      </Field>
+      {isConnected && (
+        <Field label="Auto-start music" description="Play music automatically when a focus session starts.">
+          <Toggle
+            checked={settings?.spotify_auto_start ?? true}
+            onChange={(v) => onSave({ spotify_auto_start: v })}
+          />
+        </Field>
+      )}
+    </Section>
   );
 }
 
