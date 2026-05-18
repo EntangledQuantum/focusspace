@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, MoreHorizontal, CheckCircle2, Circle, Trash2, FolderPlus, Tag, ChevronRight } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { Project, Task, Tag as TagType } from "@/types/database";
@@ -29,6 +29,8 @@ export default function ProjectsPage() {
   const [addingProject, setAddingProject] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [addingTask, setAddingTask] = useState(false);
+  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
+  const [editingProjectName, setEditingProjectName] = useState("");
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -89,6 +91,34 @@ export default function ProjectsPage() {
     onError: () => toast.error("Failed to create project"),
   });
 
+  const renameProject = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from("projects").update({ name }).eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      setEditingProjectId(null);
+    },
+    onError: () => toast.error("Failed to rename project"),
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from("tasks").delete().eq("project_id", id);
+      const { error } = await supabase.from("projects").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: (_, id) => {
+      if (selectedProjectId === id) setSelectedProjectId(null);
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      toast.success("Project deleted");
+    },
+    onError: () => toast.error("Failed to delete project"),
+  });
+
   const addTask = useMutation({
     mutationFn: async () => {
       if (!selectedProject) return;
@@ -103,6 +133,7 @@ export default function ProjectsPage() {
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
       setNewTaskTitle("");
       setAddingTask(false);
     },
@@ -118,7 +149,10 @@ export default function ProjectsPage() {
         .eq("id", task.id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+    },
   });
 
   const deleteTask = useMutation({
@@ -126,7 +160,10 @@ export default function ProjectsPage() {
       const { error } = await supabase.from("tasks").delete().eq("id", id);
       if (error) throw error;
     },
-    onSuccess: () => qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+    },
   });
 
   const todo = tasks.filter((t) => t.status === "todo");
@@ -148,22 +185,68 @@ export default function ProjectsPage() {
 
         <div className="flex-1 overflow-y-auto px-3 space-y-1">
           {projects.map((project) => {
-            const taskCount = tasks.length; // will be replaced per-project
             const isActive = (selectedProject?.id ?? projects[0]?.id) === project.id;
+            const isEditing = editingProjectId === project.id;
             return (
-              <button
-                key={project.id}
-                onClick={() => setSelectedProjectId(project.id)}
-                className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150"
-                style={{
-                  background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
-                  color: isActive ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
-                  border: isActive ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
-                }}
-              >
-                <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
-                <span className="flex-1 truncate font-medium">{project.name}</span>
-              </button>
+              <div key={project.id} className="group relative">
+                {isEditing ? (
+                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
+                    <input
+                      autoFocus
+                      value={editingProjectName}
+                      onChange={(e) => setEditingProjectName(e.target.value)}
+                      className="flex-1 bg-transparent text-sm outline-none font-medium"
+                      style={{ color: "var(--color-on-surface)" }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && editingProjectName.trim())
+                          renameProject.mutate({ id: project.id, name: editingProjectName.trim() });
+                        if (e.key === "Escape") setEditingProjectId(null);
+                      }}
+                    />
+                    <button onClick={() => editingProjectName.trim() && renameProject.mutate({ id: project.id, name: editingProjectName.trim() })}
+                      style={{ color: "var(--color-primary)" }}>
+                      <Check size={13} />
+                    </button>
+                    <button onClick={() => setEditingProjectId(null)}
+                      style={{ color: "var(--color-on-surface-variant)" }}>
+                      <X size={13} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setSelectedProjectId(project.id)}
+                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150"
+                    style={{
+                      background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
+                      color: isActive ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
+                      border: isActive ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
+                    }}
+                  >
+                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
+                    <span className="flex-1 truncate font-medium">{project.name}</span>
+                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0">
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); setEditingProjectName(project.name); }}
+                        className="p-1 rounded hover:opacity-100 transition-opacity"
+                        style={{ color: "var(--color-on-surface-variant)" }}
+                      >
+                        <Pencil size={11} />
+                      </span>
+                      <span
+                        role="button"
+                        onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
+                        className="p-1 rounded hover:opacity-100 transition-opacity"
+                        style={{ color: "var(--color-error)" }}
+                      >
+                        <Trash2 size={11} />
+                      </span>
+                    </div>
+                  </button>
+                )}
+              </div>
             );
           })}
 

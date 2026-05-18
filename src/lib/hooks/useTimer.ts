@@ -136,6 +136,28 @@ export function useTimer() {
 
     store.reset();
     qc.invalidateQueries({ queryKey: ["sessions"] });
+    qc.invalidateQueries({ queryKey: ["analytics"] });
+  }, [supabase, store, qc]);
+
+  const resetSession = useCallback(async () => {
+    const state = useTimerStore.getState();
+    const elapsed = getElapsedSec(state);
+
+    if (state.currentSessionId && elapsed > 0) {
+      await supabase
+        .from("focus_sessions")
+        .update({
+          ended_at: new Date().toISOString(),
+          actual_duration_sec: elapsed,
+          completed: false,
+        })
+        .eq("id", state.currentSessionId);
+
+      qc.invalidateQueries({ queryKey: ["sessions"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+    }
+
+    store.reset();
   }, [supabase, store, qc]);
 
   const elapsed = getElapsedSec(store);
@@ -157,6 +179,7 @@ export function useTimer() {
     startSession,
     completeSession,
     skipSession,
+    resetSession,
     onCompleteRef,
   };
 }

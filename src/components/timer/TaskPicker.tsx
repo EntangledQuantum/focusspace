@@ -29,6 +29,7 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
       return data ?? [];
     },
     enabled: open,
+    staleTime: 0,
   });
 
   const filtered = projects

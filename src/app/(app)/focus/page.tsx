@@ -10,7 +10,7 @@ import { TimerRing } from "@/components/timer/TimerRing";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
 import { motion, AnimatePresence } from "framer-motion";
-import { ChevronDown, Target, Clock, Pencil } from "lucide-react";
+import { Pencil, Maximize2, Minimize2 } from "lucide-react";
 import { toast } from "sonner";
 import type { Task, Project } from "@/types/database";
 
@@ -22,7 +22,21 @@ export default function FocusPage() {
   const [activeTask, setActiveTask] = useState<Task | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [customMinutes, setCustomMinutes] = useState(45);
-  const [showModeToggle, setShowModeToggle] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    document.addEventListener("fullscreenchange", handler);
+    return () => document.removeEventListener("fullscreenchange", handler);
+  }, []);
+
+  function toggleFullscreen() {
+    if (!document.fullscreenElement) {
+      document.documentElement.requestFullscreen?.();
+    } else {
+      document.exitFullscreen?.();
+    }
+  }
 
   const { data: settings } = useQuery<import("@/types/database").UserSettings | null>({
     queryKey: ["settings"],
@@ -86,8 +100,8 @@ export default function FocusPage() {
     toast("Session skipped");
   }
 
-  function handleReset() {
-    timer.reset();
+  async function handleReset() {
+    await timer.resetSession();
   }
 
   function selectTask(task: Task, project: Project | null) {
@@ -104,6 +118,16 @@ export default function FocusPage() {
 
   return (
     <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-dvh relative">
+      {/* Fullscreen toggle */}
+      <button
+        onClick={toggleFullscreen}
+        className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
+        style={{ color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.04)" }}
+        title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+      >
+        {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
+      </button>
+
       {/* Mode toggle */}
       <div className="absolute top-6 left-0 right-0 flex justify-center gap-2">
         {(["pomodoro", "custom"] as const).map((m) => (
