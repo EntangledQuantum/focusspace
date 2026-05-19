@@ -30,16 +30,31 @@ export default function FocusPage() {
   const autoStartHandled = useRef(false);
 
   useEffect(() => {
-    const handler = () => setIsFullscreen(!!document.fullscreenElement);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const isFs = () => !!(document.fullscreenElement || (document as any).webkitFullscreenElement);
+    const handler = () => setIsFullscreen(isFs());
     document.addEventListener("fullscreenchange", handler);
-    return () => document.removeEventListener("fullscreenchange", handler);
+    document.addEventListener("webkitfullscreenchange", handler);
+    return () => {
+      document.removeEventListener("fullscreenchange", handler);
+      document.removeEventListener("webkitfullscreenchange", handler);
+    };
   }, []);
 
-  function toggleFullscreen() {
-    if (!document.fullscreenElement) {
-      document.documentElement.requestFullscreen?.();
-    } else {
-      document.exitFullscreen?.();
+  async function toggleFullscreen() {
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const doc = document as any;
+      const el = document.documentElement as any; // eslint-disable-line @typescript-eslint/no-explicit-any
+      if (!document.fullscreenElement && !doc.webkitFullscreenElement) {
+        if (el.requestFullscreen) await el.requestFullscreen();
+        else if (el.webkitRequestFullscreen) el.webkitRequestFullscreen();
+      } else {
+        if (document.exitFullscreen) await document.exitFullscreen();
+        else if (doc.webkitExitFullscreen) doc.webkitExitFullscreen();
+      }
+    } catch {
+      // fullscreen blocked by browser policy — silently ignore
     }
   }
 
