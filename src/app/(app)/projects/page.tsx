@@ -396,7 +396,7 @@ export default function ProjectsPage() {
                 ) : (
                   <button
                     onClick={() => setSelectedProjectId(project.id)}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150"
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150 ${!isActive ? "nav-link-hover" : ""}`}
                     style={{
                       background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
                       color: isActive ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
@@ -468,14 +468,14 @@ export default function ProjectsPage() {
                 <div className="flex gap-2">
                   <button
                     onClick={() => newProjectName.trim() && addProject.mutate()}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold"
+                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all btn-hover-primary"
                     style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
                   >
                     Add
                   </button>
                   <button
                     onClick={() => setAddingProject(false)}
-                    className="flex-1 py-1.5 rounded-lg text-xs"
+                    className="flex-1 py-1.5 rounded-lg text-xs transition-all btn-hover-surface"
                     style={{ background: "var(--color-surface-variant)", color: "var(--color-on-surface-variant)" }}
                   >
                     Cancel
@@ -485,7 +485,7 @@ export default function ProjectsPage() {
             ) : (
               <button
                 onClick={() => setAddingProject(true)}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm mt-1 transition-all"
+                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm mt-1 transition-all nav-link-hover"
                 style={{ color: "var(--color-on-surface-variant)" }}
               >
                 <Plus size={15} />
@@ -731,14 +731,14 @@ export default function ProjectsPage() {
                       <div className="flex items-center gap-2">
                         <button
                           onClick={() => newTaskTitle.trim() && addTask.mutate()}
-                          className="text-xs px-3 py-1 rounded-full font-semibold"
+                          className="text-xs px-3 py-1 rounded-full font-semibold transition-all btn-hover-primary"
                           style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
                         >
                           Add
                         </button>
                         <button
                           onClick={() => { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskTags([]); }}
-                          className="text-xs"
+                          className="text-xs transition-all btn-hover-ghost px-2 py-1 rounded-lg"
                           style={{ color: "var(--color-on-surface-variant)" }}
                         >
                           Cancel
@@ -749,7 +749,7 @@ export default function ProjectsPage() {
                 ) : (
                   <button
                     onClick={() => setAddingTask(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all"
+                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all btn-hover-surface"
                     style={{
                       background: "color-mix(in srgb, var(--color-surface-container) 50%, transparent)",
                       color: "var(--color-on-surface-variant)",

@@ -62,7 +62,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
         )}
         <button
           onClick={toggleSidebar}
-          className="w-7 h-7 rounded-lg flex items-center justify-center transition-colors shrink-0"
+          className="w-7 h-7 rounded-lg flex items-center justify-center transition-all duration-150 btn-hover-ghost shrink-0"
           style={{ color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.04)" }}
           title={collapsed ? "Expand sidebar" : "Collapse sidebar"}
         >
@@ -79,7 +79,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
               key={href}
               href={href}
               title={collapsed ? label : undefined}
-              className="flex items-center rounded-xl text-sm font-medium transition-all duration-200"
+              className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${!active ? "nav-link-hover" : ""}`}
               style={{
                 gap: collapsed ? 0 : 12,
                 padding: collapsed ? "10px 0" : "10px 12px",
@@ -109,7 +109,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
         <Link
           href="/settings"
           title={collapsed ? "Settings" : undefined}
-          className="flex items-center rounded-xl text-sm font-medium transition-all duration-200"
+          className={`flex items-center rounded-xl text-sm font-medium transition-all duration-200 ${pathname !== "/settings" ? "nav-link-hover" : ""}`}
           style={{
             gap: collapsed ? 0 : 12,
             padding: collapsed ? "10px 0" : "10px 12px",
@@ -125,7 +125,7 @@ export function SideNav({ displayName }: { displayName?: string | null }) {
         <button
           onClick={handleSignOut}
           title={collapsed ? "Sign out" : undefined}
-          className="flex items-center rounded-xl text-sm font-medium transition-all duration-200 text-left"
+          className="flex items-center rounded-xl text-sm font-medium transition-all duration-200 text-left btn-hover-error"
           style={{
             gap: collapsed ? 0 : 12,
             padding: collapsed ? "10px 0" : "10px 12px",

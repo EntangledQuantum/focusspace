@@ -117,7 +117,7 @@ export default function LoginPage() {
               onChange={(e) => setEmail(e.target.value)}
               required
               placeholder="you@example.com"
-              className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
+              className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all input-field"
               style={{
                 background: "var(--color-surface-container-high)",
                 color: "var(--color-on-surface)",
@@ -136,7 +136,7 @@ export default function LoginPage() {
               onChange={(e) => setPassword(e.target.value)}
               required
               placeholder="••••••••"
-              className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all"
+              className="w-full rounded-xl px-4 py-2.5 text-sm outline-none transition-all input-field"
               style={{
                 background: "var(--color-surface-container-high)",
                 color: "var(--color-on-surface)",
@@ -148,7 +148,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95"
+            className="w-full rounded-full py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95 btn-hover-primary"
             style={{
               background: "var(--color-primary-container)",
               color: "var(--color-on-primary-container)",
@@ -169,7 +169,7 @@ export default function LoginPage() {
         <button
           onClick={handleGoogle}
           disabled={googleLoading}
-          className="w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+          className="w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95 btn-hover-surface"
           style={{
             background: "var(--color-surface-container-high)",
             color: "var(--color-on-surface)",
@@ -193,7 +193,7 @@ export default function LoginPage() {
         <button
           onClick={handleSpotify}
           disabled={spotifyLoading}
-          className="mt-3 w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+          className="mt-3 w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95 btn-hover-green"
           style={{
             background: "#1DB954",
             color: "#000",

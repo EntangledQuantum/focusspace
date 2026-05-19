@@ -21,7 +21,8 @@ export function TimerControls({ status, onPlayPause, onReset, onSkip, disabled }
       <motion.button
         onClick={onReset}
         whileTap={{ scale: 0.92 }}
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200"
+        whileHover={{ scale: 1.06 }}
+        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 btn-hover-surface"
         style={{
           background: "color-mix(in srgb, var(--color-surface-variant) 40%, transparent)",
           color: "var(--color-on-surface-variant)",
@@ -55,7 +56,8 @@ export function TimerControls({ status, onPlayPause, onReset, onSkip, disabled }
       <motion.button
         onClick={onSkip}
         whileTap={{ scale: 0.92 }}
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200"
+        whileHover={{ scale: 1.06 }}
+        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 btn-hover-surface"
         style={{
           background: "color-mix(in srgb, var(--color-surface-variant) 40%, transparent)",
           color: "var(--color-on-surface-variant)",

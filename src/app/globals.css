@@ -155,9 +155,58 @@ body {
   border-radius: 99px;
 }
 
-/* ─── Focus ring ─────────────────────────────────────────────────── */
-:focus-visible {
+/* ─── Focus ring (buttons/links only — inputs handle their own focus) */
+:focus-visible:not(input):not(textarea):not(select):not(.outline-none) {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
   border-radius: var(--radius);
+}
+input:focus, input:focus-visible,
+textarea:focus, textarea:focus-visible {
+  outline: none;
+  box-shadow: none;
+}
+
+/* ─── Hover utilities ────────────────────────────────────────────── */
+
+/* Primary button (terracotta) – brightness lift + glow */
+.btn-hover-primary:hover {
+  filter: brightness(1.1) !important;
+  box-shadow: 0 6px 28px color-mix(in srgb, var(--color-primary) 40%, transparent) !important;
+}
+
+/* Green (Spotify) button */
+.btn-hover-green:hover {
+  filter: brightness(1.12) !important;
+  box-shadow: 0 4px 22px rgba(29, 185, 84, 0.42) !important;
+}
+
+/* Surface / outlined ghost button */
+.btn-hover-surface:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-color: rgba(255, 255, 255, 0.16) !important;
+}
+
+/* Minimal ghost icon button */
+.btn-hover-ghost:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Nav link – inactive only */
+.nav-link-hover:hover {
+  background: rgba(255, 255, 255, 0.05) !important;
+  color: var(--color-on-surface) !important;
+  border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Error / destructive hover */
+.btn-hover-error:hover {
+  background: color-mix(in srgb, var(--color-error) 14%, transparent) !important;
+  color: var(--color-error) !important;
+}
+
+/* Standalone form input – nice focus glow */
+.input-field:focus {
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--color-primary) 18%, transparent) !important;
 }
