@@ -12,7 +12,7 @@ import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music } from
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
-const MAX_STORAGE_MB = 500;
+const MAX_STORAGE_MB = 50;
 
 const THEME_OPTIONS = [
   { value: "light", label: "Light" },
@@ -313,7 +313,7 @@ export default function SettingsPage() {
                 />
               </div>
               <p className="text-[10px]" style={{ color: "var(--color-on-surface-variant)" }}>
-                Max 15 MB per file · 500 MB total
+                Max 15 MB per file · 50 MB total
               </p>
             </div>
           </div>

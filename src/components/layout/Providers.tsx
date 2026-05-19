@@ -6,6 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Toaster } from "sonner";
 import { SideNav } from "@/components/layout/SideNav";
 import { WallpaperRenderer, SOLID_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { SpotifyProvider } from "@/lib/context/SpotifyContext";
+import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
 import { useUiStore } from "@/lib/stores/ui";
 import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
 import type { UserSettings, Wallpaper } from "@/types/database";
@@ -106,34 +108,37 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
   }, [settings?.theme]);
 
   return (
-    <>
-      <TimerTitle />
-      <WallpaperRenderer
-        wallpaper={wallpaper ?? null}
-        supabaseUrl={supabaseUrl}
-        blur={settings?.wallpaper_blur ?? 60}
-        opacity={settings?.wallpaper_opacity ?? 40}
-      />
-      <SideNav displayName={displayName ?? null} />
-      <main
-        className="relative z-10 h-dvh overflow-y-auto flex flex-col transition-all duration-300"
-        style={{ marginLeft: sidebarCollapsed ? 64 : 240 }}
-      >
-        {children}
-      </main>
-      <Toaster
-        theme="dark"
-        position="bottom-right"
-        toastOptions={{
-          style: {
-            background: "var(--color-surface-container-high)",
-            border: "1px solid rgba(255,255,255,0.08)",
-            color: "var(--color-on-surface)",
-            backdropFilter: "blur(20px)",
-          },
-        }}
-      />
-    </>
+    <SpotifyProvider>
+      <>
+        <TimerTitle />
+        <WallpaperRenderer
+          wallpaper={wallpaper ?? null}
+          supabaseUrl={supabaseUrl}
+          blur={settings?.wallpaper_blur ?? 60}
+          opacity={settings?.wallpaper_opacity ?? 40}
+        />
+        <SideNav displayName={displayName ?? null} />
+        <main
+          className="relative z-10 h-dvh overflow-y-auto flex flex-col transition-all duration-300"
+          style={{ marginLeft: sidebarCollapsed ? 64 : 240 }}
+        >
+          {children}
+        </main>
+        <SpotifyMiniBar />
+        <Toaster
+          theme="dark"
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: "var(--color-surface-container-high)",
+              border: "1px solid rgba(255,255,255,0.08)",
+              color: "var(--color-on-surface)",
+              backdropFilter: "blur(20px)",
+            },
+          }}
+        />
+      </>
+    </SpotifyProvider>
   );
 }
 

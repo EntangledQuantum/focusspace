@@ -1,16 +1,23 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { Project, Task, Tag as TagType } from "@/types/database";
+import type { Project, Task, Tag as TagType, TaskWithTags } from "@/types/database";
+import { PomodoroRating, PomodoroMiniPips } from "@/components/timer/PomodoroRating";
+import type { UserSettings } from "@/types/database";
 
 const PROJECT_COLORS = [
   "#ffb4a5", "#b5ccc1", "#adcae4", "#e2725b",
   "#7a96af", "#a48b86", "#394d45", "#c0b0ff",
+];
+
+const TAG_COLORS = [
+  "#ffb4a5", "#b5ccc1", "#adcae4", "#c0b0ff",
+  "#80c0a0", "#e2725b", "#7a96af", "#f0c060",
 ];
 
 const PRIORITY_CONFIG = {
@@ -20,6 +27,10 @@ const PRIORITY_CONFIG = {
   low:    { label: "Low",    color: "#a48b86" },
 } as const;
 
+function randomTagColor() {
+  return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
+}
+
 export default function ProjectsPage() {
   const supabase = createClient();
   const qc = useQueryClient();
@@ -28,9 +39,29 @@ export default function ProjectsPage() {
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
   const [addingProject, setAddingProject] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
+  const [newTaskPomos, setNewTaskPomos] = useState(1);
   const [addingTask, setAddingTask] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
+
+  // Tag state
+  const [newTaskTags, setNewTaskTags] = useState<TagType[]>([]);
+  const [tagQuery, setTagQuery] = useState("");
+  const [showTagSugs, setShowTagSugs] = useState(false);
+  const [deleteTagConfirm, setDeleteTagConfirm] = useState<TagType | null>(null);
+  const [showTagInput, setShowTagInput] = useState(false);
+  const [addingTagName, setAddingTagName] = useState("");
+  const titleInputRef = useRef<HTMLInputElement>(null);
+  const tagSugRef = useRef<HTMLDivElement>(null);
+
+  const { data: settings } = useQuery<UserSettings | null>({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("user_settings").select("*").maybeSingle();
+      return data as UserSettings | null;
+    },
+    staleTime: 5 * 60_000,
+  });
 
   const { data: projects = [] } = useQuery<Project[]>({
     queryKey: ["projects"],
@@ -47,17 +78,21 @@ export default function ProjectsPage() {
 
   const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
 
-  const { data: tasks = [] } = useQuery<Task[]>({
+  const { data: tasks = [] } = useQuery<TaskWithTags[]>({
     queryKey: ["tasks", selectedProject?.id],
     queryFn: async () => {
       if (!selectedProject) return [];
       const { data, error } = await supabase
         .from("tasks")
-        .select("*")
+        .select("*, task_tags(tag_id, tags(id, name, color))")
         .eq("project_id", selectedProject.id)
         .order("sort_order");
       if (error) throw error;
-      return data ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((t: any) => ({
+        ...t,
+        tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+      })) as TaskWithTags[];
     },
     enabled: !!selectedProject,
   });
@@ -69,6 +104,32 @@ export default function ProjectsPage() {
       return data ?? [];
     },
   });
+
+  // Suggestions: filter by current tagQuery
+  const tagSuggestions = tags.filter(
+    (t) =>
+      t.name.startsWith(tagQuery) &&
+      !newTaskTags.find((nt) => nt.id === t.id)
+  );
+  const canCreateTag =
+    tagQuery.length > 0 &&
+    !tags.find((t) => t.name === tagQuery) &&
+    !newTaskTags.find((t) => t.name === tagQuery);
+
+  // Close tag suggestions on outside click
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (
+        tagSugRef.current &&
+        !tagSugRef.current.contains(e.target as Node) &&
+        titleInputRef.current !== e.target
+      ) {
+        setShowTagSugs(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
 
   const addProject = useMutation({
     mutationFn: async () => {
@@ -123,21 +184,94 @@ export default function ProjectsPage() {
     mutationFn: async () => {
       if (!selectedProject) return;
       const { data: { user } } = await supabase.auth.getUser();
-      const { error } = await supabase.from("tasks").insert({
-        title: newTaskTitle,
-        project_id: selectedProject.id,
-        user_id: user!.id,
-        sort_order: tasks.length,
-      });
+
+      // Extract inline #tags and clean title
+      const hashTagNames = (newTaskTitle.match(/#(\w+)/g) ?? []).map((m) => m.slice(1).toLowerCase());
+      const cleanTitle = newTaskTitle.replace(/#\w+/g, "").trim() || newTaskTitle.trim();
+
+      const { data: task, error } = await supabase
+        .from("tasks")
+        .insert({
+          title: cleanTitle,
+          project_id: selectedProject.id,
+          user_id: user!.id,
+          sort_order: tasks.length,
+          estimated_pomodoros: newTaskPomos,
+        })
+        .select("id")
+        .single();
       if (error) throw error;
+
+      // Resolve all tags: chips already selected + inline #tags
+      const chipIds = new Set(newTaskTags.map((t) => t.id));
+      const resolvedTagIds: string[] = [...chipIds];
+
+      for (const name of hashTagNames) {
+        const existing = tags.find((t) => t.name === name);
+        if (existing) {
+          if (!chipIds.has(existing.id)) resolvedTagIds.push(existing.id);
+        } else {
+          const { data: created } = await supabase
+            .from("tags")
+            .insert({ user_id: user!.id, name, color: randomTagColor() })
+            .select("id")
+            .single();
+          if (created) resolvedTagIds.push(created.id);
+        }
+      }
+
+      if (resolvedTagIds.length > 0) {
+        await supabase.from("task_tags").insert(
+          resolvedTagIds.map((tagId) => ({ task_id: task.id, tag_id: tagId }))
+        );
+      }
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
       qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      qc.invalidateQueries({ queryKey: ["tags"] });
       setNewTaskTitle("");
+      setNewTaskPomos(1);
+      setNewTaskTags([]);
       setAddingTask(false);
     },
     onError: () => toast.error("Failed to add task"),
+  });
+
+  const createTag = useMutation({
+    mutationFn: async (name: string) => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("tags")
+        .insert({ user_id: user!.id, name: name.toLowerCase(), color: randomTagColor() })
+        .select()
+        .single();
+      if (error) throw error;
+      return data as TagType;
+    },
+    onSuccess: (tag) => {
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      setAddingTagName("");
+      setShowTagInput(false);
+      toast.success(`Tag #${tag.name} created`);
+    },
+    onError: () => toast.error("Failed to create tag"),
+  });
+
+  const deleteTag = useMutation({
+    mutationFn: async (tag: TagType) => {
+      await supabase.from("task_tags").delete().eq("tag_id", tag.id);
+      const { error } = await supabase.from("tags").delete().eq("id", tag.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+      setDeleteTagConfirm(null);
+      toast.success("Tag deleted");
+    },
+    onError: () => toast.error("Failed to delete tag"),
   });
 
   const toggleTask = useMutation({
@@ -166,14 +300,59 @@ export default function ProjectsPage() {
     },
   });
 
+  function handleTitleChange(val: string) {
+    setNewTaskTitle(val);
+    const match = val.match(/#(\w*)$/);
+    if (match) {
+      setTagQuery(match[1].toLowerCase());
+      setShowTagSugs(true);
+    } else {
+      setShowTagSugs(false);
+      setTagQuery("");
+    }
+  }
+
+  function selectTagSuggestion(tag: TagType) {
+    setNewTaskTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
+    setShowTagSugs(false);
+    setTagQuery("");
+    if (!newTaskTags.find((t) => t.id === tag.id)) {
+      setNewTaskTags((prev) => [...prev, tag]);
+    }
+  }
+
+  async function createAndSelectTag() {
+    if (!tagQuery) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const existing = tags.find((t) => t.name === tagQuery);
+    if (existing) {
+      selectTagSuggestion(existing);
+      return;
+    }
+    const { data: created } = await supabase
+      .from("tags")
+      .insert({ user_id: user!.id, name: tagQuery, color: randomTagColor() })
+      .select()
+      .single();
+    if (created) {
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      setNewTaskTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
+      setShowTagSugs(false);
+      setTagQuery("");
+      setNewTaskTags((prev) => [...prev, created as TagType]);
+    }
+  }
+
   const todo = tasks.filter((t) => t.status === "todo");
   const done = tasks.filter((t) => t.status === "done");
 
   return (
     <div className="flex h-dvh">
       {/* Projects sidebar */}
-      <div className="w-72 shrink-0 flex flex-col py-8"
-        style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}>
+      <div
+        className="w-72 shrink-0 flex flex-col py-8"
+        style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}
+      >
         <div className="px-5 mb-6">
           <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
             Projects
@@ -230,7 +409,7 @@ export default function ProjectsPage() {
                       <span
                         role="button"
                         onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); setEditingProjectName(project.name); }}
-                        className="p-1 rounded hover:opacity-100 transition-opacity"
+                        className="p-1 rounded transition-opacity"
                         style={{ color: "var(--color-on-surface-variant)" }}
                       >
                         <Pencil size={11} />
@@ -238,7 +417,7 @@ export default function ProjectsPage() {
                       <span
                         role="button"
                         onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
-                        className="p-1 rounded hover:opacity-100 transition-opacity"
+                        className="p-1 rounded transition-opacity"
                         style={{ color: "var(--color-error)" }}
                       >
                         <Trash2 size={11} />
@@ -250,7 +429,6 @@ export default function ProjectsPage() {
             );
           })}
 
-          {/* Add project */}
           <AnimatePresence>
             {addingProject ? (
               <motion.div
@@ -322,7 +500,8 @@ export default function ProjectsPage() {
       <div className="flex-1 overflow-y-auto p-8">
         {selectedProject ? (
           <>
-            <div className="flex items-start justify-between mb-8">
+            {/* Project header */}
+            <div className="flex items-start justify-between mb-5">
               <div>
                 <div className="flex items-center gap-3">
                   <div className="w-4 h-4 rounded-full" style={{ background: selectedProject.color }} />
@@ -336,6 +515,112 @@ export default function ProjectsPage() {
               </div>
             </div>
 
+            {/* Tags strip */}
+            <div className="mb-5">
+              {/* Delete warning */}
+              <AnimatePresence>
+                {deleteTagConfirm && (
+                  <motion.div
+                    initial={{ opacity: 0, height: 0 }}
+                    animate={{ opacity: 1, height: "auto" }}
+                    exit={{ opacity: 0, height: 0 }}
+                    className="mb-3 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm"
+                    style={{
+                      background: "color-mix(in srgb, var(--color-error) 12%, transparent)",
+                      border: "1px solid color-mix(in srgb, var(--color-error) 30%, transparent)",
+                      color: "var(--color-error)",
+                    }}
+                  >
+                    <span className="flex-1 text-xs">
+                      Deleting <strong>#{deleteTagConfirm.name}</strong> will remove it from all tasks and affects analytics. This cannot be undone.
+                    </span>
+                    <button
+                      onClick={() => deleteTag.mutate(deleteTagConfirm)}
+                      className="text-xs px-2.5 py-1 rounded-lg font-semibold shrink-0"
+                      style={{ background: "var(--color-error)", color: "#fff" }}
+                    >
+                      Delete
+                    </button>
+                    <button
+                      onClick={() => setDeleteTagConfirm(null)}
+                      className="shrink-0"
+                      style={{ color: "var(--color-on-surface-variant)" }}
+                    >
+                      <X size={14} />
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+
+              <div className="flex items-center gap-2 flex-wrap">
+                <Tag size={12} style={{ color: "var(--color-on-surface-variant)", opacity: 0.5 }} />
+                {tags.map((tag) => (
+                  <div
+                    key={tag.id}
+                    className="group flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                    style={{
+                      background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                      color: tag.color,
+                      border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
+                    }}
+                  >
+                    <span>#{tag.name}</span>
+                    <button
+                      onClick={() => setDeleteTagConfirm(tag)}
+                      className="opacity-0 group-hover:opacity-80 transition-opacity ml-0.5"
+                      style={{ color: tag.color }}
+                      title="Delete tag"
+                    >
+                      <X size={10} />
+                    </button>
+                  </div>
+                ))}
+
+                {/* Add tag inline */}
+                {showTagInput ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      autoFocus
+                      value={addingTagName}
+                      onChange={(e) => setAddingTagName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
+                      placeholder="tagname"
+                      className="bg-transparent text-xs outline-none w-20 px-2 py-0.5 rounded-full"
+                      style={{
+                        border: "1px solid var(--color-outline-variant)",
+                        color: "var(--color-on-surface)",
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter" && addingTagName.trim()) createTag.mutate(addingTagName.trim());
+                        if (e.key === "Escape") { setShowTagInput(false); setAddingTagName(""); }
+                      }}
+                    />
+                    <button
+                      onClick={() => addingTagName.trim() && createTag.mutate(addingTagName.trim())}
+                      style={{ color: "var(--color-primary)" }}
+                    >
+                      <Check size={12} />
+                    </button>
+                    <button onClick={() => { setShowTagInput(false); setAddingTagName(""); }}
+                      style={{ color: "var(--color-on-surface-variant)" }}>
+                      <X size={12} />
+                    </button>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setShowTagInput(true)}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all"
+                    style={{
+                      color: "var(--color-on-surface-variant)",
+                      border: "1px dashed var(--color-outline-variant)",
+                    }}
+                  >
+                    <Plus size={10} />
+                    Tag
+                  </button>
+                )}
+              </div>
+            </div>
+
             {/* Inline add task */}
             <div className="mb-6">
               <AnimatePresence>
@@ -344,31 +629,122 @@ export default function ProjectsPage() {
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0 }}
-                    className="rounded-xl px-4 py-3 flex items-center gap-3"
+                    className="rounded-xl px-4 py-3 flex flex-col gap-2.5"
                     style={{ background: "var(--color-surface-container-high)", border: "1px solid var(--color-primary)" }}
                   >
-                    <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
-                    <input
-                      autoFocus
-                      value={newTaskTitle}
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      placeholder="Task title…"
-                      className="flex-1 bg-transparent text-sm outline-none"
-                      style={{ color: "var(--color-on-surface)" }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && newTaskTitle.trim()) addTask.mutate();
-                        if (e.key === "Escape") { setAddingTask(false); setNewTaskTitle(""); }
-                      }}
-                    />
-                    <button onClick={() => newTaskTitle.trim() && addTask.mutate()}
-                      className="text-xs px-3 py-1 rounded-full font-semibold"
-                      style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}>
-                      Add
-                    </button>
-                    <button onClick={() => { setAddingTask(false); setNewTaskTitle(""); }}
-                      className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>
-                      Cancel
-                    </button>
+                    {/* Title row with tag suggestions */}
+                    <div className="relative">
+                      <div className="flex items-center gap-3">
+                        <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
+                        <input
+                          ref={titleInputRef}
+                          autoFocus
+                          value={newTaskTitle}
+                          onChange={(e) => handleTitleChange(e.target.value)}
+                          placeholder="Task title… or type #tag"
+                          className="flex-1 bg-transparent text-sm outline-none"
+                          style={{ color: "var(--color-on-surface)" }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" && !showTagSugs && newTaskTitle.trim()) addTask.mutate();
+                            if (e.key === "Escape") {
+                              if (showTagSugs) { setShowTagSugs(false); }
+                              else { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskTags([]); }
+                            }
+                          }}
+                        />
+                      </div>
+
+                      {/* Tag autocomplete dropdown */}
+                      <AnimatePresence>
+                        {showTagSugs && (tagSuggestions.length > 0 || canCreateTag) && (
+                          <motion.div
+                            ref={tagSugRef}
+                            initial={{ opacity: 0, y: -4 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: -4 }}
+                            className="absolute left-7 top-full mt-1 z-50 rounded-xl py-1 min-w-40"
+                            style={{
+                              background: "var(--color-surface-container-high)",
+                              border: "1px solid var(--color-outline-variant)",
+                              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+                            }}
+                          >
+                            {tagSuggestions.map((tag) => (
+                              <button
+                                key={tag.id}
+                                onMouseDown={(e) => { e.preventDefault(); selectTagSuggestion(tag); }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                                style={{ color: "var(--color-on-surface)" }}
+                              >
+                                <span
+                                  className="w-2 h-2 rounded-full shrink-0"
+                                  style={{ background: tag.color }}
+                                />
+                                #{tag.name}
+                              </button>
+                            ))}
+                            {canCreateTag && (
+                              <button
+                                onMouseDown={(e) => { e.preventDefault(); createAndSelectTag(); }}
+                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                                style={{ color: "var(--color-primary)" }}
+                              >
+                                <Plus size={10} />
+                                Create #{tagQuery}
+                              </button>
+                            )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+
+                    {/* Selected tag chips */}
+                    {newTaskTags.length > 0 && (
+                      <div className="flex items-center gap-1.5 pl-7 flex-wrap">
+                        {newTaskTags.map((tag) => (
+                          <div
+                            key={tag.id}
+                            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                            style={{
+                              background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                              color: tag.color,
+                              border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
+                            }}
+                          >
+                            #{tag.name}
+                            <button onClick={() => setNewTaskTags((prev) => prev.filter((t) => t.id !== tag.id))}>
+                              <X size={9} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* Pomodoro picker + actions row */}
+                    <div className="flex items-center justify-between pl-7">
+                      <PomodoroRating
+                        value={newTaskPomos}
+                        onChange={setNewTaskPomos}
+                        pomoDurationSec={settings?.focus_duration_sec ?? 25 * 60}
+                        shortBreakSec={settings?.short_break_sec ?? 5 * 60}
+                      />
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => newTaskTitle.trim() && addTask.mutate()}
+                          className="text-xs px-3 py-1 rounded-full font-semibold"
+                          style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
+                        >
+                          Add
+                        </button>
+                        <button
+                          onClick={() => { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskTags([]); }}
+                          className="text-xs"
+                          style={{ color: "var(--color-on-surface-variant)" }}
+                        >
+                          Cancel
+                        </button>
+                      </div>
+                    </div>
                   </motion.div>
                 ) : (
                   <button
@@ -432,8 +808,13 @@ export default function ProjectsPage() {
   );
 }
 
-function TaskRow({ task, onToggle, onDelete, done = false }: {
-  task: Task;
+function TaskRow({
+  task,
+  onToggle,
+  onDelete,
+  done = false,
+}: {
+  task: TaskWithTags;
   onToggle: () => void;
   onDelete: () => void;
   done?: boolean;
@@ -462,28 +843,43 @@ function TaskRow({ task, onToggle, onDelete, done = false }: {
         )}
       </button>
 
-      <span
-        className="flex-1 text-sm truncate"
-        style={{ color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)", textDecoration: done ? "line-through" : "none" }}
-      >
-        {task.title}
-      </span>
+      <div className="flex-1 min-w-0">
+        <span
+          className="text-sm truncate block"
+          style={{
+            color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+            textDecoration: done ? "line-through" : "none",
+          }}
+        >
+          {task.title}
+        </span>
+        {task.tags && task.tags.length > 0 && (
+          <div className="flex items-center gap-1 mt-1 flex-wrap">
+            {task.tags.map((tag) => (
+              <span
+                key={tag.id}
+                className="px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none"
+                style={{
+                  background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                  color: tag.color,
+                }}
+              >
+                #{tag.name}
+              </span>
+            ))}
+          </div>
+        )}
+      </div>
 
       {/* Priority dot */}
       <div className="w-2 h-2 rounded-full shrink-0 opacity-70" style={{ background: priority.color }} title={priority.label} />
 
       {/* Pomodoro pips */}
-      {task.estimated_pomodoros > 0 && (
-        <div className="flex gap-0.5">
-          {Array.from({ length: task.estimated_pomodoros }).map((_, i) => (
-            <div key={i} className="w-1.5 h-1.5 rounded-full"
-              style={{
-                background: i < task.completed_pomodoros
-                  ? "var(--color-primary)"
-                  : "var(--color-outline-variant)",
-              }} />
-          ))}
-        </div>
+      {(task.estimated_pomodoros ?? 0) > 0 && (
+        <PomodoroMiniPips
+          estimated={task.estimated_pomodoros ?? 1}
+          completed={task.completed_pomodoros ?? 0}
+        />
       )}
 
       <button

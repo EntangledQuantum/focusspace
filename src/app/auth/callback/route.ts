@@ -7,6 +7,15 @@ export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   const code = searchParams.get("code");
   const next = searchParams.get("next") ?? "/focus";
+  const oauthError = searchParams.get("error");
+  const errorCode = searchParams.get("error_code");
+
+  if (oauthError) {
+    if (errorCode === "provider_email_needs_verification") {
+      return NextResponse.redirect(`${origin}/login?error=spotify_email_verify`);
+    }
+    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  }
 
   if (code) {
     const cookieStore = await cookies();

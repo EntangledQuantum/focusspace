@@ -1,19 +1,10 @@
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSpotify } from "@/lib/hooks/useSpotify";
-import { useSpotifyPlayer } from "@/lib/hooks/useSpotifyPlayer";
+import { useSpotifyContext, type Playlist } from "@/lib/context/SpotifyContext";
 import { useTimerStore } from "@/lib/stores/timer";
 import { Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic } from "lucide-react";
-
-interface Playlist {
-  id: string;
-  name: string;
-  images: { url: string }[];
-  uri: string;
-  tracks: { total: number };
-}
 
 function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: string }) {
   return (
@@ -44,7 +35,7 @@ function PlaylistPicker({
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      return (data.items ?? []) as Playlist[];
+      return ((data.items ?? []) as (Playlist | null)[]).filter(Boolean) as Playlist[];
     },
     staleTime: 60 * 1000,
   });
@@ -129,14 +120,9 @@ function PlaylistPicker({
                   <ListMusic size={14} style={{ color: "var(--color-on-surface-variant)" }} />
                 </div>
               )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: "var(--color-on-surface)" }}>
-                  {pl.name}
-                </p>
-                <p className="text-xs truncate" style={{ color: "var(--color-on-surface-variant)" }}>
-                  {pl.tracks.total} tracks
-                </p>
-              </div>
+              <p className="text-sm font-medium truncate" style={{ color: "var(--color-on-surface)" }}>
+                {pl.name}
+              </p>
             </button>
           ))
         )}
@@ -145,69 +131,16 @@ function PlaylistPicker({
   );
 }
 
-interface SpotifyPanelProps {
-  autoStart?: boolean;
-}
-
-export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
+export function SpotifyPanel() {
+  const {
+    token, isConnected, tokenLoading, player, deviceId, state, isReady, sdkError,
+    selectedPlaylist, setSelectedPlaylist, externalState, progress,
+  } = useSpotifyContext();
   const qc = useQueryClient();
-  const { data, isLoading: tokenLoading, refetch: refreshToken } = useSpotify();
-  const token = data?.token ?? null;
-  const isConnected = data?.isConnected ?? false;
 
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [progress, setProgress] = useState(0);
-
-  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
   const pickerRef = useRef<HTMLDivElement>(null);
   const timerStatus = useTimerStore((s) => s.status);
-  const prevTimerStatus = useRef(timerStatus);
-
-  const handleTokenRefresh = useCallback(async () => {
-    const result = await refreshToken();
-    return result.data?.token ?? null;
-  }, [refreshToken]);
-
-  const { player, deviceId, state, isReady, error } = useSpotifyPlayer({
-    token,
-    onTokenRefresh: handleTokenRefresh,
-  });
-
-  // Progress bar tick
-  useEffect(() => {
-    if (progressInterval.current) clearInterval(progressInterval.current);
-    if (!state) return;
-    if (state.paused) {
-      setProgress(state.duration > 0 ? state.position / state.duration : 0);
-      return;
-    }
-    const tick = () => {
-      player?.getCurrentState().then((s) => {
-        if (s) setProgress(s.duration > 0 ? s.position / s.duration : 0);
-      });
-    };
-    progressInterval.current = setInterval(tick, 500);
-    return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
-  }, [state, player]);
-
-  // Auto-start on timer run
-  useEffect(() => {
-    if (!autoStart || !isReady || !deviceId || !token) return;
-    const wasIdle = prevTimerStatus.current === "idle" || prevTimerStatus.current === "completed";
-    if (wasIdle && timerStatus === "running") {
-      if (selectedPlaylist) {
-        fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-          method: "PUT",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ context_uri: selectedPlaylist.uri }),
-        });
-      } else if (state?.paused !== false) {
-        player?.resume();
-      }
-    }
-    prevTimerStatus.current = timerStatus;
-  }, [timerStatus]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Close picker on outside click
   useEffect(() => {
@@ -257,18 +190,21 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
     );
   }
 
-  if (error) {
+  if (sdkError) {
     return (
       <div className="glass rounded-2xl px-6 py-3 flex items-center gap-3 w-full max-w-[420px] mt-4">
         <SpotifyLogo size={16} />
-        <p className="text-sm" style={{ color: "var(--color-error)" }}>{error}</p>
+        <p className="text-sm" style={{ color: "var(--color-error)" }}>{sdkError}</p>
       </div>
     );
   }
 
   const track = state?.track_window?.current_track;
-  const albumArt = track?.album?.images?.[0]?.url;
-  const isPlaying = state ? !state.paused : false;
+  const extTrack = !track ? externalState?.item ?? null : null;
+  const albumArt = track?.album?.images?.[0]?.url ?? extTrack?.album?.images?.[0]?.url;
+  const isPlaying = state ? !state.paused : (externalState?.is_playing ?? false);
+  const trackName = track?.name ?? extTrack?.name;
+  const trackArtists = track?.artists?.map((a) => a.name).join(", ") ?? extTrack?.artists?.map((a) => a.name).join(", ");
 
   function handlePlayPause() {
     if (!isReady) return;
@@ -282,6 +218,10 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
       player?.togglePlay();
     }
   }
+
+  const extProgress = extTrack && !track && externalState
+    ? externalState.progress_ms / (extTrack.duration_ms || 1)
+    : progress;
 
   return (
     <div className="glass rounded-2xl p-4 w-full max-w-[420px] mt-4 space-y-3">
@@ -321,7 +261,7 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
       <div className="flex items-center gap-3">
         {albumArt ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={albumArt} alt={track?.album?.name} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          <img src={albumArt} alt={trackName} className="w-12 h-12 rounded-xl object-cover shrink-0" />
         ) : (
           <div
             className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center"
@@ -332,20 +272,25 @@ export function SpotifyPanel({ autoStart = true }: SpotifyPanelProps) {
         )}
         <div className="flex-1 min-w-0">
           <p className="text-sm font-semibold truncate" style={{ color: "var(--color-on-surface)" }}>
-            {track?.name ?? (isReady ? "Ready" : "Connecting…")}
+            {trackName ?? (isReady ? "Ready" : "Connecting…")}
           </p>
           <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-            {track?.artists?.map((a) => a.name).join(", ") ?? "Pick a playlist to start"}
+            {trackArtists ?? (extTrack ? "" : "Pick a playlist to start")}
           </p>
         </div>
-        <SpotifyLogo size={15} />
+        <div className="flex flex-col items-end gap-1">
+          <SpotifyLogo size={15} />
+          {extTrack && !track && (
+            <span className="text-[10px]" style={{ color: "var(--color-on-surface-variant)" }}>other device</span>
+          )}
+        </div>
       </div>
 
       {/* Progress bar */}
       <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
         <div
           className="h-full rounded-full transition-all duration-500"
-          style={{ width: `${progress * 100}%`, background: "#1DB954" }}
+          style={{ width: `${extProgress * 100}%`, background: "#1DB954" }}
         />
       </div>
 

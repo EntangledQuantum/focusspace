@@ -1,12 +1,30 @@
 "use client";
 
-import { useState } from "react";
+import { useState, Suspense } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { Loader2 } from "lucide-react";
 import Image from "next/image";
 import appIcon from "@/app/icon.png";
+
+const URL_ERROR_MESSAGES: Record<string, string> = {
+  spotify_email_verify: "Your Spotify account email isn't verified. Check your inbox and verify it, then try signing in again.",
+  auth_callback_failed: "Sign-in failed. Please try again.",
+};
+
+function UrlErrorBanner({ formError }: { formError: string | null }) {
+  const searchParams = useSearchParams();
+  const urlError = searchParams.get("error");
+  const message = urlError ? (URL_ERROR_MESSAGES[urlError] ?? "Sign-in failed. Please try again.") : formError;
+  if (!message) return null;
+  return (
+    <div className="mb-4 rounded-xl px-4 py-3 text-sm"
+      style={{ background: "color-mix(in srgb, var(--color-error-container) 30%, transparent)", color: "var(--color-error)" }}>
+      {message}
+    </div>
+  );
+}
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -84,12 +102,9 @@ export default function LoginPage() {
           Log in and get to work.
         </p>
 
-        {error && (
-          <div className="mb-4 rounded-xl px-4 py-3 text-sm"
-            style={{ background: "color-mix(in srgb, var(--color-error-container) 30%, transparent)", color: "var(--color-error)" }}>
-            {error}
-          </div>
-        )}
+        <Suspense fallback={null}>
+          <UrlErrorBanner formError={error} />
+        </Suspense>
 
         <form onSubmit={handleLogin} className="flex flex-col gap-4">
           <div className="flex flex-col gap-1.5">
@@ -178,7 +193,7 @@ export default function LoginPage() {
         <button
           onClick={handleSpotify}
           disabled={spotifyLoading}
-          className="w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+          className="mt-3 w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
           style={{
             background: "#1DB954",
             color: "#000",
