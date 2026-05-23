@@ -5,12 +5,12 @@ import { useQuery } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { Search, FolderOpen, ChevronRight, X } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
-import type { Task, Project } from "@/types/database";
+import type { Project, TaskWithTags } from "@/types/database";
 
 interface Props {
   open: boolean;
   onClose: () => void;
-  onSelect: (task: Task, project: Project | null) => void;
+  onSelect: (task: TaskWithTags, project: Project | null) => void;
 }
 
 export function TaskPicker({ open, onClose, onSelect }: Props) {
@@ -22,23 +22,34 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
     queryFn: async () => {
       const { data } = await supabase
         .from("projects")
-        .select("*, tasks!inner(*)")
+        .select("*, tasks!inner(*, task_tags(tag_id, tags(id, name, color)))")
         .is("archived_at", null)
         .eq("tasks.status", "todo")
         .order("sort_order");
-      return data ?? [];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((p: any) => ({
+        ...p,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tasks: (p.tasks ?? []).map((t: any) => ({
+          ...t,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+        })) as TaskWithTags[],
+      }));
     },
     enabled: open,
     staleTime: 0,
   });
 
   const filtered = projects
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .map((p: any) => ({
       ...p,
-      tasks: (p.tasks as Task[]).filter((t) =>
+      tasks: (p.tasks as TaskWithTags[]).filter((t) =>
         t.title.toLowerCase().includes(query.toLowerCase())
       ),
     }))
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .filter((p: any) => p.tasks.length > 0);
 
   return (
@@ -92,7 +103,7 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
                         {project.name}
                       </span>
                     </div>
-                    {project.tasks.map((task: Task) => (
+                    {project.tasks.map((task: TaskWithTags) => (
                       <button
                         key={task.id}
                         onClick={() => { onSelect(task, project); onClose(); }}

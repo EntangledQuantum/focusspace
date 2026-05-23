@@ -62,68 +62,78 @@ export function PomodoroTimeline({
     );
   }
 
-  const totalSessions = Math.max(1, Math.ceil(estimatedPomodoros));
+  const plannedSessions = Math.max(1, Math.ceil(estimatedPomodoros));
   const hasHalfLast = estimatedPomodoros % 1 === 0.5;
   // Global count before any of this task's sessions ran
   const initialCount = pomodoroCount - completedPomodoros;
 
+  // The current session number (1-indexed) — if we're running/paused on a pomo,
+  // it's the (completedPomodoros + 1)-th pomo. While on a break, the most recently
+  // completed pomo was (completedPomodoros)-th.
+  const isRunningPomo = isActive && !isOnBreak;
+  const inFlightPomo = isRunningPomo ? 1 : 0;
+  // Render enough segments to cover both the plan AND any overflow pomos the user is doing
+  const visibleSessions = Math.max(plannedSessions, completedPomodoros + inFlightPomo);
+
   // Build: [P, Break, P, Break, ..., P, Break] — always ends with a break
-  type Seg = { type: SegType; durationSec: number };
+  type Seg = { type: SegType; durationSec: number; isOverflow: boolean };
   const segs: Seg[] = [];
-  for (let i = 0; i < totalSessions; i++) {
-    const isLastPomo = i === totalSessions - 1;
+  for (let i = 0; i < visibleSessions; i++) {
+    const isLastPlanned = i === plannedSessions - 1;
+    const isOverflow = i >= plannedSessions;
     segs.push({
       type: "pomodoro",
-      durationSec: isLastPomo && hasHalfLast ? pomoDurationSec / 2 : pomoDurationSec,
+      durationSec: !isOverflow && isLastPlanned && hasHalfLast ? pomoDurationSec / 2 : pomoDurationSec,
+      isOverflow,
     });
-    // Break type is computed by where this pomo falls in the global cycle
     const globalCountAfterPomo = initialCount + i + 1;
     const isLong = longBreakEvery > 0 && globalCountAfterPomo % longBreakEvery === 0;
     segs.push({
       type: isLong ? "long_break" : "short_break",
       durationSec: isLong ? longBreakSec : shortBreakSec,
+      isOverflow,
     });
   }
 
-  // Which segment is active?
-  // completedPomodoros = N  → pomo N+1 is next (segment index N*2)
-  // On break after N         → break segment index N*2 - 1
+  // Active segment index:
+  //   completedPomodoros = N → next pomo segment index = N*2
+  //   On break after pomo N → break segment index = N*2 - 1
   const activeIdx = Math.max(0, completedPomodoros * 2 - (isOnBreak ? 1 : 0));
-  const isTaskDone = !isOnBreak && completedPomodoros >= totalSessions;
-
-  const currentPomoNum = Math.min(
-    isOnBreak ? completedPomodoros : completedPomodoros + 1,
-    totalSessions
-  );
   const activeSeg = segs[activeIdx];
 
+  // Labels — never auto-conclude "Task complete"; only the user's Done button does that.
+  const currentPomoNum = isOnBreak ? completedPomodoros : completedPomodoros + 1;
+  const isOverflowPomo = currentPomoNum > plannedSessions;
+
   let leftLabel = "";
-  if (isTaskDone) {
-    leftLabel = status === "idle" ? "Task complete — pick another" : "Session done";
-  } else if (isOnBreak) {
+  if (isOnBreak) {
     leftLabel = activeSeg?.type === "long_break" ? "Long break" : "Short break";
   } else if (status === "idle") {
-    leftLabel = `Ready · Focus ${currentPomoNum}/${totalSessions}`;
+    leftLabel = completedPomodoros >= plannedSessions
+      ? `Ready · ${plannedSessions}/${plannedSessions} done · bonus`
+      : `Ready · Focus ${currentPomoNum}/${plannedSessions}`;
   } else {
-    leftLabel = `Focus ${currentPomoNum}/${totalSessions}`;
+    leftLabel = isOverflowPomo
+      ? `Bonus focus ${currentPomoNum - plannedSessions}`
+      : `Focus ${currentPomoNum}/${plannedSessions}`;
   }
 
   let rightLabel = "";
-  if (isActive && !isOnBreak && !isTaskDone) {
+  if (isActive && !isOnBreak) {
     const nextBreak = segs[activeIdx + 1];
     if (nextBreak) {
       const breakType = nextBreak.type === "long_break" ? "Long" : "Short";
-      const isLastPomo = currentPomoNum === totalSessions;
-      rightLabel = isLastPomo
+      const isLastPlanned = currentPomoNum === plannedSessions;
+      rightLabel = isLastPlanned && !isOverflowPomo
         ? `${breakType} break up next`
         : `${breakType} break in ~${fmt(remainingSec)} · ${fmt(nextBreak.durationSec)}`;
     }
   } else if (isActive && isOnBreak) {
     const nextPomoNum = completedPomodoros + 1;
-    if (nextPomoNum <= totalSessions) {
-      rightLabel = `Focus ${nextPomoNum}/${totalSessions} next`;
-    }
-  } else if (status === "idle" && !isTaskDone) {
+    rightLabel = nextPomoNum > plannedSessions
+      ? `Bonus focus ${nextPomoNum - plannedSessions} next`
+      : `Focus ${nextPomoNum}/${plannedSessions} next`;
+  } else if (status === "idle") {
     rightLabel = `${fmt(activeSeg?.durationSec ?? pomoDurationSec)} session`;
   }
 

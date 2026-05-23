@@ -15,14 +15,14 @@ import { motion } from "framer-motion";
 import { Pencil, Maximize2, Minimize2, Check } from "lucide-react";
 import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
 import { toast } from "sonner";
-import type { Task, Project } from "@/types/database";
+import type { Project, TaskWithTags } from "@/types/database";
 
 export default function FocusPage() {
   const supabase = createClient();
   const qc = useQueryClient();
 
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
-  const [activeTask, setActiveTask] = useState<Task | null>(null);
+  const [activeTask, setActiveTask] = useState<TaskWithTags | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [customMinutes, setCustomMinutes] = useState(45);
   const [isFullscreen, setIsFullscreen] = useState(false);
@@ -86,8 +86,19 @@ export default function FocusPage() {
     if (!currentTaskId) return;
     (async () => {
       const { data: task } = await supabase
-        .from("tasks").select("*").eq("id", currentTaskId).maybeSingle();
-      if (task) setActiveTask(task as Task);
+        .from("tasks")
+        .select("*, task_tags(tag_id, tags(id, name, color))")
+        .eq("id", currentTaskId)
+        .maybeSingle();
+      if (task) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const t = task as any;
+        setActiveTask({
+          ...t,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+        } as TaskWithTags);
+      }
       if (currentProjectId) {
         const { data: project } = await supabase
           .from("projects").select("*").eq("id", currentProjectId).maybeSingle();
@@ -219,17 +230,19 @@ export default function FocusPage() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
 
-    const { data: candidates } = await supabase
+    const { data: candidatesData } = await supabase
       .from("tasks")
-      .select("*")
+      .select("*, task_tags(tag_id, tags(id, name, color))")
       .eq("status", "todo")
       .neq("id", activeTask.id)
       .order("sort_order")
       .limit(20);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const candidates = (candidatesData ?? []) as any[];
 
     const next =
-      candidates?.find((t) => t.project_id === activeTask.project_id) ??
-      candidates?.[0] ??
+      candidates.find((t) => t.project_id === activeTask.project_id) ??
+      candidates[0] ??
       null;
 
     if (next) {
@@ -239,7 +252,13 @@ export default function FocusPage() {
           .from("projects").select("*").eq("id", next.project_id).single();
         nextProject = p ?? null;
       }
-      setActiveTask(next as Task);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const n = next as any;
+      setActiveTask({
+        ...n,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tags: (n.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+      } as TaskWithTags);
       setActiveProject(nextProject);
       toast.success(`Done! Now: ${next.title}`);
     } else {
@@ -249,7 +268,7 @@ export default function FocusPage() {
     }
   }
 
-  function selectTask(task: Task, project: Project | null) {
+  function selectTask(task: TaskWithTags, project: Project | null) {
     setActiveTask(task);
     setActiveProject(project);
     if (timer.status === "idle" || timer.status === "completed") {
@@ -307,7 +326,7 @@ export default function FocusPage() {
         />
 
         {/* Task context */}
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex flex-col items-center gap-2.5 text-center w-full">
           {activeProject && (
             <span
               className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider"
@@ -321,44 +340,62 @@ export default function FocusPage() {
             </span>
           )}
 
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setTaskPickerOpen(true)}
-              className="flex items-center gap-2 max-w-[260px] group"
-            >
-              {activeTask ? (
-                <h2
-                  className="text-xl font-semibold leading-snug text-center"
-                  style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}
-                >
-                  {activeTask.title}
-                </h2>
-              ) : (
-                <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-                  Choose a task to focus on…
-                </span>
-              )}
-              <Pencil
-                size={13}
-                className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0"
-                style={{ color: "var(--color-on-surface-variant)" }}
-              />
-            </button>
-            {activeTask && (
-              <button
-                onClick={handleFinishTask}
-                title="Mark done & load next task"
-                className="w-6 h-6 flex items-center justify-center rounded-full transition-all active:scale-90 shrink-0"
-                style={{
-                  background: "color-mix(in srgb, var(--color-secondary) 18%, transparent)",
-                  color: "var(--color-secondary)",
-                  border: "1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent)",
-                }}
+          <button
+            onClick={() => setTaskPickerOpen(true)}
+            className="flex items-center justify-center gap-2 group w-full"
+          >
+            {activeTask ? (
+              <h2
+                className="text-xl font-semibold leading-snug text-center break-words"
+                style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}
               >
-                <Check size={12} strokeWidth={2.5} />
-              </button>
+                {activeTask.title}
+              </h2>
+            ) : (
+              <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
+                Choose a task to focus on…
+              </span>
             )}
-          </div>
+            <Pencil
+              size={13}
+              className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0"
+              style={{ color: "var(--color-on-surface-variant)" }}
+            />
+          </button>
+
+          {activeTask && activeTask.tags && activeTask.tags.length > 0 && (
+            <div className="flex items-center gap-1.5 flex-wrap justify-center">
+              {activeTask.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="px-2 py-0.5 rounded-full text-[10px] font-medium leading-none"
+                  style={{
+                    background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                    color: tag.color,
+                    border: `1px solid color-mix(in srgb, ${tag.color} 28%, transparent)`,
+                  }}
+                >
+                  #{tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+
+          {activeTask && (
+            <button
+              onClick={handleFinishTask}
+              title="Mark done & load next task"
+              className="mt-0.5 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 btn-hover-surface"
+              style={{
+                background: "color-mix(in srgb, var(--color-secondary) 14%, transparent)",
+                color: "var(--color-secondary)",
+                border: "1px solid color-mix(in srgb, var(--color-secondary) 28%, transparent)",
+              }}
+            >
+              <Check size={11} strokeWidth={2.5} />
+              Mark done
+            </button>
+          )}
 
           {/* Custom duration input */}
           {timer.mode === "custom" && (timer.status === "idle" || timer.status === "completed") && (
