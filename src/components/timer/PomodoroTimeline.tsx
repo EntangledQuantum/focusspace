@@ -99,9 +99,11 @@ export function PomodoroTimeline({
 
   let leftLabel = "";
   if (isTaskDone) {
-    leftLabel = "Session done";
+    leftLabel = status === "idle" ? "Task complete — pick another" : "Session done";
   } else if (isOnBreak) {
     leftLabel = activeSeg?.type === "long_break" ? "Long break" : "Short break";
+  } else if (status === "idle") {
+    leftLabel = `Ready · Focus ${currentPomoNum}/${totalSessions}`;
   } else {
     leftLabel = `Focus ${currentPomoNum}/${totalSessions}`;
   }
@@ -121,6 +123,8 @@ export function PomodoroTimeline({
     if (nextPomoNum <= totalSessions) {
       rightLabel = `Focus ${nextPomoNum}/${totalSessions} next`;
     }
+  } else if (status === "idle" && !isTaskDone) {
+    rightLabel = `${fmt(activeSeg?.durationSec ?? pomoDurationSec)} session`;
   }
 
   return (

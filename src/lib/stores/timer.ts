@@ -78,13 +78,15 @@ export const useTimerStore = create<TimerState>()(
       },
 
       reset() {
-        set({
+        set((s) => ({
+          // If we were on a break, flip back to pomodoro so the timeline shows the next focus
+          mode: s.mode === "short_break" || s.mode === "long_break" ? "pomodoro" : s.mode,
           status: "idle",
           startedAt: null,
           pausedAt: null,
           accumulatedPausedMs: 0,
           currentSessionId: null,
-        });
+        }));
       },
 
       complete() {

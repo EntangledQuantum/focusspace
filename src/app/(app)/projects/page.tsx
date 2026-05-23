@@ -54,6 +54,16 @@ export default function ProjectsPage() {
   const titleInputRef = useRef<HTMLInputElement>(null);
   const tagSugRef = useRef<HTMLDivElement>(null);
 
+  // Task edit state
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editTitle, setEditTitle] = useState("");
+  const [editPomos, setEditPomos] = useState(1);
+  const [editTags, setEditTags] = useState<TagType[]>([]);
+  const [editTagQuery, setEditTagQuery] = useState("");
+  const [showEditTagSugs, setShowEditTagSugs] = useState(false);
+  const editInputRef = useRef<HTMLInputElement>(null);
+  const editTagSugRef = useRef<HTMLDivElement>(null);
+
   const { data: settings } = useQuery<UserSettings | null>({
     queryKey: ["settings"],
     queryFn: async () => {
@@ -116,6 +126,14 @@ export default function ProjectsPage() {
     !tags.find((t) => t.name === tagQuery) &&
     !newTaskTags.find((t) => t.name === tagQuery);
 
+  const editTagSuggestions = tags.filter(
+    (t) => t.name.startsWith(editTagQuery) && !editTags.find((nt) => nt.id === t.id),
+  );
+  const canCreateEditTag =
+    editTagQuery.length > 0 &&
+    !tags.find((t) => t.name === editTagQuery) &&
+    !editTags.find((t) => t.name === editTagQuery);
+
   // Close tag suggestions on outside click
   useEffect(() => {
     function onDown(e: MouseEvent) {
@@ -126,10 +144,78 @@ export default function ProjectsPage() {
       ) {
         setShowTagSugs(false);
       }
+      if (
+        editTagSugRef.current &&
+        !editTagSugRef.current.contains(e.target as Node) &&
+        editInputRef.current !== e.target
+      ) {
+        setShowEditTagSugs(false);
+      }
     }
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, []);
+
+  function startEditingTask(task: TaskWithTags) {
+    setEditingTaskId(task.id);
+    setEditTitle(task.title);
+    setEditPomos(task.estimated_pomodoros ?? 1);
+    setEditTags(task.tags ?? []);
+    setEditTagQuery("");
+    setShowEditTagSugs(false);
+  }
+
+  function cancelEditingTask() {
+    setEditingTaskId(null);
+    setEditTitle("");
+    setEditPomos(1);
+    setEditTags([]);
+    setEditTagQuery("");
+    setShowEditTagSugs(false);
+  }
+
+  function handleEditTitleChange(val: string) {
+    setEditTitle(val);
+    const match = val.match(/#(\w*)$/);
+    if (match) {
+      setEditTagQuery(match[1].toLowerCase());
+      setShowEditTagSugs(true);
+    } else {
+      setShowEditTagSugs(false);
+      setEditTagQuery("");
+    }
+  }
+
+  function selectEditTagSuggestion(tag: TagType) {
+    setEditTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
+    setShowEditTagSugs(false);
+    setEditTagQuery("");
+    if (!editTags.find((t) => t.id === tag.id)) {
+      setEditTags((prev) => [...prev, tag]);
+    }
+  }
+
+  async function createAndSelectEditTag() {
+    if (!editTagQuery) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    const existing = tags.find((t) => t.name === editTagQuery);
+    if (existing) {
+      selectEditTagSuggestion(existing);
+      return;
+    }
+    const { data: created } = await supabase
+      .from("tags")
+      .insert({ user_id: user!.id, name: editTagQuery, color: randomTagColor() })
+      .select()
+      .single();
+    if (created) {
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      setEditTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
+      setShowEditTagSugs(false);
+      setEditTagQuery("");
+      setEditTags((prev) => [...prev, created as TagType]);
+    }
+  }
 
   const addProject = useMutation({
     mutationFn: async () => {
@@ -272,6 +358,56 @@ export default function ProjectsPage() {
       toast.success("Tag deleted");
     },
     onError: () => toast.error("Failed to delete tag"),
+  });
+
+  const updateTask = useMutation({
+    mutationFn: async () => {
+      if (!editingTaskId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // Extract inline #tags from title
+      const hashTagNames = (editTitle.match(/#(\w+)/g) ?? []).map((m) => m.slice(1).toLowerCase());
+      const cleanTitle = editTitle.replace(/#\w+/g, "").trim() || editTitle.trim();
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({ title: cleanTitle, estimated_pomodoros: editPomos })
+        .eq("id", editingTaskId);
+      if (error) throw error;
+
+      // Resolve tags (chips + inline)
+      const chipIds = new Set(editTags.map((t) => t.id));
+      const resolvedTagIds: string[] = [...chipIds];
+      for (const name of hashTagNames) {
+        const existing = tags.find((t) => t.name === name);
+        if (existing) {
+          if (!chipIds.has(existing.id)) resolvedTagIds.push(existing.id);
+        } else {
+          const { data: created } = await supabase
+            .from("tags")
+            .insert({ user_id: user!.id, name, color: randomTagColor() })
+            .select("id")
+            .single();
+          if (created) resolvedTagIds.push(created.id);
+        }
+      }
+
+      // Replace task_tags: delete existing then insert
+      await supabase.from("task_tags").delete().eq("task_id", editingTaskId);
+      if (resolvedTagIds.length > 0) {
+        await supabase.from("task_tags").insert(
+          resolvedTagIds.map((tagId) => ({ task_id: editingTaskId, tag_id: tagId })),
+        );
+      }
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      cancelEditingTask();
+      toast.success("Task updated");
+    },
+    onError: () => toast.error("Failed to update task"),
   });
 
   const toggleTask = useMutation({
@@ -765,14 +901,39 @@ export default function ProjectsPage() {
 
             {/* Todo tasks */}
             <div className="space-y-2">
-              {todo.map((task) => (
-                <TaskRow
-                  key={task.id}
-                  task={task}
-                  onToggle={() => toggleTask.mutate(task)}
-                  onDelete={() => deleteTask.mutate(task.id)}
-                />
-              ))}
+              {todo.map((task) =>
+                editingTaskId === task.id ? (
+                  <TaskEditor
+                    key={task.id}
+                    editTitle={editTitle}
+                    editPomos={editPomos}
+                    editTags={editTags}
+                    editTagQuery={editTagQuery}
+                    showEditTagSugs={showEditTagSugs}
+                    editTagSuggestions={editTagSuggestions}
+                    canCreateEditTag={canCreateEditTag}
+                    editInputRef={editInputRef}
+                    editTagSugRef={editTagSugRef}
+                    onTitleChange={handleEditTitleChange}
+                    onPomosChange={setEditPomos}
+                    onRemoveTag={(id) => setEditTags((prev) => prev.filter((t) => t.id !== id))}
+                    onSelectTagSug={selectEditTagSuggestion}
+                    onCreateAndSelectTag={createAndSelectEditTag}
+                    onSave={() => editTitle.trim() && updateTask.mutate()}
+                    onCancel={cancelEditingTask}
+                    pomoDurationSec={settings?.focus_duration_sec ?? 25 * 60}
+                    shortBreakSec={settings?.short_break_sec ?? 5 * 60}
+                  />
+                ) : (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    onToggle={() => toggleTask.mutate(task)}
+                    onDelete={() => deleteTask.mutate(task.id)}
+                    onEdit={() => startEditingTask(task)}
+                  />
+                ),
+              )}
             </div>
 
             {/* Done tasks */}
@@ -812,11 +973,13 @@ function TaskRow({
   task,
   onToggle,
   onDelete,
+  onEdit,
   done = false,
 }: {
   task: TaskWithTags;
   onToggle: () => void;
   onDelete: () => void;
+  onEdit?: () => void;
   done?: boolean;
 }) {
   const priority = PRIORITY_CONFIG[task.priority];
@@ -882,13 +1045,182 @@ function TaskRow({
         />
       )}
 
-      <button
-        onClick={onDelete}
-        className="opacity-0 group-hover:opacity-60 hover:!opacity-100 transition-opacity"
-        style={{ color: "var(--color-error)" }}
-      >
-        <Trash2 size={14} />
-      </button>
+      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {onEdit && (
+          <button
+            onClick={onEdit}
+            title="Edit task"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            <Pencil size={13} />
+          </button>
+        )}
+        <button
+          onClick={onDelete}
+          title="Delete task"
+          style={{ color: "var(--color-error)" }}
+        >
+          <Trash2 size={14} />
+        </button>
+      </div>
+    </motion.div>
+  );
+}
+
+function TaskEditor({
+  editTitle,
+  editPomos,
+  editTags,
+  editTagQuery,
+  showEditTagSugs,
+  editTagSuggestions,
+  canCreateEditTag,
+  editInputRef,
+  editTagSugRef,
+  onTitleChange,
+  onPomosChange,
+  onRemoveTag,
+  onSelectTagSug,
+  onCreateAndSelectTag,
+  onSave,
+  onCancel,
+  pomoDurationSec,
+  shortBreakSec,
+}: {
+  editTitle: string;
+  editPomos: number;
+  editTags: TagType[];
+  editTagQuery: string;
+  showEditTagSugs: boolean;
+  editTagSuggestions: TagType[];
+  canCreateEditTag: boolean;
+  editInputRef: React.RefObject<HTMLInputElement | null>;
+  editTagSugRef: React.RefObject<HTMLDivElement | null>;
+  onTitleChange: (val: string) => void;
+  onPomosChange: (n: number) => void;
+  onRemoveTag: (id: string) => void;
+  onSelectTagSug: (tag: TagType) => void;
+  onCreateAndSelectTag: () => void;
+  onSave: () => void;
+  onCancel: () => void;
+  pomoDurationSec: number;
+  shortBreakSec: number;
+}) {
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+      className="rounded-xl px-4 py-3 flex flex-col gap-2.5"
+      style={{ background: "var(--color-surface-container-high)", border: "1px solid var(--color-primary)" }}
+    >
+      <div className="relative">
+        <div className="flex items-center gap-3">
+          <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
+          <input
+            ref={editInputRef}
+            autoFocus
+            value={editTitle}
+            onChange={(e) => onTitleChange(e.target.value)}
+            placeholder="Task title… or type #tag"
+            className="flex-1 bg-transparent text-sm outline-none"
+            style={{ color: "var(--color-on-surface)" }}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !showEditTagSugs && editTitle.trim()) onSave();
+              if (e.key === "Escape") {
+                if (showEditTagSugs) return;
+                onCancel();
+              }
+            }}
+          />
+        </div>
+
+        <AnimatePresence>
+          {showEditTagSugs && (editTagSuggestions.length > 0 || canCreateEditTag) && (
+            <motion.div
+              ref={editTagSugRef}
+              initial={{ opacity: 0, y: -4 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -4 }}
+              className="absolute left-7 top-full mt-1 z-50 rounded-xl py-1 min-w-40"
+              style={{
+                background: "var(--color-surface-container-high)",
+                border: "1px solid var(--color-outline-variant)",
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              }}
+            >
+              {editTagSuggestions.map((tag) => (
+                <button
+                  key={tag.id}
+                  onMouseDown={(e) => { e.preventDefault(); onSelectTagSug(tag); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                  style={{ color: "var(--color-on-surface)" }}
+                >
+                  <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tag.color }} />
+                  #{tag.name}
+                </button>
+              ))}
+              {canCreateEditTag && (
+                <button
+                  onMouseDown={(e) => { e.preventDefault(); onCreateAndSelectTag(); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                  style={{ color: "var(--color-primary)" }}
+                >
+                  <Plus size={10} />
+                  Create #{editTagQuery}
+                </button>
+              )}
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </div>
+
+      {editTags.length > 0 && (
+        <div className="flex items-center gap-1.5 pl-7 flex-wrap">
+          {editTags.map((tag) => (
+            <div
+              key={tag.id}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+              style={{
+                background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                color: tag.color,
+                border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
+              }}
+            >
+              #{tag.name}
+              <button onClick={() => onRemoveTag(tag.id)}>
+                <X size={9} />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="flex items-center justify-between pl-7">
+        <PomodoroRating
+          value={editPomos}
+          onChange={onPomosChange}
+          pomoDurationSec={pomoDurationSec}
+          shortBreakSec={shortBreakSec}
+        />
+        <div className="flex items-center gap-2">
+          <button
+            onClick={onSave}
+            className="text-xs px-3 py-1 rounded-full font-semibold transition-all btn-hover-primary"
+            style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
+          >
+            Save
+          </button>
+          <button
+            onClick={onCancel}
+            className="text-xs transition-all btn-hover-ghost px-2 py-1 rounded-lg"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
     </motion.div>
   );
 }

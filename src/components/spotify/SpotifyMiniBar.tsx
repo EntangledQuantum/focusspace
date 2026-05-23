@@ -14,9 +14,10 @@ function SpotifyLogo() {
 
 export function SpotifyMiniBar() {
   const pathname = usePathname();
-  const { state, externalState, player, isReady } = useSpotifyContext();
+  const { state, externalState, isReady, playPause, next } = useSpotifyContext();
 
   if (pathname === "/focus") return null;
+  if (pathname === "/miniplayer") return null;
 
   const track = state?.track_window?.current_track;
   const extTrack = !track ? externalState?.item ?? null : null;
@@ -26,6 +27,8 @@ export function SpotifyMiniBar() {
 
   const isPlaying = state ? !state.paused : (externalState?.is_playing ?? false);
   const albumArt = track?.album?.images?.[0]?.url ?? extTrack?.album?.images?.[0]?.url;
+  const isExternal = !track && !!extTrack;
+  const controlsEnabled = isReady || isExternal;
 
   return (
     <div
@@ -58,9 +61,9 @@ export function SpotifyMiniBar() {
       </div>
       <div className="flex items-center gap-1.5 shrink-0">
         <button
-          onClick={() => player?.togglePlay()}
-          disabled={!isReady}
-          className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+          onClick={playPause}
+          disabled={!controlsEnabled}
+          className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30 btn-hover-green"
           style={{ background: "#1DB954", color: "#000" }}
         >
           {isPlaying
@@ -68,8 +71,8 @@ export function SpotifyMiniBar() {
             : <Play size={12} fill="currentColor" />}
         </button>
         <button
-          onClick={() => player?.nextTrack()}
-          disabled={!isReady}
+          onClick={next}
+          disabled={!controlsEnabled}
           className="w-6 h-6 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
           style={{ color: "var(--color-on-surface-variant)" }}
         >

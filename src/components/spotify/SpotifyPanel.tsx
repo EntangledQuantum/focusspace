@@ -2,9 +2,20 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSpotifyContext, type Playlist } from "@/lib/context/SpotifyContext";
+import { useSpotifyContext, type PlayableContext } from "@/lib/context/SpotifyContext";
 import { useTimerStore } from "@/lib/stores/timer";
-import { Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic } from "lucide-react";
+import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
+import { toast } from "sonner";
+import {
+  Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic,
+  Shuffle, Volume2, VolumeX, ExternalLink, PictureInPicture2,
+} from "lucide-react";
+
+type SearchType = "playlist" | "track" | "album" | "artist";
+
+interface SearchHit extends PlayableContext {
+  subtitle?: string;
+}
 
 function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: string }) {
   return (
@@ -14,54 +25,101 @@ function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: 
   );
 }
 
-function PlaylistPicker({
+function SearchPicker({
   token,
   onSelect,
   onClose,
 }: {
   token: string;
-  onSelect: (playlist: Playlist) => void;
+  onSelect: (ctx: PlayableContext) => void;
   onClose: () => void;
 }) {
   const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<Playlist[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchHit[]>([]);
+  const [searchType, setSearchType] = useState<SearchType>("playlist");
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const { data: playlists = [] } = useQuery<Playlist[]>({
+  // Default list: user's playlists (only when search is empty + playlist tab)
+  const { data: playlists = [] } = useQuery<SearchHit[]>({
     queryKey: ["spotify-playlists"],
     queryFn: async () => {
       const res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
         headers: { Authorization: `Bearer ${token}` },
       });
       const data = await res.json();
-      return ((data.items ?? []) as (Playlist | null)[]).filter(Boolean) as Playlist[];
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data.items ?? []) as any[]).filter(Boolean).map((p: any) => ({
+        uri: p.uri,
+        name: p.name,
+        images: p.images,
+        type: "playlist" as const,
+        subtitle: `${p.tracks?.total ?? 0} tracks`,
+      }));
     },
     staleTime: 60 * 1000,
   });
 
-  function handleSearchChange(q: string) {
-    setSearch(q);
+  useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    if (!q.trim()) { setSearchResults([]); return; }
+    const q = search.trim();
+    if (!q) { setSearchResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
         const res = await fetch(
-          `https://api.spotify.com/v1/search?type=playlist&q=${encodeURIComponent(q)}&limit=20`,
-          { headers: { Authorization: `Bearer ${token}` } }
+          `https://api.spotify.com/v1/search?type=${searchType}&q=${encodeURIComponent(q)}&limit=20`,
+          { headers: { Authorization: `Bearer ${token}` } },
         );
         const data = await res.json();
-        setSearchResults(
-          ((data.playlists?.items ?? []) as (Playlist | null)[]).filter(Boolean) as Playlist[]
-        );
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const key = (searchType + "s") as keyof typeof data;
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const items = ((data[key]?.items ?? []) as any[]).filter(Boolean);
+        const hits: SearchHit[] = items.map((it) => {
+          if (searchType === "track") {
+            return {
+              uri: it.uri,
+              name: it.name,
+              images: it.album?.images,
+              type: "track" as const,
+              subtitle: it.artists?.map((a: { name: string }) => a.name).join(", "),
+            };
+          }
+          if (searchType === "album") {
+            return {
+              uri: it.uri,
+              name: it.name,
+              images: it.images,
+              type: "album" as const,
+              subtitle: it.artists?.map((a: { name: string }) => a.name).join(", "),
+            };
+          }
+          if (searchType === "artist") {
+            return {
+              uri: it.uri,
+              name: it.name,
+              images: it.images,
+              type: "artist" as const,
+              subtitle: it.genres?.[0] ?? "Artist",
+            };
+          }
+          return {
+            uri: it.uri,
+            name: it.name,
+            images: it.images,
+            type: "playlist" as const,
+            subtitle: `${it.tracks?.total ?? 0} tracks`,
+          };
+        });
+        setSearchResults(hits);
       } finally {
         setIsSearching(false);
       }
     }, 400);
-  }
+  }, [search, searchType, token]);
 
-  const displayList = search.trim() ? searchResults : playlists;
+  const displayList = search.trim() ? searchResults : (searchType === "playlist" ? playlists : []);
 
   return (
     <div
@@ -69,11 +127,11 @@ function PlaylistPicker({
       style={{
         background: "var(--color-surface-container-high)",
         border: "1px solid rgba(255,255,255,0.08)",
-        maxHeight: 320,
+        maxHeight: 380,
         boxShadow: "0 -8px 32px rgba(0,0,0,0.35)",
       }}
     >
-      <div className="p-3" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="p-3 space-y-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
         <div
           className="flex items-center gap-2 px-3 py-2 rounded-xl"
           style={{ background: "var(--color-surface-container-highest)" }}
@@ -82,35 +140,52 @@ function PlaylistPicker({
           <input
             autoFocus
             value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            placeholder="Search playlists…"
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={`Search ${searchType}s…`}
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--color-on-surface)" }}
           />
         </div>
+        <div className="flex items-center gap-1">
+          {(["playlist", "track", "album", "artist"] as SearchType[]).map((t) => (
+            <button
+              key={t}
+              onClick={() => setSearchType(t)}
+              className="px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all"
+              style={{
+                background: searchType === t ? "rgba(29,185,84,0.18)" : "transparent",
+                color: searchType === t ? "#1DB954" : "var(--color-on-surface-variant)",
+                border: searchType === t ? "1px solid rgba(29,185,84,0.35)" : "1px solid transparent",
+              }}
+            >
+              {t}
+            </button>
+          ))}
+        </div>
       </div>
-      <div className="overflow-y-auto" style={{ maxHeight: 240 }}>
+      <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
         {isSearching ? (
           <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
             Searching…
           </div>
         ) : displayList.length === 0 ? (
           <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-            {search ? "No results" : "No playlists found"}
+            {search ? "No results" : "Type to search"}
           </div>
         ) : (
-          displayList.map((pl) => (
+          displayList.map((hit) => (
             <button
-              key={pl.id}
-              onClick={() => { onSelect(pl); onClose(); }}
+              key={hit.uri}
+              onClick={() => { onSelect(hit); onClose(); }}
               className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5"
             >
-              {pl.images?.[0] ? (
+              {hit.images?.[0] ? (
                 // eslint-disable-next-line @next/next/no-img-element
                 <img
-                  src={pl.images[0].url}
-                  alt={pl.name}
+                  src={hit.images[0].url}
+                  alt={hit.name}
                   className="w-9 h-9 rounded-lg object-cover shrink-0"
+                  style={{ borderRadius: hit.type === "artist" ? "50%" : undefined }}
                 />
               ) : (
                 <div
@@ -120,9 +195,16 @@ function PlaylistPicker({
                   <ListMusic size={14} style={{ color: "var(--color-on-surface-variant)" }} />
                 </div>
               )}
-              <p className="text-sm font-medium truncate" style={{ color: "var(--color-on-surface)" }}>
-                {pl.name}
-              </p>
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate" style={{ color: "var(--color-on-surface)" }}>
+                  {hit.name}
+                </p>
+                {hit.subtitle && (
+                  <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
+                    {hit.subtitle}
+                  </p>
+                )}
+              </div>
             </button>
           ))
         )}
@@ -133,28 +215,78 @@ function PlaylistPicker({
 
 export function SpotifyPanel() {
   const {
-    token, isConnected, tokenLoading, player, deviceId, state, isReady, sdkError,
+    token, isConnected, tokenLoading, state, isReady, sdkError,
     selectedPlaylist, setSelectedPlaylist, externalState, progress,
+    volume, setVolume, shuffle, setShuffle,
+    playPause, next, previous, transferToSdk, playContext,
   } = useSpotifyContext();
   const qc = useQueryClient();
 
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [volumeOpen, setVolumeOpen] = useState(false);
+  const [lastVolume, setLastVolume] = useState(60);
   const pickerRef = useRef<HTMLDivElement>(null);
+  const volumeRef = useRef<HTMLDivElement>(null);
   const timerStatus = useTimerStore((s) => s.status);
 
-  // Close picker on outside click
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) {
-        setPickerOpen(false);
-      }
+      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
+      if (volumeRef.current && !volumeRef.current.contains(e.target as Node)) setVolumeOpen(false);
     }
-    if (pickerOpen) document.addEventListener("mousedown", handler);
+    if (pickerOpen || volumeOpen) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [pickerOpen]);
+  }, [pickerOpen, volumeOpen]);
 
   function connectSpotify() {
     window.location.href = "/api/spotify/connect?next=/focus";
+  }
+
+  const { pipWindow, setPipWindow } = useMiniPlayerStore();
+
+  async function openMiniPlayer() {
+    if (pipWindow) { pipWindow.focus(); return; }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const dpi = (window as any).documentPictureInPicture;
+    if (!dpi) {
+      toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
+      return;
+    }
+    try {
+      const pip: Window = await dpi.requestWindow({ width: 320, height: 540 });
+      // Clone styles + tokens into the pip window
+      for (const sheet of Array.from(document.styleSheets)) {
+        try {
+          const rules = Array.from(sheet.cssRules).map((r) => r.cssText).join("");
+          const style = pip.document.createElement("style");
+          style.textContent = rules;
+          pip.document.head.appendChild(style);
+        } catch {
+          if (sheet.href) {
+            const link = pip.document.createElement("link");
+            link.rel = "stylesheet";
+            link.href = sheet.href;
+            pip.document.head.appendChild(link);
+          }
+        }
+      }
+      const rootStyles = window.getComputedStyle(document.documentElement);
+      const themeStyle = pip.document.createElement("style");
+      const tokens: string[] = [];
+      for (let i = 0; i < rootStyles.length; i++) {
+        const prop = rootStyles[i];
+        if (prop.startsWith("--")) tokens.push(`${prop}: ${rootStyles.getPropertyValue(prop)};`);
+      }
+      themeStyle.textContent = `:root { ${tokens.join(" ")} } body { margin:0; background: var(--color-background); color: var(--color-on-surface); font-family: var(--font-sans, system-ui); overflow: hidden; }`;
+      pip.document.head.appendChild(themeStyle);
+      if (document.documentElement.classList.contains("dark")) {
+        pip.document.documentElement.classList.add("dark");
+      }
+      pip.addEventListener("pagehide", () => setPipWindow(null));
+      setPipWindow(pip);
+    } catch {
+      toast.error("Couldn't open mini player.");
+    }
   }
 
   const isSessionActive = timerStatus === "running" || timerStatus === "paused";
@@ -181,7 +313,7 @@ export function SpotifyPanel() {
         </div>
         <button
           onClick={connectSpotify}
-          className="px-4 py-2 rounded-full text-xs font-semibold shrink-0 transition-all active:scale-95"
+          className="px-4 py-2 rounded-full text-xs font-semibold shrink-0 transition-all active:scale-95 btn-hover-green"
           style={{ background: "#1DB954", color: "#000" }}
         >
           Connect
@@ -204,32 +336,31 @@ export function SpotifyPanel() {
   const albumArt = track?.album?.images?.[0]?.url ?? extTrack?.album?.images?.[0]?.url;
   const isPlaying = state ? !state.paused : (externalState?.is_playing ?? false);
   const trackName = track?.name ?? extTrack?.name;
-  const trackArtists = track?.artists?.map((a) => a.name).join(", ") ?? extTrack?.artists?.map((a) => a.name).join(", ");
+  const trackArtists =
+    track?.artists?.map((a) => a.name).join(", ") ??
+    extTrack?.artists?.map((a) => a.name).join(", ");
+  const isExternal = !track && !!extTrack;
 
-  function handlePlayPause() {
-    if (!isReady) return;
-    if (!state && selectedPlaylist && deviceId && token) {
-      fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ context_uri: selectedPlaylist.uri }),
-      });
+  const extProgress = extTrack && externalState && extTrack.duration_ms
+    ? externalState.progress_ms / extTrack.duration_ms
+    : progress;
+
+  function toggleMute() {
+    if (volume > 0) {
+      setLastVolume(volume);
+      setVolume(0);
     } else {
-      player?.togglePlay();
+      setVolume(lastVolume || 60);
     }
   }
 
-  const extProgress = extTrack && !track && externalState
-    ? externalState.progress_ms / (extTrack.duration_ms || 1)
-    : progress;
-
   return (
     <div className="glass rounded-2xl p-4 w-full max-w-[420px] mt-4 space-y-3">
-      {/* Playlist selector */}
+      {/* Playlist / search selector */}
       <div ref={pickerRef} className="relative">
         <button
           onClick={() => setPickerOpen(!pickerOpen)}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left transition-colors"
+          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left transition-colors btn-hover-surface"
           style={{
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.07)",
@@ -238,18 +369,16 @@ export function SpotifyPanel() {
         >
           <ListMusic size={14} />
           <span className="flex-1 text-xs truncate">
-            {selectedPlaylist ? selectedPlaylist.name : "Choose a playlist…"}
+            {selectedPlaylist ? selectedPlaylist.name : "Choose music…"}
           </span>
-          <ChevronDown
-            size={13}
-            className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`}
-          />
+          <ChevronDown size={13} className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
         </button>
         {pickerOpen && token && (
-          <PlaylistPicker
+          <SearchPicker
             token={token}
-            onSelect={(pl) => {
-              setSelectedPlaylist(pl);
+            onSelect={(ctx) => {
+              setSelectedPlaylist(ctx);
+              playContext(ctx);
               qc.invalidateQueries({ queryKey: ["spotify-playlists"] });
             }}
             onClose={() => setPickerOpen(false)}
@@ -275,13 +404,23 @@ export function SpotifyPanel() {
             {trackName ?? (isReady ? "Ready" : "Connecting…")}
           </p>
           <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-            {trackArtists ?? (extTrack ? "" : "Pick a playlist to start")}
+            {trackArtists ?? (extTrack ? "" : "Pick something to play")}
           </p>
         </div>
         <div className="flex flex-col items-end gap-1">
-          <SpotifyLogo size={15} />
-          {extTrack && !track && (
-            <span className="text-[10px]" style={{ color: "var(--color-on-surface-variant)" }}>other device</span>
+          <button
+            onClick={openMiniPlayer}
+            title="Open mini player"
+            className="transition-opacity opacity-60 hover:opacity-100"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            <PictureInPicture2 size={13} />
+          </button>
+          {isExternal && externalState?.device && (
+            <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--color-on-surface-variant)" }}>
+              <ExternalLink size={9} />
+              {externalState.device.name}
+            </span>
           )}
         </div>
       </div>
@@ -295,32 +434,100 @@ export function SpotifyPanel() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-center gap-6">
+      <div className="flex items-center justify-between">
+        {/* Shuffle */}
         <button
-          onClick={() => player?.previousTrack()}
-          disabled={!isReady}
-          className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
-          style={{ color: "var(--color-on-surface-variant)" }}
+          onClick={() => setShuffle(!shuffle)}
+          title={shuffle ? "Shuffle on" : "Shuffle off"}
+          className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90"
+          style={{
+            color: shuffle ? "#1DB954" : "var(--color-on-surface-variant)",
+            background: shuffle ? "rgba(29,185,84,0.12)" : "transparent",
+          }}
         >
-          <SkipBack size={17} />
+          <Shuffle size={14} />
         </button>
-        <button
-          onClick={handlePlayPause}
-          disabled={!isReady}
-          className="w-11 h-11 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
-          style={{ background: "#1DB954", color: "#000" }}
-        >
-          {isPlaying ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
-        </button>
-        <button
-          onClick={() => player?.nextTrack()}
-          disabled={!isReady}
-          className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
-          style={{ color: "var(--color-on-surface-variant)" }}
-        >
-          <SkipForward size={17} />
-        </button>
+
+        <div className="flex items-center gap-4">
+          <button
+            onClick={previous}
+            disabled={!isReady && !isExternal}
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            <SkipBack size={17} />
+          </button>
+          <button
+            onClick={playPause}
+            disabled={!isReady && !isExternal}
+            className="w-11 h-11 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30 btn-hover-green"
+            style={{ background: "#1DB954", color: "#000" }}
+          >
+            {isPlaying ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
+          </button>
+          <button
+            onClick={next}
+            disabled={!isReady && !isExternal}
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            <SkipForward size={17} />
+          </button>
+        </div>
+
+        {/* Volume */}
+        <div ref={volumeRef} className="relative">
+          <button
+            onClick={() => setVolumeOpen((v) => !v)}
+            title="Volume"
+            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90"
+            style={{ color: "var(--color-on-surface-variant)" }}
+          >
+            {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+          </button>
+          {volumeOpen && (
+            <div
+              className="absolute bottom-full right-0 mb-2 p-3 rounded-xl flex items-center gap-2"
+              style={{
+                background: "var(--color-surface-container-high)",
+                border: "1px solid rgba(255,255,255,0.08)",
+                boxShadow: "0 -4px 16px rgba(0,0,0,0.3)",
+                width: 180,
+              }}
+            >
+              <button onClick={toggleMute} style={{ color: "var(--color-on-surface-variant)" }}>
+                {volume === 0 ? <VolumeX size={13} /> : <Volume2 size={13} />}
+              </button>
+              <input
+                type="range"
+                min={0}
+                max={100}
+                value={volume}
+                onChange={(e) => setVolume(parseInt(e.target.value, 10))}
+                className="flex-1 accent-[#1DB954]"
+              />
+              <span className="text-[10px] w-7 text-right" style={{ color: "var(--color-on-surface-variant)" }}>
+                {volume}%
+              </span>
+            </div>
+          )}
+        </div>
       </div>
+
+      {/* Takeover hint */}
+      {isExternal && (
+        <button
+          onClick={() => transferToSdk(true)}
+          className="w-full text-[11px] py-1.5 rounded-lg transition-all btn-hover-surface"
+          style={{
+            color: "var(--color-on-surface-variant)",
+            background: "rgba(255,255,255,0.04)",
+            border: "1px solid rgba(255,255,255,0.07)",
+          }}
+        >
+          Take over playback here
+        </button>
+      )}
     </div>
   );
 }

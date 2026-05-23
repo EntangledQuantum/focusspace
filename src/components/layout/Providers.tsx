@@ -2,12 +2,15 @@
 
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
 import { useState, type ReactNode, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { createClient } from "@/lib/supabase/client";
 import { Toaster } from "sonner";
 import { SideNav } from "@/components/layout/SideNav";
 import { WallpaperRenderer, SOLID_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
 import { SpotifyProvider } from "@/lib/context/SpotifyContext";
 import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
+import { MiniPlayer } from "@/components/MiniPlayer";
+import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
 import { useUiStore } from "@/lib/stores/ui";
 import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
 import type { UserSettings, Wallpaper } from "@/types/database";
@@ -125,6 +128,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
           {children}
         </main>
         <SpotifyMiniBar />
+        <MiniPlayerHost />
         <Toaster
           theme="dark"
           position="bottom-right"
@@ -140,6 +144,12 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
       </>
     </SpotifyProvider>
   );
+}
+
+function MiniPlayerHost() {
+  const { pipWindow } = useMiniPlayerStore();
+  if (!pipWindow) return null;
+  return createPortal(<MiniPlayer />, pipWindow.document.body);
 }
 
 export function Providers({ children, supabaseUrl }: { children: ReactNode; supabaseUrl: string }) {

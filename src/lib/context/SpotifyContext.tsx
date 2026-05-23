@@ -29,6 +29,15 @@ export interface ExternalPlaybackState {
   is_playing: boolean;
   progress_ms: number;
   item: ExternalTrack | null;
+  device?: { id: string; name: string; volume_percent: number } | null;
+  shuffle_state?: boolean;
+}
+
+export interface PlayableContext {
+  uri: string;
+  name: string;
+  images?: { url: string }[];
+  type: "playlist" | "album" | "artist" | "track";
 }
 
 interface SpotifyContextValue {
@@ -41,10 +50,23 @@ interface SpotifyContextValue {
   state: SpotifyPlaybackState | null;
   isReady: boolean;
   sdkError: string | null;
-  selectedPlaylist: Playlist | null;
-  setSelectedPlaylist: (p: Playlist | null) => void;
+  selectedPlaylist: PlayableContext | null;
+  setSelectedPlaylist: (p: PlayableContext | null) => void;
   externalState: ExternalPlaybackState | null;
   progress: number;
+  /** percent 0–100, kept in sync across SDK + external */
+  volume: number;
+  setVolume: (percent: number) => Promise<void>;
+  shuffle: boolean;
+  setShuffle: (on: boolean) => Promise<void>;
+  /** Targets whichever device is actually playing (SDK preferred, falls back to external) */
+  playPause: () => Promise<void>;
+  next: () => Promise<void>;
+  previous: () => Promise<void>;
+  /** Transfer playback to this app's SDK device */
+  transferToSdk: (play?: boolean) => Promise<void>;
+  /** Play a specific context (playlist/album/artist) or track on the SDK device */
+  playContext: (ctx: PlayableContext) => Promise<void>;
 }
 
 const SpotifyContext = createContext<SpotifyContextValue | null>(null);
@@ -65,9 +87,11 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     staleTime: 5 * 60_000,
   });
 
-  const [selectedPlaylist, setSelectedPlaylist] = useState<Playlist | null>(null);
+  const [selectedPlaylist, setSelectedPlaylist] = useState<PlayableContext | null>(null);
   const [externalState, setExternalState] = useState<ExternalPlaybackState | null>(null);
   const [progress, setProgress] = useState(0);
+  const [volume, setVolumeState] = useState(60);
+  const [shuffle, setShuffleState] = useState(false);
 
   const handleTokenRefresh = useCallback(async () => {
     const result = await refreshToken();
@@ -84,6 +108,36 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const timerStatus = useTimerStore((s) => s.status);
   const prevTimerStatus = useRef(timerStatus);
 
+  // Track which device is "current" for control routing
+  const sdkActive = !!(state && !state.paused);
+
+  // Helpers for hitting Web API endpoints with optional device_id
+  const apiPut = useCallback(
+    async (path: string, body?: Record<string, unknown>, params?: Record<string, string>) => {
+      if (!token) return;
+      const url = new URL(`https://api.spotify.com/v1${path}`);
+      if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+      await fetch(url.toString(), {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+    },
+    [token],
+  );
+  const apiPost = useCallback(
+    async (path: string, params?: Record<string, string>) => {
+      if (!token) return;
+      const url = new URL(`https://api.spotify.com/v1${path}`);
+      if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
+      await fetch(url.toString(), {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+      });
+    },
+    [token],
+  );
+
   // Progress bar tick
   useEffect(() => {
     if (progressInterval.current) clearInterval(progressInterval.current);
@@ -93,7 +147,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       return;
     }
     const tick = () => {
-      player?.getCurrentState().then((s: SpotifyPlaybackState | null) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (player as any)?.getCurrentState().then((s: SpotifyPlaybackState | null) => {
         if (s) setProgress(s.duration > 0 ? s.position / s.duration : 0);
       });
     };
@@ -101,23 +156,43 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
   }, [state, player]);
 
-  // Poll GET /me/player for external device state
+  // Sync shuffle state from SDK player_state_changed
+  useEffect(() => {
+    if (state) setShuffleState(state.shuffle ?? false);
+  }, [state]);
+
+  // Poll GET /me/player for external device state + global shuffle/volume
   useEffect(() => {
     if (!token) return;
     if (externalPollRef.current) clearInterval(externalPollRef.current);
 
     async function poll() {
       if (!token) return;
-      if (state && !state.paused) { setExternalState(null); return; }
       try {
         const res = await fetch("https://api.spotify.com/v1/me/player", {
           headers: { Authorization: `Bearer ${token}` },
         });
-        if (res.status === 204 || !res.ok) { setExternalState(null); return; }
+        if (res.status === 204 || !res.ok) {
+          if (!state) setExternalState(null);
+          return;
+        }
         const d = await res.json();
-        if (d?.item) {
-          setExternalState({ is_playing: d.is_playing, progress_ms: d.progress_ms ?? 0, item: d.item });
-        } else {
+        // Only treat as external when our SDK isn't the active source
+        const isOurDevice = d?.device?.id && d.device.id === deviceId;
+        if (d?.item && !isOurDevice && !sdkActive) {
+          setExternalState({
+            is_playing: d.is_playing,
+            progress_ms: d.progress_ms ?? 0,
+            item: d.item,
+            device: d.device,
+            shuffle_state: d.shuffle_state,
+          });
+          if (d.device?.volume_percent != null) setVolumeState(d.device.volume_percent);
+          if (typeof d.shuffle_state === "boolean") setShuffleState(d.shuffle_state);
+        } else if (isOurDevice && d.device?.volume_percent != null) {
+          setVolumeState(d.device.volume_percent);
+          setExternalState(null);
+        } else if (sdkActive) {
           setExternalState(null);
         }
       } catch { /* ignore */ }
@@ -126,9 +201,109 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     poll();
     externalPollRef.current = setInterval(poll, 3000);
     return () => { if (externalPollRef.current) clearInterval(externalPollRef.current); };
-  }, [token, state]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [token, deviceId, sdkActive, state]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Timer-driven playback: auto-start on run, pause on stop, resume on un-pause
+  // Control helpers — auto-route to whichever device is active
+  const playPause = useCallback(async () => {
+    if (sdkActive || (state && state.paused)) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (player as any)?.togglePlay();
+      return;
+    }
+    // External device
+    if (externalState?.device?.id) {
+      const path = externalState.is_playing ? "/me/player/pause" : "/me/player/play";
+      await apiPut(path, undefined, { device_id: externalState.device.id });
+      setExternalState((p) => p ? { ...p, is_playing: !p.is_playing } : p);
+      return;
+    }
+    // No active device but we have one selected — start it on SDK
+    if (selectedPlaylist && deviceId) {
+      await apiPut("/me/player/play", { context_uri: selectedPlaylist.uri }, { device_id: deviceId });
+    }
+  }, [sdkActive, state, player, externalState, selectedPlaylist, deviceId, apiPut]);
+
+  const next = useCallback(async () => {
+    if (sdkActive) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (player as any)?.nextTrack();
+    } else if (externalState?.device?.id) {
+      await apiPost("/me/player/next", { device_id: externalState.device.id });
+    } else {
+      await apiPost("/me/player/next");
+    }
+  }, [sdkActive, player, externalState, apiPost]);
+
+  const previous = useCallback(async () => {
+    if (sdkActive) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (player as any)?.previousTrack();
+    } else if (externalState?.device?.id) {
+      await apiPost("/me/player/previous", { device_id: externalState.device.id });
+    } else {
+      await apiPost("/me/player/previous");
+    }
+  }, [sdkActive, player, externalState, apiPost]);
+
+  const setVolume = useCallback(
+    async (percent: number) => {
+      const p = Math.max(0, Math.min(100, Math.round(percent)));
+      setVolumeState(p);
+      const targetId = sdkActive ? deviceId : externalState?.device?.id ?? deviceId;
+      if (sdkActive && player) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        try { await (player as any).setVolume(p / 100); } catch { /* ignore */ }
+      }
+      if (!targetId) return;
+      await apiPut("/me/player/volume", undefined, {
+        volume_percent: String(p),
+        device_id: targetId,
+      });
+    },
+    [sdkActive, deviceId, externalState, player, apiPut],
+  );
+
+  const setShuffle = useCallback(
+    async (on: boolean) => {
+      setShuffleState(on);
+      const targetId = sdkActive ? deviceId : externalState?.device?.id ?? deviceId;
+      if (!targetId) return;
+      await apiPut("/me/player/shuffle", undefined, {
+        state: String(on),
+        device_id: targetId,
+      });
+    },
+    [sdkActive, deviceId, externalState, apiPut],
+  );
+
+  const transferToSdk = useCallback(
+    async (play = false) => {
+      if (!deviceId || !token) return;
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [deviceId], play }),
+      });
+      // Clear external state — we just took over
+      setExternalState(null);
+    },
+    [deviceId, token],
+  );
+
+  const playContext = useCallback(
+    async (ctx: PlayableContext) => {
+      if (!deviceId || !token) return;
+      // Artist context_uri doesn't accept the standard play body — use uris for tracks, context_uri otherwise
+      const body =
+        ctx.type === "track"
+          ? { uris: [ctx.uri] }
+          : { context_uri: ctx.uri };
+      await apiPut("/me/player/play", body, { device_id: deviceId });
+    },
+    [deviceId, token, apiPut],
+  );
+
+  // Timer-driven playback: takeover on start, pause on stop
   useEffect(() => {
     const prev = prevTimerStatus.current;
     prevTimerStatus.current = timerStatus;
@@ -141,26 +316,26 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     const wasRunning = prev === "running";
 
     if (autoStart && wasIdle && timerStatus === "running") {
-      // Only start/restart if nothing is already playing — avoids jarring restart
-      // when auto_start_breaks transitions completed → running with music going
       const alreadyPlaying = state && !state.paused;
-      if (!alreadyPlaying) {
+      const externallyPlaying = externalState?.is_playing;
+      if (externallyPlaying) {
+        // Takeover from external device, keep playing
+        transferToSdk(true);
+      } else if (!alreadyPlaying) {
         if (selectedPlaylist) {
-          fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-            method: "PUT",
-            headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-            body: JSON.stringify({ context_uri: selectedPlaylist.uri }),
-          });
+          playContext(selectedPlaylist);
         } else {
-          player?.resume();
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          (player as any)?.resume();
         }
       }
     } else if (autoStart && wasPaused && timerStatus === "running") {
-      // Timer resumed from pause → resume music
-      player?.resume();
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (player as any)?.resume();
     } else if (wasRunning && (timerStatus === "idle" || timerStatus === "completed" || timerStatus === "paused")) {
       if (state && !state.paused) {
-        player?.pause();
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (player as any)?.pause();
       }
     }
   }, [timerStatus]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -171,6 +346,10 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       player, deviceId, state, isReady, sdkError,
       selectedPlaylist, setSelectedPlaylist,
       externalState, progress,
+      volume, setVolume,
+      shuffle, setShuffle,
+      playPause, next, previous,
+      transferToSdk, playContext,
     }}>
       {children}
     </SpotifyContext.Provider>

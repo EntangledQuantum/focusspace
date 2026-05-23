@@ -146,8 +146,28 @@ export default function FocusPage() {
       setTimeout(() => {
         timer.startSession({ mode: nextMode, durationSec: nextDur });
       }, 600);
+    } else if (isBreak && s?.auto_start_pomodoros && activeTask) {
+      // After a break, auto-start the next pomodoro if the task still has work left
+      const estimated = activeTask.estimated_pomodoros ?? 1;
+      const completed = activeTask.completed_pomodoros ?? 0;
+      if (completed < Math.ceil(estimated)) {
+        const totalSessions = Math.ceil(estimated);
+        const isHalfLast = estimated % 1 === 0.5;
+        const isLastSession = completed === totalSessions - 1;
+        const dur = isLastSession && isHalfLast
+          ? Math.round(pomoDurationSec / 2)
+          : pomoDurationSec;
+        setTimeout(() => {
+          timer.startSession({
+            mode: "pomodoro",
+            durationSec: dur,
+            taskId: activeTask.id,
+            projectId: activeProject?.id,
+          });
+        }, 600);
+      }
     }
-  }, [timer, isBreak, activeTask, notifyCompletion]);
+  }, [timer, isBreak, activeTask, activeProject, notifyCompletion, pomoDurationSec]);
 
   function handlePlayPause() {
     if (timer.status === "idle" || timer.status === "completed") {
