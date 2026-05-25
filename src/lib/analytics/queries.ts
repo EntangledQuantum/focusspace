@@ -55,6 +55,10 @@ export async function fetchRecentSessions(filter: AnalyticsFilter): Promise<
       tasks:task_id ( title, task_tags ( tags ( * ) ) ),
       projects:project_id ( name )
     `)
+    // Only focus sessions that actually ran — skip breaks and orphaned start rows
+    .in("mode", ["pomodoro", "custom"])
+    .not("ended_at", "is", null)
+    .gte("actual_duration_sec", 30)
     .order("started_at", { ascending: false })
     .limit(50);
 
@@ -65,10 +69,14 @@ export async function fetchRecentSessions(filter: AnalyticsFilter): Promise<
   const { data, error } = await q;
   if (error) throw error;
 
-  return (data ?? []).map((s: any) => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const rows = (data ?? []) as any[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return rows.map((s: any) => ({
     ...s,
-    task_title: s.tasks?.title ?? null,
+    task_title: s.tasks?.title ?? (s.mode === "custom" ? "Custom session" : null),
     project_name: s.projects?.name ?? null,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     tags: s.tasks?.task_tags?.map((tt: any) => tt.tags).filter(Boolean) ?? [],
   }));
 }
@@ -78,30 +86,49 @@ export async function fetchStreak(): Promise<{ current: number; best: number }> 
   const { data, error } = await supabase
     .from("v_daily_focus")
     .select("day, completed_sessions")
-    .order("day", { ascending: false })
-    .limit(365);
+    .order("day", { ascending: true })
+    .limit(730);
 
   if (error || !data) return { current: 0, best: 0 };
 
-  let current = 0;
-  let best = 0;
-  let streak = 0;
-  const today = new Date().toISOString().slice(0, 10);
+  // Set of dates (YYYY-MM-DD) with at least one completed session
+  const activeDays = new Set(
+    data.filter((d) => d.completed_sessions > 0).map((d) => d.day.slice(0, 10)),
+  );
+  if (activeDays.size === 0) return { current: 0, best: 0 };
 
-  const days = data.filter((d) => d.completed_sessions > 0).map((d) => d.day);
-  for (let i = 0; i < days.length; i++) {
-    const expected = new Date(today);
-    expected.setDate(expected.getDate() - i);
-    const expectedStr = expected.toISOString().slice(0, 10);
-    if (days[i] === expectedStr) {
-      streak++;
-      if (i === 0) current = streak;
-    } else {
-      best = Math.max(best, streak);
-      streak = 0;
-    }
+  function toIso(d: Date) {
+    return d.toISOString().slice(0, 10);
   }
-  best = Math.max(best, streak, current);
+  function shiftDays(iso: string, delta: number) {
+    const d = new Date(iso + "T00:00:00Z");
+    d.setUTCDate(d.getUTCDate() + delta);
+    return toIso(d);
+  }
 
-  return { current, best };
+  // Current streak: walk back from today (or yesterday if today is empty — streak still alive)
+  const today = toIso(new Date());
+  let cursor = activeDays.has(today) ? today : shiftDays(today, -1);
+  let current = 0;
+  while (activeDays.has(cursor)) {
+    current++;
+    cursor = shiftDays(cursor, -1);
+  }
+
+  // Best streak: iterate ascending sorted unique days and find max consecutive run
+  const sorted = Array.from(activeDays).sort();
+  let best = 0;
+  let run = 0;
+  let prev: string | null = null;
+  for (const day of sorted) {
+    if (prev !== null && shiftDays(prev, 1) === day) {
+      run++;
+    } else {
+      run = 1;
+    }
+    if (run > best) best = run;
+    prev = day;
+  }
+
+  return { current, best: Math.max(best, current) };
 }

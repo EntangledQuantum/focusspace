@@ -171,7 +171,7 @@ export default function AnalyticsPage() {
                   </Pie>
                   <Tooltip
                     contentStyle={{ background: "var(--color-surface-container-high)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", color: "var(--color-on-surface)", fontSize: 12 }}
-                    formatter={(v: unknown) => [fmtDuration(Number(v)), "Focus"]}
+                    formatter={(v: unknown, name: unknown) => [fmtDuration(Number(v)), `#${String(name ?? "tag")}`]}
                   />
                 </PieChart>
               </ResponsiveContainer>

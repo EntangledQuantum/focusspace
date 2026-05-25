@@ -36,17 +36,19 @@ function SearchPicker({
 }) {
   const [search, setSearch] = useState("");
   const [searchResults, setSearchResults] = useState<SearchHit[]>([]);
-  const [searchType, setSearchType] = useState<SearchType>("playlist");
+  // Default to track since playlist search is restricted for unverified apps (Spotify Nov 2024)
+  const [searchType, setSearchType] = useState<SearchType>("track");
   const [isSearching, setIsSearching] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Default list: user's playlists (only when search is empty + playlist tab)
+  // User's own playlists — used as the "Playlists" tab list (search-for-playlist is restricted)
   const { data: playlists = [] } = useQuery<SearchHit[]>({
     queryKey: ["spotify-playlists"],
     queryFn: async () => {
       const res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
         headers: { Authorization: `Bearer ${token}` },
       });
+      if (!res.ok) return [];
       const data = await res.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       return ((data.items ?? []) as any[]).filter(Boolean).map((p: any) => ({
@@ -64,13 +66,19 @@ function SearchPicker({
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = search.trim();
     if (!q) { setSearchResults([]); return; }
+    // Playlist tab uses client-side filter on user's own playlists (Spotify restricts playlist search)
+    if (searchType === "playlist") { setSearchResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const res = await fetch(
-          `https://api.spotify.com/v1/search?type=${searchType}&q=${encodeURIComponent(q)}&limit=20`,
-          { headers: { Authorization: `Bearer ${token}` } },
-        );
+        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=${searchType}&limit=20`;
+        const res = await fetch(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!res.ok) {
+          setSearchResults([]);
+          return;
+        }
         const data = await res.json();
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const key = (searchType + "s") as keyof typeof data;
@@ -95,21 +103,12 @@ function SearchPicker({
               subtitle: it.artists?.map((a: { name: string }) => a.name).join(", "),
             };
           }
-          if (searchType === "artist") {
-            return {
-              uri: it.uri,
-              name: it.name,
-              images: it.images,
-              type: "artist" as const,
-              subtitle: it.genres?.[0] ?? "Artist",
-            };
-          }
           return {
             uri: it.uri,
             name: it.name,
             images: it.images,
-            type: "playlist" as const,
-            subtitle: `${it.tracks?.total ?? 0} tracks`,
+            type: "artist" as const,
+            subtitle: it.genres?.[0] ?? "Artist",
           };
         });
         setSearchResults(hits);
@@ -119,7 +118,11 @@ function SearchPicker({
     }, 400);
   }, [search, searchType, token]);
 
-  const displayList = search.trim() ? searchResults : (searchType === "playlist" ? playlists : []);
+  // For playlist tab: client-side filter user's own playlists by query
+  const filteredOwnPlaylists = search.trim()
+    ? playlists.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
+    : playlists;
+  const displayList = searchType === "playlist" ? filteredOwnPlaylists : searchResults;
 
   return (
     <div
@@ -141,13 +144,13 @@ function SearchPicker({
             autoFocus
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder={`Search ${searchType}s…`}
+            placeholder={searchType === "playlist" ? "Filter your playlists…" : `Search ${searchType}s…`}
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--color-on-surface)" }}
           />
         </div>
         <div className="flex items-center gap-1">
-          {(["playlist", "track", "album", "artist"] as SearchType[]).map((t) => (
+          {(["track", "album", "artist", "playlist"] as SearchType[]).map((t) => (
             <button
               key={t}
               onClick={() => setSearchType(t)}
@@ -170,7 +173,9 @@ function SearchPicker({
           </div>
         ) : displayList.length === 0 ? (
           <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-            {search ? "No results" : "Type to search"}
+            {searchType === "playlist"
+              ? (search ? "No matching playlists" : "No playlists yet")
+              : (search ? "No results" : "Type to search")}
           </div>
         ) : (
           displayList.map((hit) => (

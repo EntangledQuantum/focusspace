@@ -64,7 +64,7 @@ interface SpotifyContextValue {
   next: () => Promise<void>;
   previous: () => Promise<void>;
   /** Transfer playback to this app's SDK device */
-  transferToSdk: (play?: boolean) => Promise<void>;
+  transferToSdk: (play?: boolean) => Promise<boolean>;
   /** Play a specific context (playlist/album/artist) or track on the SDK device */
   playContext: (ctx: PlayableContext) => Promise<void>;
 }
@@ -203,6 +203,79 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     return () => { if (externalPollRef.current) clearInterval(externalPollRef.current); };
   }, [token, deviceId, sdkActive, state]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const transferToSdk = useCallback(
+    async (play = false) => {
+      if (!deviceId || !token) return false;
+      const res = await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [deviceId], play }),
+      });
+      setExternalState(null);
+      return res.ok || res.status === 204;
+    },
+    [deviceId, token],
+  );
+
+  // For an artist context Spotify wants their top tracks — fetch and play as uris
+  const fetchArtistTopTracks = useCallback(
+    async (artistUri: string): Promise<string[]> => {
+      if (!token) return [];
+      const id = artistUri.split(":").pop();
+      const res = await fetch(
+        `https://api.spotify.com/v1/artists/${id}/top-tracks?market=from_token`,
+        { headers: { Authorization: `Bearer ${token}` } },
+      );
+      if (!res.ok) return [];
+      const data = await res.json();
+      return (data.tracks ?? []).map((t: { uri: string }) => t.uri).slice(0, 20);
+    },
+    [token],
+  );
+
+  const playContext = useCallback(
+    async (ctx: PlayableContext) => {
+      if (!deviceId || !token) return;
+      // 1. Transfer playback to SDK device so it becomes the "active device" —
+      //    fixes 404 "no active device" from /play against an inactive Connect device.
+      await fetch("https://api.spotify.com/v1/me/player", {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ device_ids: [deviceId], play: false }),
+      });
+      setExternalState(null);
+      await new Promise((r) => setTimeout(r, 300));
+
+      let body: Record<string, unknown>;
+      if (ctx.type === "track") {
+        body = { uris: [ctx.uri] };
+      } else if (ctx.type === "artist") {
+        const uris = await fetchArtistTopTracks(ctx.uri);
+        if (uris.length === 0) return;
+        body = { uris };
+      } else {
+        body = { context_uri: ctx.uri };
+      }
+
+      const url = new URL("https://api.spotify.com/v1/me/player/play");
+      url.searchParams.set("device_id", deviceId);
+      const res = await fetch(url.toString(), {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok && res.status !== 204) {
+        await new Promise((r) => setTimeout(r, 600));
+        await fetch(url.toString(), {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        });
+      }
+    },
+    [deviceId, token, fetchArtistTopTracks],
+  );
+
   // Control helpers — auto-route to whichever device is active
   const playPause = useCallback(async () => {
     if (sdkActive || (state && state.paused)) {
@@ -217,11 +290,11 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       setExternalState((p) => p ? { ...p, is_playing: !p.is_playing } : p);
       return;
     }
-    // No active device but we have one selected — start it on SDK
-    if (selectedPlaylist && deviceId) {
-      await apiPut("/me/player/play", { context_uri: selectedPlaylist.uri }, { device_id: deviceId });
+    // No active device but we have one selected — kick off via playContext (handles transfer)
+    if (selectedPlaylist) {
+      await playContext(selectedPlaylist);
     }
-  }, [sdkActive, state, player, externalState, selectedPlaylist, deviceId, apiPut]);
+  }, [sdkActive, state, player, externalState, selectedPlaylist, deviceId, apiPut, playContext]);
 
   const next = useCallback(async () => {
     if (sdkActive) {
@@ -274,33 +347,6 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       });
     },
     [sdkActive, deviceId, externalState, apiPut],
-  );
-
-  const transferToSdk = useCallback(
-    async (play = false) => {
-      if (!deviceId || !token) return;
-      await fetch("https://api.spotify.com/v1/me/player", {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ device_ids: [deviceId], play }),
-      });
-      // Clear external state — we just took over
-      setExternalState(null);
-    },
-    [deviceId, token],
-  );
-
-  const playContext = useCallback(
-    async (ctx: PlayableContext) => {
-      if (!deviceId || !token) return;
-      // Artist context_uri doesn't accept the standard play body — use uris for tracks, context_uri otherwise
-      const body =
-        ctx.type === "track"
-          ? { uris: [ctx.uri] }
-          : { context_uri: ctx.uri };
-      await apiPut("/me/player/play", body, { device_id: deviceId });
-    },
-    [deviceId, token, apiPut],
   );
 
   // Timer-driven playback: takeover on start, pause on stop

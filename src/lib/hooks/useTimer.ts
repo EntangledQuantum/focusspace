@@ -147,6 +147,10 @@ export function useTimer() {
     qc.invalidateQueries({ queryKey: ["analytics"] });
   }, [supabase, store, qc]);
 
+  // Sessions shorter than this are treated as accidental (start → immediate reset/skip)
+  // and removed entirely so they don't pollute analytics with 0m / Untitled noise.
+  const MIN_RECORDED_SEC = 10;
+
   const skipSession = useCallback(async () => {
     const state = useTimerStore.getState();
     if (!state.currentSessionId) {
@@ -155,14 +159,18 @@ export function useTimer() {
     }
 
     const elapsed = getElapsedSec(state);
-    await supabase
-      .from("focus_sessions")
-      .update({
-        ended_at: new Date().toISOString(),
-        actual_duration_sec: elapsed,
-        completed: false,
-      })
-      .eq("id", state.currentSessionId);
+    if (elapsed < MIN_RECORDED_SEC) {
+      await supabase.from("focus_sessions").delete().eq("id", state.currentSessionId);
+    } else {
+      await supabase
+        .from("focus_sessions")
+        .update({
+          ended_at: new Date().toISOString(),
+          actual_duration_sec: elapsed,
+          completed: false,
+        })
+        .eq("id", state.currentSessionId);
+    }
 
     store.reset();
     qc.invalidateQueries({ queryKey: ["sessions"] });
@@ -173,16 +181,19 @@ export function useTimer() {
     const state = useTimerStore.getState();
     const elapsed = getElapsedSec(state);
 
-    if (state.currentSessionId && elapsed > 0) {
-      await supabase
-        .from("focus_sessions")
-        .update({
-          ended_at: new Date().toISOString(),
-          actual_duration_sec: elapsed,
-          completed: false,
-        })
-        .eq("id", state.currentSessionId);
-
+    if (state.currentSessionId) {
+      if (elapsed < MIN_RECORDED_SEC) {
+        await supabase.from("focus_sessions").delete().eq("id", state.currentSessionId);
+      } else {
+        await supabase
+          .from("focus_sessions")
+          .update({
+            ended_at: new Date().toISOString(),
+            actual_duration_sec: elapsed,
+            completed: false,
+          })
+          .eq("id", state.currentSessionId);
+      }
       qc.invalidateQueries({ queryKey: ["sessions"] });
       qc.invalidateQueries({ queryKey: ["analytics"] });
     }
