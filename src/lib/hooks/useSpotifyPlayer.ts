@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useRef, useState, useCallback } from "react";
+import { useEffect, useRef, useState } from "react";
+import { getSpotifyToken } from "@/lib/spotify/api";
 
 declare global {
   interface Window {
@@ -48,14 +49,14 @@ export interface SpotifyPlaybackState {
 
 interface UseSpotifyPlayerOptions {
   token: string | null;
-  onTokenRefresh?: () => Promise<string | null>;
 }
 
-export function useSpotifyPlayer({ token, onTokenRefresh }: UseSpotifyPlayerOptions) {
+export function useSpotifyPlayer({ token }: UseSpotifyPlayerOptions) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [state, setState] = useState<SpotifyPlaybackState | null>(null);
   const [isReady, setIsReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [player, setPlayer] = useState<SpotifyPlayerInstance | null>(null);
   const playerRef = useRef<SpotifyPlayerInstance | null>(null);
   const tokenRef = useRef<string | null>(token);
 
@@ -67,9 +68,11 @@ export function useSpotifyPlayer({ token, onTokenRefresh }: UseSpotifyPlayerOpti
     function initPlayer() {
       const player = new window.Spotify.Player({
         name: "FocusSpace",
+        // The SDK calls this whenever it needs a token (init + reconnects),
+        // so always hand it a fresh one — a token captured at mount expires
+        // after an hour and used to break playback silently.
         getOAuthToken: async (cb) => {
-          let t = tokenRef.current;
-          if (!t && onTokenRefresh) t = await onTokenRefresh();
+          const t = (await getSpotifyToken()) ?? tokenRef.current;
           if (t) cb(t);
         },
         volume: 0.6,
@@ -107,6 +110,7 @@ export function useSpotifyPlayer({ token, onTokenRefresh }: UseSpotifyPlayerOpti
 
       player.connect();
       playerRef.current = player;
+      setPlayer(player);
     }
 
     if (typeof window !== "undefined" && window.Spotify) {
@@ -125,6 +129,7 @@ export function useSpotifyPlayer({ token, onTokenRefresh }: UseSpotifyPlayerOpti
       if (playerRef.current) {
         playerRef.current.disconnect();
         playerRef.current = null;
+        setPlayer(null);
         setIsReady(false);
         setDeviceId(null);
         setState(null);
@@ -132,37 +137,11 @@ export function useSpotifyPlayer({ token, onTokenRefresh }: UseSpotifyPlayerOpti
     };
   }, [token]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const playContext = useCallback(async (contextUri: string) => {
-    if (!deviceId || !tokenRef.current) return;
-    await fetch(`https://api.spotify.com/v1/me/player/play?device_id=${deviceId}`, {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${tokenRef.current}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ context_uri: contextUri }),
-    });
-  }, [deviceId]);
-
-  const transferPlayback = useCallback(async (play = false) => {
-    if (!deviceId || !tokenRef.current) return;
-    await fetch("https://api.spotify.com/v1/me/player", {
-      method: "PUT",
-      headers: {
-        Authorization: `Bearer ${tokenRef.current}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ device_ids: [deviceId], play }),
-    });
-  }, [deviceId]);
-
   return {
-    player: playerRef.current,
+    player,
     deviceId,
     state,
     isReady,
     error,
-    playContext,
-    transferPlayback,
   };
 }

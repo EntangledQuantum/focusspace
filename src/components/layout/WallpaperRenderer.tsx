@@ -50,6 +50,8 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
         alt={wallpaper.name}
         fill
         priority
+        quality={90}
+        sizes="100vw"
         className="object-cover"
         style={{
           filter: `blur(${blurPx.toFixed(1)}px) brightness(${brightness.toFixed(2)})`,

@@ -3,8 +3,9 @@
 import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSpotifyContext, type PlayableContext } from "@/lib/context/SpotifyContext";
+import { spotifyFetch, spotifyJson } from "@/lib/spotify/api";
 import { useTimerStore } from "@/lib/stores/timer";
-import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
+import { useMiniPlayer } from "@/lib/hooks/useMiniPlayer";
 import { toast } from "sonner";
 import {
   Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic,
@@ -26,11 +27,9 @@ function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: 
 }
 
 function SearchPicker({
-  token,
   onSelect,
   onClose,
 }: {
-  token: string;
   onSelect: (ctx: PlayableContext) => void;
   onClose: () => void;
 }) {
@@ -39,19 +38,17 @@ function SearchPicker({
   // Default to track since playlist search is restricted for unverified apps (Spotify Nov 2024)
   const [searchType, setSearchType] = useState<SearchType>("track");
   const [isSearching, setIsSearching] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // User's own playlists — used as the "Playlists" tab list (search-for-playlist is restricted)
   const { data: playlists = [] } = useQuery<SearchHit[]>({
     queryKey: ["spotify-playlists"],
     queryFn: async () => {
-      const res = await fetch("https://api.spotify.com/v1/me/playlists?limit=50", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!res.ok) return [];
-      const data = await res.json();
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data.items ?? []) as any[]).filter(Boolean).map((p: any) => ({
+      const data = await spotifyJson<{ items: any[] }>("/me/playlists", { params: { limit: "50" } });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return ((data?.items ?? []) as any[]).filter(Boolean).map((p: any) => ({
         uri: p.uri,
         name: p.name,
         images: p.images,
@@ -65,18 +62,21 @@ function SearchPicker({
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     const q = search.trim();
-    if (!q) { setSearchResults([]); return; }
+    if (!q) { setSearchResults([]); setSearchError(null); return; }
     // Playlist tab uses client-side filter on user's own playlists (Spotify restricts playlist search)
     if (searchType === "playlist") { setSearchResults([]); return; }
     debounceRef.current = setTimeout(async () => {
       setIsSearching(true);
+      setSearchError(null);
       try {
-        const url = `https://api.spotify.com/v1/search?q=${encodeURIComponent(q)}&type=${searchType}&limit=20`;
-        const res = await fetch(url, {
-          headers: { Authorization: `Bearer ${token}` },
+        const res = await spotifyFetch("/search", {
+          params: { q, type: searchType, limit: "20" },
         });
         if (!res.ok) {
           setSearchResults([]);
+          setSearchError(res.status === 403
+            ? "Spotify rejected the search — check your account permissions."
+            : `Search failed (${res.status}) — try again.`);
           return;
         }
         const data = await res.json();
@@ -112,11 +112,14 @@ function SearchPicker({
           };
         });
         setSearchResults(hits);
+      } catch {
+        setSearchResults([]);
+        setSearchError("Spotify isn't reachable — reconnect in Settings.");
       } finally {
         setIsSearching(false);
       }
     }, 400);
-  }, [search, searchType, token]);
+  }, [search, searchType]);
 
   // For playlist tab: client-side filter user's own playlists by query
   const filteredOwnPlaylists = search.trim()
@@ -171,6 +174,10 @@ function SearchPicker({
           <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
             Searching…
           </div>
+        ) : searchError && searchType !== "playlist" ? (
+          <div className="p-4 text-center text-sm" style={{ color: "var(--color-error)" }}>
+            {searchError}
+          </div>
         ) : displayList.length === 0 ? (
           <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
             {searchType === "playlist"
@@ -220,7 +227,7 @@ function SearchPicker({
 
 export function SpotifyPanel() {
   const {
-    token, isConnected, tokenLoading, state, isReady, sdkError,
+    isConnected, tokenLoading, state, isReady, sdkError,
     selectedPlaylist, setSelectedPlaylist, externalState, progress,
     volume, setVolume, shuffle, setShuffle,
     playPause, next, previous, transferToSdk, playContext,
@@ -247,51 +254,11 @@ export function SpotifyPanel() {
     window.location.href = "/api/spotify/connect?next=/focus";
   }
 
-  const { pipWindow, setPipWindow } = useMiniPlayerStore();
+  const { open: openPip } = useMiniPlayer();
 
   async function openMiniPlayer() {
-    if (pipWindow) { pipWindow.focus(); return; }
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const dpi = (window as any).documentPictureInPicture;
-    if (!dpi) {
-      toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
-      return;
-    }
-    try {
-      const pip: Window = await dpi.requestWindow({ width: 320, height: 540 });
-      // Clone styles + tokens into the pip window
-      for (const sheet of Array.from(document.styleSheets)) {
-        try {
-          const rules = Array.from(sheet.cssRules).map((r) => r.cssText).join("");
-          const style = pip.document.createElement("style");
-          style.textContent = rules;
-          pip.document.head.appendChild(style);
-        } catch {
-          if (sheet.href) {
-            const link = pip.document.createElement("link");
-            link.rel = "stylesheet";
-            link.href = sheet.href;
-            pip.document.head.appendChild(link);
-          }
-        }
-      }
-      const rootStyles = window.getComputedStyle(document.documentElement);
-      const themeStyle = pip.document.createElement("style");
-      const tokens: string[] = [];
-      for (let i = 0; i < rootStyles.length; i++) {
-        const prop = rootStyles[i];
-        if (prop.startsWith("--")) tokens.push(`${prop}: ${rootStyles.getPropertyValue(prop)};`);
-      }
-      themeStyle.textContent = `:root { ${tokens.join(" ")} } body { margin:0; background: var(--color-background); color: var(--color-on-surface); font-family: var(--font-sans, system-ui); overflow: hidden; }`;
-      pip.document.head.appendChild(themeStyle);
-      if (document.documentElement.classList.contains("dark")) {
-        pip.document.documentElement.classList.add("dark");
-      }
-      pip.addEventListener("pagehide", () => setPipWindow(null));
-      setPipWindow(pip);
-    } catch {
-      toast.error("Couldn't open mini player.");
-    }
+    const ok = await openPip();
+    if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
   }
 
   const isSessionActive = timerStatus === "running" || timerStatus === "paused";
@@ -378,9 +345,8 @@ export function SpotifyPanel() {
           </span>
           <ChevronDown size={13} className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
         </button>
-        {pickerOpen && token && (
+        {pickerOpen && (
           <SearchPicker
-            token={token}
             onSelect={(ctx) => {
               setSelectedPlaylist(ctx);
               playContext(ctx);

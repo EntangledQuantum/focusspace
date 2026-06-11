@@ -3,10 +3,10 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag } from "lucide-react";
+import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag, ListChecks, ChevronDown } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { Project, Task, Tag as TagType, TaskWithTags } from "@/types/database";
+import type { Project, Subtask, Task, Tag as TagType, TaskWithTags } from "@/types/database";
 import { PomodoroRating, PomodoroMiniPips } from "@/components/timer/PomodoroRating";
 import type { UserSettings } from "@/types/database";
 
@@ -40,6 +40,8 @@ export default function ProjectsPage() {
   const [addingProject, setAddingProject] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskPomos, setNewTaskPomos] = useState(1);
+  const [newTaskDesc, setNewTaskDesc] = useState("");
+  const [newTaskSubs, setNewTaskSubs] = useState<{ title: string; done: boolean }[]>([]);
   const [addingTask, setAddingTask] = useState(false);
   const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
   const [editingProjectName, setEditingProjectName] = useState("");
@@ -58,6 +60,8 @@ export default function ProjectsPage() {
   const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
   const [editTitle, setEditTitle] = useState("");
   const [editPomos, setEditPomos] = useState(1);
+  const [editDesc, setEditDesc] = useState("");
+  const [editSubs, setEditSubs] = useState<{ title: string; done: boolean }[]>([]);
   const [editTags, setEditTags] = useState<TagType[]>([]);
   const [editTagQuery, setEditTagQuery] = useState("");
   const [showEditTagSugs, setShowEditTagSugs] = useState(false);
@@ -115,6 +119,37 @@ export default function ProjectsPage() {
     },
   });
 
+  // Subtasks for the visible tasks, grouped by task — fetched separately so a
+  // missing subtasks table (migration not yet applied) doesn't break the list.
+  const taskIds = tasks.map((t) => t.id);
+  const { data: subtasksByTask = {} } = useQuery<Record<string, Subtask[]>>({
+    queryKey: ["subtasks-by-task", selectedProject?.id, taskIds.join(",")],
+    enabled: taskIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subtasks")
+        .select("*")
+        .in("task_id", taskIds)
+        .order("sort_order");
+      const grouped: Record<string, Subtask[]> = {};
+      for (const st of (data ?? []) as Subtask[]) {
+        (grouped[st.task_id] ??= []).push(st);
+      }
+      return grouped;
+    },
+  });
+
+  const toggleSubtask = useMutation({
+    mutationFn: async (st: Subtask) => {
+      const { error } = await supabase.from("subtasks").update({ done: !st.done }).eq("id", st.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
+      qc.invalidateQueries({ queryKey: ["subtasks"] });
+    },
+  });
+
   // Suggestions: filter by current tagQuery
   const tagSuggestions = tags.filter(
     (t) =>
@@ -160,6 +195,8 @@ export default function ProjectsPage() {
     setEditingTaskId(task.id);
     setEditTitle(task.title);
     setEditPomos(task.estimated_pomodoros ?? 1);
+    setEditDesc(task.notes ?? "");
+    setEditSubs((subtasksByTask[task.id] ?? []).map((st) => ({ title: st.title, done: st.done })));
     setEditTags(task.tags ?? []);
     setEditTagQuery("");
     setShowEditTagSugs(false);
@@ -169,6 +206,8 @@ export default function ProjectsPage() {
     setEditingTaskId(null);
     setEditTitle("");
     setEditPomos(1);
+    setEditDesc("");
+    setEditSubs([]);
     setEditTags([]);
     setEditTagQuery("");
     setShowEditTagSugs(false);
@@ -279,6 +318,7 @@ export default function ProjectsPage() {
         .from("tasks")
         .insert({
           title: cleanTitle,
+          notes: newTaskDesc.trim() || null,
           project_id: selectedProject.id,
           user_id: user!.id,
           sort_order: tasks.length,
@@ -287,6 +327,18 @@ export default function ProjectsPage() {
         .select("id")
         .single();
       if (error) throw error;
+
+      if (newTaskSubs.length > 0) {
+        await supabase.from("subtasks").insert(
+          newTaskSubs.map((st, i) => ({
+            task_id: task.id,
+            user_id: user!.id,
+            title: st.title,
+            done: st.done,
+            sort_order: i,
+          }))
+        );
+      }
 
       // Resolve all tags: chips already selected + inline #tags
       const chipIds = new Set(newTaskTags.map((t) => t.id));
@@ -315,9 +367,12 @@ export default function ProjectsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
       qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
       qc.invalidateQueries({ queryKey: ["tags"] });
       setNewTaskTitle("");
       setNewTaskPomos(1);
+      setNewTaskDesc("");
+      setNewTaskSubs([]);
       setNewTaskTags([]);
       setAddingTask(false);
     },
@@ -371,9 +426,23 @@ export default function ProjectsPage() {
 
       const { error } = await supabase
         .from("tasks")
-        .update({ title: cleanTitle, estimated_pomodoros: editPomos })
+        .update({ title: cleanTitle, notes: editDesc.trim() || null, estimated_pomodoros: editPomos })
         .eq("id", editingTaskId);
       if (error) throw error;
+
+      // Replace subtasks with the edited list (done state preserved from local edit)
+      await supabase.from("subtasks").delete().eq("task_id", editingTaskId);
+      if (editSubs.length > 0) {
+        await supabase.from("subtasks").insert(
+          editSubs.map((st, i) => ({
+            task_id: editingTaskId,
+            user_id: user!.id,
+            title: st.title,
+            done: st.done,
+            sort_order: i,
+          }))
+        );
+      }
 
       // Resolve tags (chips + inline)
       const chipIds = new Set(editTags.map((t) => t.id));
@@ -403,6 +472,8 @@ export default function ProjectsPage() {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
       qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
+      qc.invalidateQueries({ queryKey: ["subtasks"] });
       qc.invalidateQueries({ queryKey: ["tags"] });
       cancelEditingTask();
       toast.success("Task updated");
@@ -784,7 +855,7 @@ export default function ProjectsPage() {
                             if (e.key === "Enter" && !showTagSugs && newTaskTitle.trim()) addTask.mutate();
                             if (e.key === "Escape") {
                               if (showTagSugs) { setShowTagSugs(false); }
-                              else { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskTags([]); }
+                              else { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskDesc(""); setNewTaskSubs([]); setNewTaskTags([]); }
                             }
                           }}
                         />
@@ -856,6 +927,26 @@ export default function ProjectsPage() {
                       </div>
                     )}
 
+                    {/* Description */}
+                    <div className="pl-7">
+                      <textarea
+                        value={newTaskDesc}
+                        onChange={(e) => setNewTaskDesc(e.target.value)}
+                        placeholder="Description (optional)"
+                        rows={2}
+                        className="w-full bg-transparent text-xs outline-none resize-none rounded-lg px-2 py-1.5"
+                        style={{
+                          color: "var(--color-on-surface)",
+                          border: "1px solid var(--color-outline-variant)",
+                        }}
+                      />
+                    </div>
+
+                    {/* Subtasks */}
+                    <div className="pl-7">
+                      <SubtaskListEditor subs={newTaskSubs} onChange={setNewTaskSubs} />
+                    </div>
+
                     {/* Pomodoro picker + actions row */}
                     <div className="flex items-center justify-between pl-7">
                       <PomodoroRating
@@ -873,7 +964,7 @@ export default function ProjectsPage() {
                           Add
                         </button>
                         <button
-                          onClick={() => { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskTags([]); }}
+                          onClick={() => { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskDesc(""); setNewTaskSubs([]); setNewTaskTags([]); }}
                           className="text-xs transition-all btn-hover-ghost px-2 py-1 rounded-lg"
                           style={{ color: "var(--color-on-surface-variant)" }}
                         >
@@ -907,6 +998,10 @@ export default function ProjectsPage() {
                     key={task.id}
                     editTitle={editTitle}
                     editPomos={editPomos}
+                    editDesc={editDesc}
+                    editSubs={editSubs}
+                    onDescChange={setEditDesc}
+                    onSubsChange={setEditSubs}
                     editTags={editTags}
                     editTagQuery={editTagQuery}
                     showEditTagSugs={showEditTagSugs}
@@ -928,6 +1023,8 @@ export default function ProjectsPage() {
                   <TaskRow
                     key={task.id}
                     task={task}
+                    subtasks={subtasksByTask[task.id] ?? []}
+                    onToggleSubtask={(st) => toggleSubtask.mutate(st)}
                     onToggle={() => toggleTask.mutate(task)}
                     onDelete={() => deleteTask.mutate(task.id)}
                     onEdit={() => startEditingTask(task)}
@@ -947,6 +1044,7 @@ export default function ProjectsPage() {
                     <TaskRow
                       key={task.id}
                       task={task}
+                      subtasks={subtasksByTask[task.id] ?? []}
                       onToggle={() => toggleTask.mutate(task)}
                       onDelete={() => deleteTask.mutate(task.id)}
                       done
@@ -971,18 +1069,24 @@ export default function ProjectsPage() {
 
 function TaskRow({
   task,
+  subtasks = [],
+  onToggleSubtask,
   onToggle,
   onDelete,
   onEdit,
   done = false,
 }: {
   task: TaskWithTags;
+  subtasks?: Subtask[];
+  onToggleSubtask?: (st: Subtask) => void;
   onToggle: () => void;
   onDelete: () => void;
   onEdit?: () => void;
   done?: boolean;
 }) {
   const priority = PRIORITY_CONFIG[task.priority];
+  const [expanded, setExpanded] = useState(false);
+  const doneSubs = subtasks.filter((st) => st.done).length;
 
   return (
     <motion.div
@@ -990,7 +1094,7 @@ function TaskRow({
       initial={{ opacity: 0, x: -10 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 10 }}
-      className="flex items-center gap-3 px-4 py-3 rounded-xl group transition-all"
+      className="px-4 py-3 rounded-xl group transition-all"
       style={{
         background: "color-mix(in srgb, var(--color-surface-container) 60%, transparent)",
         border: "1px solid rgba(255,255,255,0.04)",
@@ -998,78 +1102,213 @@ function TaskRow({
       onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)")}
       onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)")}
     >
-      <button onClick={onToggle} className="shrink-0 transition-all">
-        {done ? (
-          <CheckCircle2 size={18} style={{ color: "var(--color-secondary)" }} />
-        ) : (
-          <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
-        )}
-      </button>
+      <div className="flex items-center gap-3">
+        <button onClick={onToggle} className="shrink-0 transition-all">
+          {done ? (
+            <CheckCircle2 size={18} style={{ color: "var(--color-secondary)" }} />
+          ) : (
+            <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
+          )}
+        </button>
 
-      <div className="flex-1 min-w-0">
-        <span
-          className="text-sm truncate block"
-          style={{
-            color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
-            textDecoration: done ? "line-through" : "none",
-          }}
-        >
-          {task.title}
-        </span>
-        {task.tags && task.tags.length > 0 && (
-          <div className="flex items-center gap-1 mt-1 flex-wrap">
-            {task.tags.map((tag) => (
-              <span
-                key={tag.id}
-                className="px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none"
-                style={{
-                  background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                  color: tag.color,
-                }}
-              >
-                #{tag.name}
-              </span>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Priority dot */}
-      <div className="w-2 h-2 rounded-full shrink-0 opacity-70" style={{ background: priority.color }} title={priority.label} />
-
-      {/* Pomodoro pips */}
-      {(task.estimated_pomodoros ?? 0) > 0 && (
-        <PomodoroMiniPips
-          estimated={task.estimated_pomodoros ?? 1}
-          completed={task.completed_pomodoros ?? 0}
-        />
-      )}
-
-      <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
-        {onEdit && (
-          <button
-            onClick={onEdit}
-            title="Edit task"
-            style={{ color: "var(--color-on-surface-variant)" }}
+        <div className="flex-1 min-w-0">
+          <span
+            className="text-sm truncate block"
+            style={{
+              color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+              textDecoration: done ? "line-through" : "none",
+            }}
           >
-            <Pencil size={13} />
+            {task.title}
+          </span>
+          {task.notes && (
+            <span
+              className="text-[11px] truncate block mt-0.5"
+              style={{ color: "var(--color-on-surface-variant)", opacity: 0.75 }}
+            >
+              {task.notes}
+            </span>
+          )}
+          {task.tags && task.tags.length > 0 && (
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              {task.tags.map((tag) => (
+                <span
+                  key={tag.id}
+                  className="px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none"
+                  style={{
+                    background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                    color: tag.color,
+                  }}
+                >
+                  #{tag.name}
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Subtask progress chip */}
+        {subtasks.length > 0 && (
+          <button
+            onClick={() => setExpanded((v) => !v)}
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 transition-all"
+            style={{
+              background: doneSubs === subtasks.length
+                ? "color-mix(in srgb, var(--color-secondary) 15%, transparent)"
+                : "rgba(255,255,255,0.06)",
+              color: doneSubs === subtasks.length
+                ? "var(--color-secondary)"
+                : "var(--color-on-surface-variant)",
+            }}
+            title="Show subtasks"
+          >
+            <ListChecks size={10} />
+            {doneSubs}/{subtasks.length}
+            <ChevronDown size={10} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
           </button>
         )}
-        <button
-          onClick={onDelete}
-          title="Delete task"
-          style={{ color: "var(--color-error)" }}
-        >
-          <Trash2 size={14} />
-        </button>
+
+        {/* Priority dot */}
+        <div className="w-2 h-2 rounded-full shrink-0 opacity-70" style={{ background: priority.color }} title={priority.label} />
+
+        {/* Pomodoro pips */}
+        {(task.estimated_pomodoros ?? 0) > 0 && (
+          <PomodoroMiniPips
+            estimated={task.estimated_pomodoros ?? 1}
+            completed={task.completed_pomodoros ?? 0}
+          />
+        )}
+
+        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+          {onEdit && (
+            <button
+              onClick={onEdit}
+              title="Edit task"
+              style={{ color: "var(--color-on-surface-variant)" }}
+            >
+              <Pencil size={13} />
+            </button>
+          )}
+          <button
+            onClick={onDelete}
+            title="Delete task"
+            style={{ color: "var(--color-error)" }}
+          >
+            <Trash2 size={14} />
+          </button>
+        </div>
       </div>
+
+      {/* Expanded subtask checklist */}
+      {expanded && subtasks.length > 0 && (
+        <div className="mt-2 ml-8 space-y-0.5">
+          {subtasks.map((st) => (
+            <button
+              key={st.id}
+              onClick={() => onToggleSubtask?.(st)}
+              disabled={!onToggleSubtask}
+              className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-colors hover:bg-white/5"
+            >
+              {st.done ? (
+                <CheckCircle2 size={13} className="shrink-0" style={{ color: "var(--color-secondary)" }} />
+              ) : (
+                <Circle size={13} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />
+              )}
+              <span
+                className="text-xs truncate"
+                style={{
+                  color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+                  textDecoration: st.done ? "line-through" : "none",
+                  opacity: st.done ? 0.6 : 1,
+                }}
+              >
+                {st.title}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
     </motion.div>
+  );
+}
+
+function SubtaskListEditor({
+  subs,
+  onChange,
+}: {
+  subs: { title: string; done: boolean }[];
+  onChange: (subs: { title: string; done: boolean }[]) => void;
+}) {
+  const [input, setInput] = useState("");
+
+  function addSub() {
+    const title = input.trim();
+    if (!title) return;
+    onChange([...subs, { title, done: false }]);
+    setInput("");
+  }
+
+  return (
+    <div className="space-y-1">
+      {subs.map((st, i) => (
+        <div key={i} className="flex items-center gap-2 group/sub">
+          <button
+            onClick={() => onChange(subs.map((s, j) => (j === i ? { ...s, done: !s.done } : s)))}
+            className="shrink-0"
+          >
+            {st.done ? (
+              <CheckCircle2 size={13} style={{ color: "var(--color-secondary)" }} />
+            ) : (
+              <Circle size={13} style={{ color: "var(--color-on-surface-variant)" }} />
+            )}
+          </button>
+          <span
+            className="flex-1 text-xs truncate"
+            style={{
+              color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+              textDecoration: st.done ? "line-through" : "none",
+            }}
+          >
+            {st.title}
+          </span>
+          <button
+            onClick={() => onChange(subs.filter((_, j) => j !== i))}
+            className="opacity-0 group-hover/sub:opacity-100 transition-opacity shrink-0"
+            style={{ color: "var(--color-error)" }}
+            title="Remove subtask"
+          >
+            <X size={11} />
+          </button>
+        </div>
+      ))}
+      <div className="flex items-center gap-2">
+        <Plus size={13} style={{ color: "var(--color-on-surface-variant)", opacity: 0.6 }} />
+        <input
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          placeholder="Add subtask… (Enter)"
+          className="flex-1 bg-transparent text-xs outline-none py-0.5"
+          style={{ color: "var(--color-on-surface)" }}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              e.stopPropagation();
+              addSub();
+            }
+          }}
+        />
+      </div>
+    </div>
   );
 }
 
 function TaskEditor({
   editTitle,
   editPomos,
+  editDesc,
+  editSubs,
+  onDescChange,
+  onSubsChange,
   editTags,
   editTagQuery,
   showEditTagSugs,
@@ -1089,6 +1328,10 @@ function TaskEditor({
 }: {
   editTitle: string;
   editPomos: number;
+  editDesc: string;
+  editSubs: { title: string; done: boolean }[];
+  onDescChange: (val: string) => void;
+  onSubsChange: (subs: { title: string; done: boolean }[]) => void;
   editTags: TagType[];
   editTagQuery: string;
   showEditTagSugs: boolean;
@@ -1196,6 +1439,26 @@ function TaskEditor({
           ))}
         </div>
       )}
+
+      {/* Description */}
+      <div className="pl-7">
+        <textarea
+          value={editDesc}
+          onChange={(e) => onDescChange(e.target.value)}
+          placeholder="Description (optional)"
+          rows={2}
+          className="w-full bg-transparent text-xs outline-none resize-none rounded-lg px-2 py-1.5"
+          style={{
+            color: "var(--color-on-surface)",
+            border: "1px solid var(--color-outline-variant)",
+          }}
+        />
+      </div>
+
+      {/* Subtasks */}
+      <div className="pl-7">
+        <SubtaskListEditor subs={editSubs} onChange={onSubsChange} />
+      </div>
 
       <div className="flex items-center justify-between pl-7">
         <PomodoroRating

@@ -12,10 +12,10 @@ import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
 import { PomodoroTimeline } from "@/components/timer/PomodoroTimeline";
 import { motion } from "framer-motion";
-import { Pencil, Maximize2, Minimize2, Check } from "lucide-react";
+import { Pencil, Maximize2, Minimize2, Check, CheckCircle2, Circle, ChevronDown } from "lucide-react";
 import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
 import { toast } from "sonner";
-import type { Project, TaskWithTags } from "@/types/database";
+import type { Project, Subtask, TaskWithTags } from "@/types/database";
 
 export default function FocusPage() {
   const supabase = createClient();
@@ -80,6 +80,28 @@ export default function FocusPage() {
 
   const isBreak = timer.mode === "short_break" || timer.mode === "long_break";
 
+  // Subtasks for the active task — checkable right from the focus card
+  const { data: subtasks = [] } = useQuery<Subtask[]>({
+    queryKey: ["subtasks", activeTask?.id],
+    enabled: !!activeTask,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subtasks")
+        .select("*")
+        .eq("task_id", activeTask!.id)
+        .order("sort_order");
+      return (data ?? []) as Subtask[];
+    },
+  });
+  const [subtasksOpen, setSubtasksOpen] = useState(true);
+  const doneSubtasks = subtasks.filter((s) => s.done).length;
+
+  async function toggleSubtask(st: Subtask) {
+    await supabase.from("subtasks").update({ done: !st.done }).eq("id", st.id);
+    qc.invalidateQueries({ queryKey: ["subtasks", activeTask?.id] });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+  }
+
   // On mount: restore task/project that were active when the browser was closed
   useEffect(() => {
     const { currentTaskId, currentProjectId } = useTimerStore.getState();
@@ -132,7 +154,7 @@ export default function FocusPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings]);
 
-  timer.onCompleteRef.current = useCallback(async () => {
+  const handleSessionComplete = useCallback(async () => {
     await timer.completeSession();
     const label = isBreak ? "Break complete — back to work!" : "Session complete! Great focus.";
     notifyCompletion(label, activeTask?.title ?? "");
@@ -148,10 +170,13 @@ export default function FocusPage() {
     // Use ref so we always read the latest settings even if query hadn't resolved at tick time
     const s = settingsRef.current;
     if (!isBreak && s?.auto_start_breaks) {
-      // Read fresh count from store — completeSession() increments it synchronously
-      const freshCount = useTimerStore.getState().pomodoroCount;
       const lbe = s.long_break_every ?? 4;
-      const isLong = freshCount % lbe === 0;
+      // Cycle position is task-relative when a task is active (matches the
+      // timeline); otherwise use the global session count from the store.
+      const completedInCycle = activeTask
+        ? (activeTask.completed_pomodoros ?? 0) + 1
+        : useTimerStore.getState().pomodoroCount;
+      const isLong = completedInCycle % lbe === 0;
       const nextMode = isLong ? "long_break" : "short_break";
       const nextDur = isLong ? (s.long_break_sec ?? 15 * 60) : (s.short_break_sec ?? 5 * 60);
       setTimeout(() => {
@@ -179,6 +204,10 @@ export default function FocusPage() {
       }
     }
   }, [timer, isBreak, activeTask, activeProject, notifyCompletion, pomoDurationSec]);
+
+  useEffect(() => {
+    timer.setOnComplete(handleSessionComplete);
+  }, [timer.setOnComplete, handleSessionComplete]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function handlePlayPause() {
     if (timer.status === "idle" || timer.status === "completed") {
@@ -381,6 +410,72 @@ export default function FocusPage() {
             </div>
           )}
 
+          {activeTask?.notes && (
+            <p
+              className="text-xs leading-relaxed text-center max-w-[320px] line-clamp-3"
+              style={{ color: "var(--color-on-surface-variant)" }}
+            >
+              {activeTask.notes}
+            </p>
+          )}
+
+          {activeTask && subtasks.length > 0 && (
+            <div className="w-full max-w-[320px] mt-1 text-left">
+              <button
+                onClick={() => setSubtasksOpen((v) => !v)}
+                className="w-full flex items-center gap-2 mb-1.5"
+                style={{ color: "var(--color-on-surface-variant)" }}
+              >
+                <span className="text-[10px] font-semibold uppercase tracking-wider">
+                  Subtasks · {doneSubtasks}/{subtasks.length}
+                </span>
+                <div
+                  className="flex-1 h-1 rounded-full overflow-hidden"
+                  style={{ background: "rgba(255,255,255,0.08)" }}
+                >
+                  <div
+                    className="h-full rounded-full transition-all duration-300"
+                    style={{
+                      width: `${subtasks.length ? (doneSubtasks / subtasks.length) * 100 : 0}%`,
+                      background: "var(--color-secondary)",
+                    }}
+                  />
+                </div>
+                <ChevronDown
+                  size={12}
+                  className={`transition-transform shrink-0 ${subtasksOpen ? "" : "-rotate-90"}`}
+                />
+              </button>
+              {subtasksOpen && (
+                <div className="space-y-0.5 max-h-32 overflow-y-auto pr-1">
+                  {subtasks.map((st) => (
+                    <button
+                      key={st.id}
+                      onClick={() => toggleSubtask(st)}
+                      className="w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left transition-colors hover:bg-white/5"
+                    >
+                      {st.done ? (
+                        <CheckCircle2 size={13} className="shrink-0" style={{ color: "var(--color-secondary)" }} />
+                      ) : (
+                        <Circle size={13} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />
+                      )}
+                      <span
+                        className="text-xs truncate"
+                        style={{
+                          color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+                          textDecoration: st.done ? "line-through" : "none",
+                          opacity: st.done ? 0.6 : 1,
+                        }}
+                      >
+                        {st.title}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
           {activeTask && (
             <button
               onClick={handleFinishTask}
@@ -483,7 +578,7 @@ export default function FocusPage() {
           pomoDurationSec={pomoDurationSec}
           shortBreakSec={shortBreakSec}
           longBreakSec={longBreakSec}
-          pomodoroCount={timer.pomodoroCount}
+          cycleOffset={activeTask ? 0 : timer.pomodoroCount}
           longBreakEvery={longBreakEvery}
         />
       </motion.div>
