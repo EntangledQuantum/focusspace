@@ -7,6 +7,7 @@ import { SOLID_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
 import { TONE_OPTIONS } from "@/lib/audio/tones";
 import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
+import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
 import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music } from "lucide-react";
 import type { UserSettings, Wallpaper } from "@/types/database";
@@ -488,6 +489,7 @@ function MusicSection({
       spotify_token_expires_at: null,
     }).eq("user_id", settings!.user_id);
     if (!error) {
+      clearSpotifyToken();
       qc.invalidateQueries({ queryKey: ["settings"] });
       qc.invalidateQueries({ queryKey: ["spotify-token"] });
       toast.success("Spotify disconnected");
@@ -523,12 +525,23 @@ function MusicSection({
         )}
       </Field>
       {isConnected && (
-        <Field label="Auto-start music" description="Play music automatically when a focus session starts.">
-          <Toggle
-            checked={settings?.spotify_auto_start ?? true}
-            onChange={(v) => onSave({ spotify_auto_start: v })}
-          />
-        </Field>
+        <>
+          <Field label="Auto-start music" description="Play music automatically when a focus session starts.">
+            <Toggle
+              checked={settings?.spotify_auto_start ?? true}
+              onChange={(v) => onSave({ spotify_auto_start: v })}
+            />
+          </Field>
+          <Field
+            label="Take over playback"
+            description="If Spotify is already playing on another device when a session starts, move it here. Off keeps playing there."
+          >
+            <Toggle
+              checked={settings?.spotify_takeover ?? true}
+              onChange={(v) => onSave({ spotify_takeover: v })}
+            />
+          </Field>
+        </>
       )}
     </Section>
   );

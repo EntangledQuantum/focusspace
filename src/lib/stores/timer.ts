@@ -48,17 +48,24 @@ export const useTimerStore = create<TimerState>()(
       pomodoroCount: 0,
 
       start({ mode, durationSec, taskId = null, projectId = null, sessionId = null }) {
-        set({
+        const prevTaskId = get().currentTaskId;
+        // Starting work on a different task begins a fresh pomodoro cycle,
+        // so the break cadence and timeline don't inherit the old task's count.
+        // Breaks belong to the task's cycle and keep the current task/count.
+        const isFocusMode = mode === "pomodoro" || mode === "custom";
+        const taskChanged = isFocusMode && taskId !== prevTaskId;
+        set((s) => ({
           mode,
           status: "running",
           plannedDurationSec: durationSec,
           startedAt: Date.now(),
           pausedAt: null,
           accumulatedPausedMs: 0,
-          currentTaskId: taskId,
-          currentProjectId: projectId,
+          currentTaskId: isFocusMode ? taskId : s.currentTaskId,
+          currentProjectId: isFocusMode ? projectId : s.currentProjectId,
           currentSessionId: sessionId,
-        });
+          pomodoroCount: taskChanged ? 0 : s.pomodoroCount,
+        }));
       },
 
       pause() {

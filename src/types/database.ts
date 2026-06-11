@@ -51,6 +51,7 @@ export type Database = {
           spotify_refresh_token: string | null;
           spotify_token_expires_at: string | null;
           spotify_auto_start: boolean;
+          spotify_takeover: boolean;
         };
         Insert: {
           user_id: string;
@@ -71,6 +72,7 @@ export type Database = {
           spotify_refresh_token?: string | null;
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
+          spotify_takeover?: boolean;
         };
         Update: {
           theme?: "dark" | "light" | "system";
@@ -90,6 +92,7 @@ export type Database = {
           spotify_refresh_token?: string | null;
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
+          spotify_takeover?: boolean;
         };
         Relationships: [];
       };
@@ -192,6 +195,32 @@ export type Database = {
         Update: never;
         Relationships: [];
       };
+      subtasks: {
+        Row: {
+          id: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          done: boolean;
+          sort_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          task_id: string;
+          user_id: string;
+          title: string;
+          done?: boolean;
+          sort_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          title?: string;
+          done?: boolean;
+          sort_order?: number;
+        };
+        Relationships: [];
+      };
       focus_sessions: {
         Row: {
           id: string;
@@ -291,5 +320,7 @@ export type Wallpaper = Database["public"]["Tables"]["wallpapers"]["Row"];
 export type DailyFocus = Database["public"]["Views"]["v_daily_focus"]["Row"];
 export type TagFocus = Database["public"]["Views"]["v_tag_focus"]["Row"];
 
-export type TaskWithTags = Task & { tags: Tag[] };
+export type Subtask = Database["public"]["Tables"]["subtasks"]["Row"];
+
+export type TaskWithTags = Task & { tags: Tag[]; subtasks?: Subtask[] };
 export type ProjectWithTasks = Project & { tasks: TaskWithTags[] };

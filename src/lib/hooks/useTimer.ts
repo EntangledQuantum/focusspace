@@ -5,73 +5,53 @@ import { useTimerStore, getElapsedSec, getRemainingMs, type TimerMode } from "@/
 import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 
+// Completion listeners shared across all useTimer instances (focus page +
+// pop-out miniplayer both mount the hook). Whichever instance's tick crosses
+// zero transitions the store exactly once and notifies every listener, so the
+// focus page's session-recording logic runs even if the miniplayer "won".
+const completionListeners = new Set<() => void>();
+
 export function useTimer() {
   const store = useTimerStore();
-  const rafRef = useRef<number | null>(null);
   const onCompleteRef = useRef<(() => void) | null>(null);
   const supabase = createClient();
   const qc = useQueryClient();
 
-  // Tick counter forces React re-renders on each animation frame while running
-  const [, setTick] = useState(0);
+  // Re-render only when the displayed second changes — a 60fps rAF loop here
+  // previously re-rendered the whole page tree every frame and made the app crawl.
+  const [, setDisplayedSec] = useState(0);
 
-  const tick = useCallback(() => {
-    const state = useTimerStore.getState();
-    if (state.status !== "running") return;
-
-    const remaining = getRemainingMs(state);
-    if (remaining <= 0) {
-      useTimerStore.getState().complete();
-      onCompleteRef.current?.();
-      return;
-    }
-
-    setTick((t) => t + 1);
-    rafRef.current = requestAnimationFrame(tick);
+  /** Register the side-effect to run when a session completes (stable identity). */
+  const setOnComplete = useCallback((cb: (() => void) | null) => {
+    onCompleteRef.current = cb;
   }, []);
 
   useEffect(() => {
-    const { status } = store;
-    if (status === "running") {
-      rafRef.current = requestAnimationFrame(tick);
-    }
-    return () => {
-      if (rafRef.current) {
-        cancelAnimationFrame(rafRef.current);
-        rafRef.current = null;
-      }
-    };
-  }, [store.status, tick]);
+    const listener = () => onCompleteRef.current?.();
+    completionListeners.add(listener);
+    return () => { completionListeners.delete(listener); };
+  }, []);
 
-  // rAF pauses when the tab is hidden, so completion never fires in background.
-  // This interval kicks in when hidden and hands off back to rAF on visibility restore.
   useEffect(() => {
     if (store.status !== "running") return;
 
-    let bgInterval: ReturnType<typeof setInterval> | null = null;
+    const tick = () => {
+      const state = useTimerStore.getState();
+      if (state.status !== "running") return;
+      const remaining = getRemainingMs(state);
+      if (remaining <= 0) {
+        useTimerStore.getState().complete();
+        completionListeners.forEach((cb) => cb());
+        return;
+      }
+      setDisplayedSec(remaining);
+    };
 
-    function startBg() {
-      if (bgInterval) return;
-      bgInterval = setInterval(() => {
-        const state = useTimerStore.getState();
-        if (state.status !== "running") { clearInterval(bgInterval!); bgInterval = null; return; }
-        if (getRemainingMs(state) <= 0) {
-          useTimerStore.getState().complete();
-          onCompleteRef.current?.();
-          clearInterval(bgInterval!);
-          bgInterval = null;
-        }
-      }, 1000);
-    }
-
-    function stopBg() { if (bgInterval) { clearInterval(bgInterval); bgInterval = null; } }
-
-    function onVisibility() { document.hidden ? startBg() : stopBg(); }
-
-    if (document.hidden) startBg();
-    document.addEventListener("visibilitychange", onVisibility);
-    return () => { document.removeEventListener("visibilitychange", onVisibility); stopBg(); };
-  }, [store.status]); // eslint-disable-line react-hooks/exhaustive-deps
+    tick();
+    // Browsers throttle hidden-tab intervals to ~1s, which still completes on time.
+    const id = setInterval(tick, 250);
+    return () => clearInterval(id);
+  }, [store.status]);
 
   const startSession = useCallback(
     async ({
@@ -221,6 +201,6 @@ export function useTimer() {
     completeSession,
     skipSession,
     resetSession,
-    onCompleteRef,
+    setOnComplete,
   };
 }

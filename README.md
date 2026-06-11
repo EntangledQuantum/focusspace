@@ -16,13 +16,36 @@
 
 A modern Pomodoro + productivity tracker. Pick one task, run the timer, review the data. Built to keep you accountable — not entertained.
 
+## ⚠️ Required after pulling this update
+
+A new migration must be applied once in **Supabase Dashboard → SQL Editor**:
+
+```
+supabase/migrations/0006_subtasks_and_spotify_takeover.sql
+```
+
+It adds the `subtasks` table and the `spotify_takeover` setting. The app runs without it, but subtasks/descriptions won't save and the "Take over playback" toggle will error until it's applied.
+
+## Latest Updates
+
+- **Subtasks + descriptions** — tasks now support a description and a subtask checklist. Add/edit them on the Projects page; check subtasks off from the task row or right on the Focus card, with live progress bars.
+- **Spotify rewritten** — all Web API calls go through one client that auto-refreshes the access token (playback, search, next/prev no longer silently die after an hour). Next/Previous now route to the correct device, so they work in the pop-out mini player too.
+- **"Take over playback" setting** — choose whether starting a focus session pulls playback from an already-playing device (phone/desktop) into the app, or leaves it alone (Settings → Music).
+- **Working music search** — track/album/artist search uses fresh tokens and shows real error messages instead of failing silently.
+- **Timer fixes** — starting a new task now resets the pomodoro cycle, so the timeline and break scheduling are correct per task. Break cadence is task-relative. Completion is recorded even when the pop-out timer finishes the session.
+- **Big performance fix** — the running timer re-rendered the whole page at 60 fps; it now ticks once per second-change. Spotify polling was also cut down. The app no longer crawls during sessions.
+- **Full-resolution wallpapers** — uploads keep their native resolution (up to 4K) instead of being downscaled to 1080p, and render at high quality.
+- **Mini player (pop-out)** — content now adapts when you resize the Document-PiP window; controls actually work.
+
 ## Features
 
 - **Dual-mode timer** — Pomodoro (fixed blocks) or Custom Target (set your own duration)
 - **Single-task focus** — you can only track one thing at a time, by design
 - **Projects + Tasks + Tags** — full CRUD, priority levels, pomodoro-pip indicators
+- **Subtasks & descriptions** — break tasks down, track progress from Projects or the Focus card
+- **Spotify** — Web Playback SDK player with search, playlists, volume/shuffle, external-device takeover, and a pop-out mini player (Chrome 116+)
 - **Analytics** — KPIs, weekly bar chart, tag donut, GitHub-style heatmap, per-project filters
-- **Atmospheres** — built-in wallpapers + user-uploaded wallpapers via Supabase Storage
+- **Atmospheres** — built-in wallpapers + user-uploaded wallpapers via Supabase Storage (full resolution)
 - **Notifications** — browser notifications + Web Audio tones, with DND mode during focus sessions
 - **Auth** — Email/password + Google OAuth via Supabase Auth
 - **Theme** — Dark / Light / System
@@ -30,7 +53,7 @@ A modern Pomodoro + productivity tracker. Pick one task, run the timer, review t
 ## Architecture
 
 ```
-Next.js 15 (App Router)
+Next.js 16 (App Router)
   ├── (auth)/         — login, signup, OAuth callback
   ├── (app)/          — protected: focus, projects, analytics, settings
   └── api/            — upload-wallpaper helper
@@ -86,6 +109,9 @@ node scripts/setup-env.mjs
 #    supabase/migrations/0001_init.sql
 #    supabase/migrations/0002_views_and_trigger.sql
 #    supabase/migrations/0003_storage.sql
+#    supabase/migrations/0004_security_and_performance_fixes.sql
+#    supabase/migrations/0005_wallpaper_settings.sql
+#    supabase/migrations/0006_subtasks_and_spotify_takeover.sql
 
 # 4. Start dev server
 npm run dev
@@ -148,6 +174,9 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 | `0001_init.sql` | Tables + RLS + indexes |
 | `0002_views_and_trigger.sql` | Analytics views + new-user bootstrap trigger |
 | `0003_storage.sql` | Wallpapers storage bucket + Storage RLS |
+| `0004_security_and_performance_fixes.sql` | RLS/perf hardening |
+| `0005_wallpaper_settings.sql` | Wallpaper blur/brightness settings |
+| `0006_subtasks_and_spotify_takeover.sql` | Subtasks table + Spotify takeover setting |
 
 ## Keyboard Shortcuts (Focus screen)
 
@@ -159,4 +188,4 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 
 ## Tech Stack
 
-Next.js 15 · TypeScript · Tailwind v4 · Framer Motion · Zustand · TanStack Query · Supabase · Recharts · Sonner · date-fns · @dnd-kit
+Next.js 16 (Turbopack, Cache Components) · TypeScript · Tailwind v4 · Framer Motion · Zustand · TanStack Query · Supabase · Spotify Web Playback SDK · Recharts · Sonner · date-fns · @dnd-kit

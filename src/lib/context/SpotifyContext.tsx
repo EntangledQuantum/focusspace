@@ -6,6 +6,7 @@ import {
 import { useQuery } from "@tanstack/react-query";
 import { useSpotify } from "@/lib/hooks/useSpotify";
 import { useSpotifyPlayer, type SpotifyPlaybackState } from "@/lib/hooks/useSpotifyPlayer";
+import { spotifyFetch, spotifyJson } from "@/lib/spotify/api";
 import { useTimerStore } from "@/lib/stores/timer";
 import { createClient } from "@/lib/supabase/client";
 import type { UserSettings } from "@/types/database";
@@ -74,7 +75,7 @@ const SpotifyContext = createContext<SpotifyContextValue | null>(null);
 export function SpotifyProvider({ children }: { children: ReactNode }) {
   const supabase = createClient();
 
-  const { data: spotifyData, isLoading: tokenLoading, refetch: refreshToken } = useSpotify();
+  const { data: spotifyData, isLoading: tokenLoading } = useSpotify();
   const token = spotifyData?.token ?? null;
   const isConnected = spotifyData?.isConnected ?? false;
 
@@ -93,67 +94,40 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const [volume, setVolumeState] = useState(60);
   const [shuffle, setShuffleState] = useState(false);
 
-  const handleTokenRefresh = useCallback(async () => {
-    const result = await refreshToken();
-    return result.data?.token ?? null;
-  }, [refreshToken]);
+  const { player, deviceId, state, isReady, error: sdkError } = useSpotifyPlayer({ token });
 
-  const { player, deviceId, state, isReady, error: sdkError } = useSpotifyPlayer({
-    token,
-    onTokenRefresh: handleTokenRefresh,
-  });
-
-  const progressInterval = useRef<ReturnType<typeof setInterval> | null>(null);
-  const externalPollRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const timerStatus = useTimerStore((s) => s.status);
   const prevTimerStatus = useRef(timerStatus);
 
-  // Track which device is "current" for control routing
+  // SDK is actively playing music
   const sdkActive = !!(state && !state.paused);
+  // SDK holds a playback context (playing OR paused) — controls must route here,
+  // not to "the active external device" which may not exist (404 no active device).
+  const sdkHasContext = !!state;
 
-  // Helpers for hitting Web API endpoints with optional device_id
-  const apiPut = useCallback(
-    async (path: string, body?: Record<string, unknown>, params?: Record<string, string>) => {
-      if (!token) return;
-      const url = new URL(`https://api.spotify.com/v1${path}`);
-      if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-      await fetch(url.toString(), {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: body ? JSON.stringify(body) : undefined,
-      });
-    },
-    [token],
-  );
-  const apiPost = useCallback(
-    async (path: string, params?: Record<string, string>) => {
-      if (!token) return;
-      const url = new URL(`https://api.spotify.com/v1${path}`);
-      if (params) Object.entries(params).forEach(([k, v]) => url.searchParams.set(k, v));
-      await fetch(url.toString(), {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-    },
-    [token],
-  );
+  // Refs so the poll interval below stays stable instead of being torn down
+  // and recreated on every playback-state change.
+  const deviceIdRef = useRef(deviceId);
+  const sdkActiveRef = useRef(sdkActive);
+  const sdkHasContextRef = useRef(sdkHasContext);
+  useEffect(() => { deviceIdRef.current = deviceId; }, [deviceId]);
+  useEffect(() => { sdkActiveRef.current = sdkActive; }, [sdkActive]);
+  useEffect(() => { sdkHasContextRef.current = sdkHasContext; }, [sdkHasContext]);
 
-  // Progress bar tick
+  // Progress bar tick — only while the SDK is actually playing
   useEffect(() => {
-    if (progressInterval.current) clearInterval(progressInterval.current);
     if (!state) return;
     if (state.paused) {
       setProgress(state.duration > 0 ? state.position / state.duration : 0);
       return;
     }
-    const tick = () => {
+    const id = setInterval(() => {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (player as any)?.getCurrentState().then((s: SpotifyPlaybackState | null) => {
         if (s) setProgress(s.duration > 0 ? s.position / s.duration : 0);
       });
-    };
-    progressInterval.current = setInterval(tick, 500);
-    return () => { if (progressInterval.current) clearInterval(progressInterval.current); };
+    }, 1000);
+    return () => clearInterval(id);
   }, [state, player]);
 
   // Sync shuffle state from SDK player_state_changed
@@ -163,23 +137,24 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
 
   // Poll GET /me/player for external device state + global shuffle/volume
   useEffect(() => {
-    if (!token) return;
-    if (externalPollRef.current) clearInterval(externalPollRef.current);
+    if (!isConnected) return;
 
     async function poll() {
-      if (!token) return;
+      if (document.hidden) return;
       try {
-        const res = await fetch("https://api.spotify.com/v1/me/player", {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.status === 204 || !res.ok) {
-          if (!state) setExternalState(null);
+        const d = await spotifyJson<{
+          is_playing: boolean;
+          progress_ms: number | null;
+          item: ExternalTrack | null;
+          device: { id: string; name: string; volume_percent: number } | null;
+          shuffle_state: boolean;
+        }>("/me/player");
+        if (!d) {
+          if (!sdkHasContextRef.current) setExternalState(null);
           return;
         }
-        const d = await res.json();
-        // Only treat as external when our SDK isn't the active source
-        const isOurDevice = d?.device?.id && d.device.id === deviceId;
-        if (d?.item && !isOurDevice && !sdkActive) {
+        const isOurDevice = d.device?.id && d.device.id === deviceIdRef.current;
+        if (d.item && !isOurDevice && !sdkActiveRef.current) {
           setExternalState({
             is_playing: d.is_playing,
             progress_ms: d.progress_ms ?? 0,
@@ -189,174 +164,176 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
           });
           if (d.device?.volume_percent != null) setVolumeState(d.device.volume_percent);
           if (typeof d.shuffle_state === "boolean") setShuffleState(d.shuffle_state);
-        } else if (isOurDevice && d.device?.volume_percent != null) {
-          setVolumeState(d.device.volume_percent);
+        } else if (isOurDevice) {
+          if (d.device?.volume_percent != null) setVolumeState(d.device.volume_percent);
           setExternalState(null);
-        } else if (sdkActive) {
+        } else if (sdkActiveRef.current) {
           setExternalState(null);
         }
-      } catch { /* ignore */ }
+      } catch { /* not connected / network — ignore */ }
     }
 
     poll();
-    externalPollRef.current = setInterval(poll, 3000);
-    return () => { if (externalPollRef.current) clearInterval(externalPollRef.current); };
-  }, [token, deviceId, sdkActive, state]); // eslint-disable-line react-hooks/exhaustive-deps
+    const id = setInterval(poll, 5000);
+    return () => clearInterval(id);
+  }, [isConnected]);
 
   const transferToSdk = useCallback(
     async (play = false) => {
-      if (!deviceId || !token) return false;
-      const res = await fetch("https://api.spotify.com/v1/me/player", {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ device_ids: [deviceId], play }),
-      });
-      setExternalState(null);
-      return res.ok || res.status === 204;
+      const id = deviceIdRef.current;
+      if (!id) return false;
+      try {
+        const res = await spotifyFetch("/me/player", {
+          method: "PUT",
+          body: { device_ids: [id], play },
+        });
+        setExternalState(null);
+        return res.ok || res.status === 204;
+      } catch {
+        return false;
+      }
     },
-    [deviceId, token],
+    [],
   );
 
   // For an artist context Spotify wants their top tracks — fetch and play as uris
-  const fetchArtistTopTracks = useCallback(
-    async (artistUri: string): Promise<string[]> => {
-      if (!token) return [];
-      const id = artistUri.split(":").pop();
-      const res = await fetch(
-        `https://api.spotify.com/v1/artists/${id}/top-tracks?market=from_token`,
-        { headers: { Authorization: `Bearer ${token}` } },
-      );
-      if (!res.ok) return [];
-      const data = await res.json();
-      return (data.tracks ?? []).map((t: { uri: string }) => t.uri).slice(0, 20);
-    },
-    [token],
-  );
+  const fetchArtistTopTracks = useCallback(async (artistUri: string): Promise<string[]> => {
+    const id = artistUri.split(":").pop();
+    const data = await spotifyJson<{ tracks?: { uri: string }[] }>(
+      `/artists/${id}/top-tracks`, { params: { market: "from_token" } },
+    );
+    return (data?.tracks ?? []).map((t) => t.uri).slice(0, 20);
+  }, []);
 
   const playContext = useCallback(
     async (ctx: PlayableContext) => {
-      if (!deviceId || !token) return;
-      // 1. Transfer playback to SDK device so it becomes the "active device" —
-      //    fixes 404 "no active device" from /play against an inactive Connect device.
-      await fetch("https://api.spotify.com/v1/me/player", {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ device_ids: [deviceId], play: false }),
-      });
-      setExternalState(null);
-      await new Promise((r) => setTimeout(r, 300));
-
-      let body: Record<string, unknown>;
-      if (ctx.type === "track") {
-        body = { uris: [ctx.uri] };
-      } else if (ctx.type === "artist") {
-        const uris = await fetchArtistTopTracks(ctx.uri);
-        if (uris.length === 0) return;
-        body = { uris };
-      } else {
-        body = { context_uri: ctx.uri };
-      }
-
-      const url = new URL("https://api.spotify.com/v1/me/player/play");
-      url.searchParams.set("device_id", deviceId);
-      const res = await fetch(url.toString(), {
-        method: "PUT",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      });
-      if (!res.ok && res.status !== 204) {
-        await new Promise((r) => setTimeout(r, 600));
-        await fetch(url.toString(), {
+      const id = deviceIdRef.current;
+      if (!id) return;
+      try {
+        // 1. Transfer playback to SDK device so it becomes the "active device" —
+        //    fixes 404 "no active device" from /play against an inactive Connect device.
+        await spotifyFetch("/me/player", {
           method: "PUT",
-          headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify(body),
+          body: { device_ids: [id], play: false },
         });
-      }
+        setExternalState(null);
+        await new Promise((r) => setTimeout(r, 300));
+
+        let body: Record<string, unknown>;
+        if (ctx.type === "track") {
+          body = { uris: [ctx.uri] };
+        } else if (ctx.type === "artist") {
+          const uris = await fetchArtistTopTracks(ctx.uri);
+          if (uris.length === 0) return;
+          body = { uris };
+        } else {
+          body = { context_uri: ctx.uri };
+        }
+
+        const res = await spotifyFetch("/me/player/play", {
+          method: "PUT",
+          params: { device_id: id },
+          body,
+        });
+        if (!res.ok && res.status !== 204) {
+          await new Promise((r) => setTimeout(r, 600));
+          await spotifyFetch("/me/player/play", {
+            method: "PUT",
+            params: { device_id: id },
+            body,
+          });
+        }
+      } catch { /* surfaced via UI state staying unchanged */ }
     },
-    [deviceId, token, fetchArtistTopTracks],
+    [fetchArtistTopTracks],
   );
 
-  // Control helpers — auto-route to whichever device is active
+  // Control helpers — route to wherever the playback context actually lives
   const playPause = useCallback(async () => {
-    if (sdkActive || (state && state.paused)) {
+    if (sdkHasContext) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await (player as any)?.togglePlay();
       return;
     }
-    // External device
     if (externalState?.device?.id) {
       const path = externalState.is_playing ? "/me/player/pause" : "/me/player/play";
-      await apiPut(path, undefined, { device_id: externalState.device.id });
-      setExternalState((p) => p ? { ...p, is_playing: !p.is_playing } : p);
+      try {
+        await spotifyFetch(path, { method: "PUT", params: { device_id: externalState.device.id } });
+        setExternalState((p) => p ? { ...p, is_playing: !p.is_playing } : p);
+      } catch { /* ignore */ }
       return;
     }
-    // No active device but we have one selected — kick off via playContext (handles transfer)
+    // No active playback anywhere — kick off the selection (handles transfer)
     if (selectedPlaylist) {
       await playContext(selectedPlaylist);
+    } else if (deviceIdRef.current) {
+      await transferToSdk(true);
     }
-  }, [sdkActive, state, player, externalState, selectedPlaylist, deviceId, apiPut, playContext]);
+  }, [sdkHasContext, player, externalState, selectedPlaylist, playContext, transferToSdk]);
 
-  const next = useCallback(async () => {
-    if (sdkActive) {
+  const skip = useCallback(async (direction: "next" | "previous") => {
+    if (sdkHasContext) {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (player as any)?.nextTrack();
-    } else if (externalState?.device?.id) {
-      await apiPost("/me/player/next", { device_id: externalState.device.id });
-    } else {
-      await apiPost("/me/player/next");
+      const p = player as any;
+      await (direction === "next" ? p?.nextTrack() : p?.previousTrack());
+      return;
     }
-  }, [sdkActive, player, externalState, apiPost]);
+    const targetId = externalState?.device?.id ?? deviceIdRef.current;
+    try {
+      await spotifyFetch(`/me/player/${direction}`, {
+        method: "POST",
+        params: targetId ? { device_id: targetId } : undefined,
+      });
+    } catch { /* ignore */ }
+  }, [sdkHasContext, player, externalState]);
 
-  const previous = useCallback(async () => {
-    if (sdkActive) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      await (player as any)?.previousTrack();
-    } else if (externalState?.device?.id) {
-      await apiPost("/me/player/previous", { device_id: externalState.device.id });
-    } else {
-      await apiPost("/me/player/previous");
-    }
-  }, [sdkActive, player, externalState, apiPost]);
+  const next = useCallback(() => skip("next"), [skip]);
+  const previous = useCallback(() => skip("previous"), [skip]);
 
   const setVolume = useCallback(
     async (percent: number) => {
       const p = Math.max(0, Math.min(100, Math.round(percent)));
       setVolumeState(p);
-      const targetId = sdkActive ? deviceId : externalState?.device?.id ?? deviceId;
-      if (sdkActive && player) {
+      if (sdkHasContext && player) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         try { await (player as any).setVolume(p / 100); } catch { /* ignore */ }
       }
+      const targetId = sdkHasContext ? deviceIdRef.current : externalState?.device?.id ?? deviceIdRef.current;
       if (!targetId) return;
-      await apiPut("/me/player/volume", undefined, {
-        volume_percent: String(p),
-        device_id: targetId,
-      });
+      try {
+        await spotifyFetch("/me/player/volume", {
+          method: "PUT",
+          params: { volume_percent: String(p), device_id: targetId },
+        });
+      } catch { /* ignore */ }
     },
-    [sdkActive, deviceId, externalState, player, apiPut],
+    [sdkHasContext, externalState, player],
   );
 
   const setShuffle = useCallback(
     async (on: boolean) => {
       setShuffleState(on);
-      const targetId = sdkActive ? deviceId : externalState?.device?.id ?? deviceId;
+      const targetId = sdkHasContext ? deviceIdRef.current : externalState?.device?.id ?? deviceIdRef.current;
       if (!targetId) return;
-      await apiPut("/me/player/shuffle", undefined, {
-        state: String(on),
-        device_id: targetId,
-      });
+      try {
+        await spotifyFetch("/me/player/shuffle", {
+          method: "PUT",
+          params: { state: String(on), device_id: targetId },
+        });
+      } catch { /* ignore */ }
     },
-    [sdkActive, deviceId, externalState, apiPut],
+    [sdkHasContext, externalState],
   );
 
-  // Timer-driven playback: takeover on start, pause on stop
+  // Timer-driven playback: optional takeover on start, pause on stop
   useEffect(() => {
     const prev = prevTimerStatus.current;
     prevTimerStatus.current = timerStatus;
 
-    if (!isReady || !deviceId || !token) return;
+    if (!isReady || !deviceId) return;
 
     const autoStart = settings?.spotify_auto_start ?? true;
+    const takeover = settings?.spotify_takeover ?? true;
     const wasIdle = prev === "idle" || prev === "completed";
     const wasPaused = prev === "paused";
     const wasRunning = prev === "running";
@@ -365,19 +342,20 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
       const alreadyPlaying = state && !state.paused;
       const externallyPlaying = externalState?.is_playing;
       if (externallyPlaying) {
-        // Takeover from external device, keep playing
-        transferToSdk(true);
+        // Take over from external device only when the user opted in;
+        // otherwise leave their phone/desktop playback alone.
+        if (takeover) transferToSdk(true);
       } else if (!alreadyPlaying) {
         if (selectedPlaylist) {
           playContext(selectedPlaylist);
-        } else {
+        } else if (state) {
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           (player as any)?.resume();
         }
       }
     } else if (autoStart && wasPaused && timerStatus === "running") {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (player as any)?.resume();
+      if (state?.paused) (player as any)?.resume();
     } else if (wasRunning && (timerStatus === "idle" || timerStatus === "completed" || timerStatus === "paused")) {
       if (state && !state.paused) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any

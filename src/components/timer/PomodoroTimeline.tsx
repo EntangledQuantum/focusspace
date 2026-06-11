@@ -12,7 +12,10 @@ interface Props {
   pomoDurationSec: number;
   shortBreakSec: number;
   longBreakSec: number;
-  pomodoroCount: number;   // global count — used to determine long-break position
+  /** Pomodoros completed in the current cycle before this task's first session.
+   *  0 when a task drives the timeline (task-relative cadence); the global
+   *  session count when running without a task. */
+  cycleOffset: number;
   longBreakEvery: number;
 }
 
@@ -27,7 +30,7 @@ export function PomodoroTimeline({
   mode, status, progress, remainingSec,
   estimatedPomodoros, completedPomodoros,
   pomoDurationSec, shortBreakSec, longBreakSec,
-  pomodoroCount, longBreakEvery,
+  cycleOffset, longBreakEvery,
 }: Props) {
   const isOnBreak = mode === "short_break" || mode === "long_break";
   const isActive = status === "running" || status === "paused";
@@ -64,8 +67,6 @@ export function PomodoroTimeline({
 
   const plannedSessions = Math.max(1, Math.ceil(estimatedPomodoros));
   const hasHalfLast = estimatedPomodoros % 1 === 0.5;
-  // Global count before any of this task's sessions ran
-  const initialCount = pomodoroCount - completedPomodoros;
 
   // The current session number (1-indexed) — if we're running/paused on a pomo,
   // it's the (completedPomodoros + 1)-th pomo. While on a break, the most recently
@@ -86,8 +87,8 @@ export function PomodoroTimeline({
       durationSec: !isOverflow && isLastPlanned && hasHalfLast ? pomoDurationSec / 2 : pomoDurationSec,
       isOverflow,
     });
-    const globalCountAfterPomo = initialCount + i + 1;
-    const isLong = longBreakEvery > 0 && globalCountAfterPomo % longBreakEvery === 0;
+    const countAfterPomo = cycleOffset + i + 1;
+    const isLong = longBreakEvery > 0 && countAfterPomo % longBreakEvery === 0;
     segs.push({
       type: isLong ? "long_break" : "short_break",
       durationSec: isLong ? longBreakSec : shortBreakSec,

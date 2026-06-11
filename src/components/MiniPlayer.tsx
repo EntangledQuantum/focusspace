@@ -39,12 +39,14 @@ export function MiniPlayer() {
   return (
     <div
       style={{
-        padding: 18,
-        height: "100vh",
+        padding: "min(18px, 3vmin)",
+        height: "100dvh",
+        boxSizing: "border-box",
         display: "flex",
         flexDirection: "column",
-        gap: 14,
+        gap: "min(14px, 2.5vmin)",
         background: "var(--color-background)",
+        overflow: "hidden",
       }}
     >
       {/* Timer block */}
@@ -62,7 +64,7 @@ export function MiniPlayer() {
             : timer.mode === "long_break" ? "Long Break"
             : timer.mode === "custom" ? "Custom" : "Focus"}
         </p>
-        <p style={{ fontSize: 48, fontFamily: "var(--font-display)", fontWeight: 600, lineHeight: 1 }}>
+        <p style={{ fontSize: "clamp(28px, 16vmin, 64px)", fontFamily: "var(--font-display)", fontWeight: 600, lineHeight: 1 }}>
           {timer.displayTime}
         </p>
         <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12 }}>

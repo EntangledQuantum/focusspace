@@ -1,14 +1,16 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback } from "react";
+import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
 
 /**
  * Opens a Document Picture-in-Picture window for the FocusSpace mini player.
- * Returns the live PiP window so consumers can render into it via createPortal.
- * Falls back gracefully (returns null) on browsers without the API.
+ * The window handle lives in a global store so the portal host (in app layout)
+ * keeps rendering into it across route changes.
+ * Falls back gracefully (open() returns false) on browsers without the API.
  */
 export function useMiniPlayer() {
-  const [pipWindow, setPipWindow] = useState<Window | null>(null);
+  const { pipWindow, setPipWindow } = useMiniPlayerStore();
 
   // Copy current document stylesheets into the pip window so Tailwind + tokens apply
   const cloneStyles = useCallback((pip: Window) => {
@@ -36,7 +38,7 @@ export function useMiniPlayer() {
       const prop = rootStyles[i];
       if (prop.startsWith("--")) tokens.push(`${prop}: ${rootStyles.getPropertyValue(prop)};`);
     }
-    themeStyle.textContent = `:root { ${tokens.join(" ")} }`;
+    themeStyle.textContent = `:root { ${tokens.join(" ")} } body { margin: 0; background: var(--color-background, #0f0e0d); color: var(--color-on-surface, #fff); font-family: var(--font-sans, system-ui); overflow: hidden; }`;
     pip.document.head.appendChild(themeStyle);
 
     // Match dark class on root
@@ -46,34 +48,33 @@ export function useMiniPlayer() {
   }, []);
 
   const open = useCallback(async () => {
+    if (pipWindow) {
+      pipWindow.focus();
+      return true;
+    }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dpi = (window as any).documentPictureInPicture;
     if (!dpi) return false;
     try {
-      const pip: Window = await dpi.requestWindow({ width: 320, height: 540 });
+      const pip: Window = await dpi.requestWindow({ width: 340, height: 560 });
       cloneStyles(pip);
-      pip.document.body.style.margin = "0";
-      pip.document.body.style.background = "var(--color-background, #0f0e0d)";
-      pip.document.body.style.color = "var(--color-on-surface, #fff)";
-      pip.document.body.style.fontFamily = "var(--font-sans, system-ui)";
-      pip.document.body.style.overflow = "hidden";
       pip.addEventListener("pagehide", () => setPipWindow(null));
       setPipWindow(pip);
       return true;
     } catch {
       return false;
     }
-  }, [cloneStyles]);
+  }, [pipWindow, setPipWindow, cloneStyles]);
 
   const close = useCallback(() => {
     pipWindow?.close();
     setPipWindow(null);
-  }, [pipWindow]);
+  }, [pipWindow, setPipWindow]);
 
-  useEffect(() => {
-    return () => { pipWindow?.close(); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  return { pipWindow, open, close, isSupported: typeof window !== "undefined" && "documentPictureInPicture" in window };
+  return {
+    pipWindow,
+    open,
+    close,
+    isSupported: typeof window !== "undefined" && "documentPictureInPicture" in window,
+  };
 }

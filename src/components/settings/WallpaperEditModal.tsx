@@ -104,11 +104,14 @@ export function WallpaperEditModal({ file, onConfirm, onCancel }: Props) {
     const srcW = Math.min(natW - srcX, (cW / dispW) * natW);
     const srcH = Math.min(natH - srcY, (cH / dispH) * natH);
 
-    const OUTPUT_W = 1920;
-    const OUTPUT_H = 1080;
+    // Keep the native resolution of the cropped region (capped at 4K) instead
+    // of downscaling everything to 1080p — uploads used to lose their quality here.
+    const MAX_W = 3840;
+    const outputW = Math.round(Math.min(srcW, MAX_W));
+    const outputH = Math.round(outputW * (srcH / srcW));
     const canvas = document.createElement("canvas");
-    canvas.width = OUTPUT_W;
-    canvas.height = OUTPUT_H;
+    canvas.width = outputW;
+    canvas.height = outputH;
     const ctx = canvas.getContext("2d")!;
 
     const fullImg = new Image();
@@ -118,12 +121,12 @@ export function WallpaperEditModal({ file, onConfirm, onCancel }: Props) {
       if (fullImg.complete) r();
     });
 
-    ctx.drawImage(fullImg, srcX, srcY, srcW, srcH, 0, 0, OUTPUT_W, OUTPUT_H);
+    ctx.drawImage(fullImg, srcX, srcY, srcW, srcH, 0, 0, outputW, outputH);
 
     canvas.toBlob((blob) => {
       setProcessing(false);
       if (blob) onConfirm({ blob, name: name.trim() || "wallpaper" });
-    }, "image/jpeg", 0.92);
+    }, "image/jpeg", 0.95);
   }, [imageUrl, scale, offset, name, onConfirm]);
 
   return (
