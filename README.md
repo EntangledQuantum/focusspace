@@ -29,6 +29,12 @@ supabase/migrations/0007_glass_controls.sql
 
 ## Latest Updates
 
+### Landing page + living wallpapers
+
+- **New homepage** — `/` is now a public landing page: animated aurora background that follows your cursor and bursts on click, a live demo timer ring, rotating headline, and a compact feature grid. Signed-in users skip straight to `/focus`.
+- **Login & signup redesigned** — no more boxed card: full-bleed forms over the living background with frosted inputs, a brand panel on desktop, gradient CTAs. All auth logic (email, Google, Spotify OAuth) unchanged.
+- **Animated wallpapers** — five new code-generated presets in Settings → Appearance: **Aurora Flow, Rainfall, Snowfall, Starfield, Fireflies**. Pure canvas, no images, theme-aware, paused in hidden tabs, respects reduced-motion. They sit alongside the mesh presets and your uploaded photos.
+
 ### Pink/Purple glass redesign (June 2026)
 
 - **New theme** — pink primary + purple accent across the whole app, dark *and* light. The old terracotta/sage palette is gone.

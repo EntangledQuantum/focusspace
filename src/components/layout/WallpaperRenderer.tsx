@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Image from "next/image";
+import { AnimatedBackdrop, type BackdropVariant } from "@/components/effects/AnimatedBackdrop";
 import type { Wallpaper } from "@/types/database";
 
 /** CSS-mesh presets. `id` is stored in wallpaper.storage_path just like the old
@@ -13,6 +14,15 @@ export const MESH_WALLPAPERS = [
   { id: "wp-noir",   name: "Noir" },     // near-black, minimal
 ] as const;
 
+/** Code-generated animated presets — a live canvas effect drawn over a mesh base. */
+export const ANIMATED_WALLPAPERS: { id: string; name: string; variant: BackdropVariant; base: string }[] = [
+  { id: "wp-anim-aurora",    name: "Aurora Flow", variant: "aurora",    base: "wp-noir" },
+  { id: "wp-anim-rain",      name: "Rainfall",    variant: "rain",      base: "wp-mist" },
+  { id: "wp-anim-snow",      name: "Snowfall",    variant: "snow",      base: "wp-mist" },
+  { id: "wp-anim-stars",     name: "Starfield",   variant: "starfield", base: "wp-noir" },
+  { id: "wp-anim-fireflies", name: "Fireflies",   variant: "fireflies", base: "wp-dusk" },
+];
+
 /** Old solid/gradient preset ids — rows that still point at one of these
  *  fall back to the default mesh. */
 export const LEGACY_WALLPAPER_IDS = new Set([
@@ -20,7 +30,11 @@ export const LEGACY_WALLPAPER_IDS = new Set([
 ]);
 
 export function isBuiltinWallpaperId(id: string) {
-  return MESH_WALLPAPERS.some((w) => w.id === id) || LEGACY_WALLPAPER_IDS.has(id);
+  return (
+    MESH_WALLPAPERS.some((w) => w.id === id) ||
+    ANIMATED_WALLPAPERS.some((w) => w.id === id) ||
+    LEGACY_WALLPAPER_IDS.has(id)
+  );
 }
 
 interface Props {
@@ -38,7 +52,18 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
 
   const path = wallpaper?.storage_path ?? "";
   const preset = MESH_WALLPAPERS.find((w) => w.id === path);
+  const animated = ANIMATED_WALLPAPERS.find((w) => w.id === path);
   const isLegacy = LEGACY_WALLPAPER_IDS.has(path);
+
+  // ── Animated (code-generated) wallpaper ─────────────────────────────────
+  if (animated) {
+    return (
+      <div className={`fixed inset-0 z-0 pointer-events-none ${animated.base}`}>
+        <AnimatedBackdrop variant={animated.variant} className="absolute inset-0" />
+        <div className="wallpaper-scrim" />
+      </div>
+    );
+  }
 
   // ── Preset (CSS-mesh) wallpaper ─────────────────────────────────────────
   if (!wallpaper || preset || isLegacy) {

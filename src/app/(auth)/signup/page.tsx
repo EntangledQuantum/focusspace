@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { Loader2 } from "lucide-react";
-import Image from "next/image";
-import appIcon from "@/app/icon.png";
+import { Loader2, ArrowRight, Sparkles, ListChecks, Flame } from "lucide-react";
+
+const INPUT_STYLE: React.CSSProperties = {
+  background: "rgba(255,255,255,0.05)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+  color: "var(--color-on-surface)",
+  border: "1px solid rgba(255,255,255,0.10)",
+};
 
 export default function SignupPage() {
   const [name, setName] = useState("");
@@ -16,7 +21,6 @@ export default function SignupPage() {
   const [spotifyLoading, setSpotifyLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState(false);
-  const router = useRouter();
 
   async function handleSpotify() {
     setSpotifyLoading(true);
@@ -55,13 +59,15 @@ export default function SignupPage() {
 
   if (done) {
     return (
-      <div className="min-h-dvh flex items-center justify-center p-6" style={{ background: "var(--color-background)" }}>
-        <div className="glass w-full max-w-sm rounded-2xl p-8 text-center">
-          <div className="w-12 h-12 rounded-full mx-auto mb-4 flex items-center justify-center"
-            style={{ background: "color-mix(in srgb, var(--color-secondary-container) 40%, transparent)" }}>
-            <span className="text-xl">✓</span>
+      <div className="min-h-dvh flex items-center justify-center p-6">
+        <div className="fade-up w-full max-w-sm text-center">
+          <div className="grad-primary w-14 h-14 rounded-full mx-auto mb-5 flex items-center justify-center"
+            style={{ boxShadow: "0 10px 32px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)" }}>
+            <span className="text-xl" style={{ color: "var(--color-on-primary)" }}>✓</span>
           </div>
-          <h2 className="text-lg font-semibold mb-2" style={{ color: "var(--color-on-surface)" }}>Check your email</h2>
+          <h2 style={{ fontFamily: "var(--font-display)", fontSize: 24, fontWeight: 800, color: "var(--color-on-surface)", marginBottom: 8 }}>
+            Check your email
+          </h2>
           <p className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
             We sent a confirmation link to <strong>{email}</strong>. Click it to activate your account.
           </p>
@@ -71,27 +77,61 @@ export default function SignupPage() {
   }
 
   return (
-    <div className="min-h-dvh flex items-center justify-center p-6 relative overflow-hidden"
-      style={{ background: "var(--color-background)" }}>
-      <div className="absolute inset-0 pointer-events-none">
-        <div className="absolute top-1/3 right-1/4 w-96 h-96 rounded-full opacity-10"
-          style={{ background: "var(--color-secondary)", filter: "blur(100px)" }} />
+    <div className="min-h-dvh flex items-center justify-center lg:justify-between gap-16 px-6 lg:px-24" style={{ paddingTop: 72, paddingBottom: 48 }}>
+      {/* Brand panel — desktop only */}
+      <div className="hidden lg:flex flex-col fade-up" style={{ maxWidth: 460 }}>
+        <h1
+          style={{
+            fontFamily: "var(--font-display)", fontWeight: 800, letterSpacing: "-.03em",
+            fontSize: "clamp(36px, 4vw, 52px)", lineHeight: 1.08, color: "var(--color-on-surface)",
+          }}
+        >
+          Claim your{" "}
+          <span style={{
+            background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+            WebkitBackgroundClip: "text", backgroundClip: "text", color: "transparent",
+          }}>
+            space.
+          </span>
+        </h1>
+        <p style={{ fontSize: 15, lineHeight: 1.6, color: "var(--color-on-surface-variant)", marginTop: 14 }}>
+          Thirty seconds to set up. A lifetime of deep work ahead.
+        </p>
+        <div className="flex flex-col" style={{ gap: 12, marginTop: 28 }}>
+          {[
+            { icon: ListChecks, text: "Projects, subtasks and tags from day one" },
+            { icon: Sparkles, text: "Living wallpapers and frosted glass, your way" },
+            { icon: Flame, text: "Streaks that make showing up addictive" },
+          ].map(({ icon: Icon, text }) => (
+            <div key={text} className="flex items-center" style={{ gap: 12 }}>
+              <div
+                className="flex items-center justify-center shrink-0"
+                style={{
+                  width: 30, height: 30, borderRadius: 10,
+                  color: "var(--color-primary)",
+                  background: "color-mix(in srgb, var(--color-primary) 14%, transparent)",
+                }}
+              >
+                <Icon size={15} />
+              </div>
+              <span style={{ fontSize: 13.5, color: "var(--color-on-surface-variant)" }}>{text}</span>
+            </div>
+          ))}
+        </div>
       </div>
 
-      <div className="glass w-full max-w-sm rounded-2xl p-8 relative z-10">
-        <div className="flex items-center gap-2.5 mb-8">
-          <Image src={appIcon} alt="FocusSpace" width={36} height={36} className="rounded-xl" />
-          <div>
-            <p className="font-semibold text-sm leading-none" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>FocusSpace</p>
-            <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>Deep Work</p>
-          </div>
-        </div>
-
-        <h1 className="text-xl font-semibold mb-1" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
+      {/* Form — directly on the background, no card */}
+      <div className="w-full fade-up" style={{ maxWidth: 380 }}>
+        <h2
+          style={{
+            fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800,
+            letterSpacing: "-.02em", color: "var(--color-on-surface)", marginBottom: 4,
+          }}
+        >
           Create account
-        </h1>
-        <p className="text-sm mb-6" style={{ color: "var(--color-on-surface-variant)" }}>
-          Start getting shit done today.
+        </h2>
+        <p className="text-sm mb-7" style={{ color: "var(--color-on-surface-variant)" }}>
+          Start getting things done today.
         </p>
 
         {error && (
@@ -118,12 +158,8 @@ export default function SignupPage() {
                 required
                 minLength={type === "password" ? 8 : undefined}
                 placeholder={placeholder}
-                className="w-full rounded-xl px-4 py-2.5 text-sm outline-none"
-                style={{
-                  background: "var(--color-surface-container-high)",
-                  color: "var(--color-on-surface)",
-                  border: "1px solid var(--color-outline-variant)",
-                }}
+                className="w-full rounded-xl px-4 py-3 text-sm outline-none input-field"
+                style={INPUT_STYLE}
               />
             </div>
           ))}
@@ -131,28 +167,28 @@ export default function SignupPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-full py-2.5 text-sm font-semibold flex items-center justify-center gap-2 transition-all active:scale-95"
+            className="grad-primary w-full rounded-full py-3 text-sm font-bold flex items-center justify-center gap-2 transition-all active:scale-95 btn-hover-primary"
             style={{
-              background: "var(--color-primary-container)",
-              color: "var(--color-on-primary-container)",
+              color: "var(--color-on-primary)",
+              boxShadow: "0 10px 32px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)",
               opacity: loading ? 0.7 : 1,
             }}
           >
-            {loading && <Loader2 size={14} className="animate-spin" />}
+            {loading ? <Loader2 size={14} className="animate-spin" /> : <ArrowRight size={15} />}
             Create account
           </button>
         </form>
 
-        <div className="flex items-center gap-3 my-5">
-          <div className="flex-1 h-px" style={{ background: "var(--color-outline-variant)" }} />
+        <div className="flex items-center gap-3 my-6">
+          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
           <span className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>or</span>
-          <div className="flex-1 h-px" style={{ background: "var(--color-outline-variant)" }} />
+          <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
         </div>
 
         <button
           onClick={handleSpotify}
           disabled={spotifyLoading}
-          className="w-full rounded-full py-2.5 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95"
+          className="w-full rounded-full py-3 text-sm font-medium flex items-center justify-center gap-3 transition-all active:scale-95 btn-hover-green"
           style={{ background: "#1DB954", color: "#000", opacity: spotifyLoading ? 0.7 : 1 }}
         >
           {spotifyLoading ? (
@@ -165,9 +201,9 @@ export default function SignupPage() {
           Sign up with Spotify
         </button>
 
-        <p className="mt-5 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
+        <p className="mt-6 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
           Already have an account?{" "}
-          <Link href="/login" className="font-medium" style={{ color: "var(--color-primary)" }}>
+          <Link href="/login" className="font-semibold" style={{ color: "var(--color-primary)" }}>
             Log in
           </Link>
         </p>

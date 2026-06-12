@@ -4,7 +4,8 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { MESH_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { MESH_WALLPAPERS, ANIMATED_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { AnimatedBackdrop } from "@/components/effects/AnimatedBackdrop";
 import { SliderRow } from "@/components/layout/TopNav";
 import { TONE_OPTIONS } from "@/lib/audio/tones";
 import { playTone } from "@/lib/audio/tones";
@@ -260,6 +261,44 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
+            </div>
+
+            {/* Animated (code-generated) wallpapers */}
+            <div>
+              <p className="text-xs font-medium mb-1.5" style={{ color: "var(--color-on-surface-variant)" }}>
+                Animated — generated live, no images
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {ANIMATED_WALLPAPERS.map((s) => {
+                  const isActive = local.active_wallpaper_id === s.id;
+                  return (
+                    <button
+                      key={s.id}
+                      onClick={() => saveField("active_wallpaper_id", s.id)}
+                      className={`relative rounded-xl overflow-hidden transition-all ${s.base}`}
+                      style={{
+                        height: 60,
+                        outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
+                        outlineOffset: "2px",
+                      }}
+                    >
+                      <AnimatedBackdrop variant={s.variant} className="absolute inset-0" />
+                      <div className="absolute inset-0 flex items-end p-1.5">
+                        <span className="text-[9px] font-semibold leading-none px-1.5 py-1 rounded"
+                          style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+                          {s.name}
+                        </span>
+                      </div>
+                      {isActive && (
+                        <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                          style={{ background: "var(--color-primary)" }}>
+                          <span className="text-[7px] leading-none">✓</span>
+                        </div>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
             </div>
 
             {/* User-uploaded wallpapers */}

@@ -34,14 +34,17 @@ export async function updateSession(request: NextRequest) {
 
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
   const isCallbackRoute = pathname.startsWith("/auth/callback");
+  // "/" is the public landing page
+  const isLanding = pathname === "/";
 
-  if (!user && !isAuthRoute && !isCallbackRoute) {
+  if (!user && !isAuthRoute && !isCallbackRoute && !isLanding) {
     const url = request.nextUrl.clone();
     url.pathname = "/login";
     return NextResponse.redirect(url);
   }
 
-  if (user && isAuthRoute) {
+  // Signed-in users skip the landing + auth pages and go straight to work
+  if (user && (isAuthRoute || isLanding)) {
     const url = request.nextUrl.clone();
     url.pathname = "/focus";
     return NextResponse.redirect(url);
