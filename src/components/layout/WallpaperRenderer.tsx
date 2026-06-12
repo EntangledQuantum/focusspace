@@ -4,54 +4,65 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import type { Wallpaper } from "@/types/database";
 
-export const SOLID_WALLPAPERS = [
-  { id: "pitch-black",  name: "Pitch Black",   css: "#0a0a0a" },
-  { id: "deep-ocean",   name: "Deep Ocean",    css: "linear-gradient(135deg, #0c1a3a 0%, #0d2b4f 50%, #0a1528 100%)" },
-  { id: "forest-night", name: "Forest Night",  css: "linear-gradient(135deg, #0d1f0e 0%, #152a16 60%, #0a150b 100%)" },
-  { id: "ember",        name: "Ember",         css: "linear-gradient(135deg, #1a0a05 0%, #2a1008 60%, #120604 100%)" },
-  { id: "midnight",     name: "Midnight",      css: "linear-gradient(135deg, #0d0d1a 0%, #151530 60%, #080810 100%)" },
-  { id: "slate",        name: "Slate",         css: "linear-gradient(135deg, #111418 0%, #1a2128 60%, #0c1014 100%)" },
-];
+/** CSS-mesh presets. `id` is stored in wallpaper.storage_path just like the old
+ *  solid ids, so no DB migration is required — only the option list changed. */
+export const MESH_WALLPAPERS = [
+  { id: "wp-aurora", name: "Aurora" },   // pink → purple → indigo (default)
+  { id: "wp-dusk",   name: "Dusk" },     // warm pink / coral / violet
+  { id: "wp-mist",   name: "Mist" },     // cool blue / lilac / teal
+  { id: "wp-noir",   name: "Noir" },     // near-black, minimal
+] as const;
+
+/** Old solid/gradient preset ids — rows that still point at one of these
+ *  fall back to the default mesh. */
+export const LEGACY_WALLPAPER_IDS = new Set([
+  "pitch-black", "deep-ocean", "forest-night", "ember", "midnight", "slate",
+]);
+
+export function isBuiltinWallpaperId(id: string) {
+  return MESH_WALLPAPERS.some((w) => w.id === id) || LEGACY_WALLPAPER_IDS.has(id);
+}
 
 interface Props {
   wallpaper: Wallpaper | null;
   supabaseUrl?: string;
+  /** 0–100 from the photo "Blur" slider */
   blur?: number;
+  /** 0–100 from the photo "Brightness" slider */
   opacity?: number;
 }
 
-export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity = 40 }: Props) {
+export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity = 50 }: Props) {
   const [loaded, setLoaded] = useState(false);
-
   useEffect(() => { setLoaded(false); }, [wallpaper?.id]);
 
-  const solid = SOLID_WALLPAPERS.find((w) => w.id === wallpaper?.storage_path);
+  const path = wallpaper?.storage_path ?? "";
+  const preset = MESH_WALLPAPERS.find((w) => w.id === path);
+  const isLegacy = LEGACY_WALLPAPER_IDS.has(path);
 
-  if (!wallpaper || solid) {
+  // ── Preset (CSS-mesh) wallpaper ─────────────────────────────────────────
+  if (!wallpaper || preset || isLegacy) {
     return (
-      <div
-        className="fixed inset-0 z-0 pointer-events-none transition-all duration-700"
-        style={{ background: solid?.css ?? "#131313" }}
-      />
+      <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-700 ${preset?.id ?? "wp-aurora"}`}>
+        <div className="wallpaper-scrim" />
+      </div>
     );
   }
 
-  const imageUrl = wallpaper.storage_path.startsWith("http")
-    ? wallpaper.storage_path
-    : `${supabaseUrl}/storage/v1/object/public/wallpapers/${wallpaper.storage_path}`;
+  // ── Uploaded photo wallpaper ────────────────────────────────────────────
+  const imageUrl = path.startsWith("http")
+    ? path
+    : `${supabaseUrl}/storage/v1/object/public/wallpapers/${path}`;
 
   const blurPx = (blur / 100) * 32;
-  const brightness = (opacity / 100) * 0.75;
+  const brightness = 0.35 + (opacity / 100) * 0.55;
 
   return (
     <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
       <Image
         src={imageUrl}
         alt={wallpaper.name}
-        fill
-        priority
-        quality={90}
-        sizes="100vw"
+        fill priority quality={90} sizes="100vw"
         className="object-cover"
         style={{
           filter: `blur(${blurPx.toFixed(1)}px) brightness(${brightness.toFixed(2)})`,
@@ -61,18 +72,8 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
         }}
         onLoad={() => setLoaded(true)}
       />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.5) 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-0"
-        style={{
-          background: "linear-gradient(to top, var(--color-background) 0%, color-mix(in srgb, var(--color-background) 50%, transparent) 35%, transparent 65%)",
-        }}
-      />
+      {/* single gentle bottom scrim — no radial vignette, no tall top gradient */}
+      <div className="wallpaper-scrim" />
     </div>
   );
 }

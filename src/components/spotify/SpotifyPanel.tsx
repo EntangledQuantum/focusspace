@@ -4,7 +4,6 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSpotifyContext, type PlayableContext } from "@/lib/context/SpotifyContext";
 import { spotifyFetch, spotifyJson } from "@/lib/spotify/api";
-import { useTimerStore } from "@/lib/stores/timer";
 import { useMiniPlayer } from "@/lib/hooks/useMiniPlayer";
 import { toast } from "sonner";
 import {
@@ -225,6 +224,10 @@ function SearchPicker({
   );
 }
 
+/**
+ * Compact music column for the FocusDock. Hidden entirely until Spotify is
+ * connected (connect lives in Settings → Music).
+ */
 export function SpotifyPanel() {
   const {
     isConnected, tokenLoading, state, isReady, sdkError,
@@ -239,7 +242,6 @@ export function SpotifyPanel() {
   const [lastVolume, setLastVolume] = useState(60);
   const pickerRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
-  const timerStatus = useTimerStore((s) => s.status);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
@@ -250,10 +252,6 @@ export function SpotifyPanel() {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen, volumeOpen]);
 
-  function connectSpotify() {
-    window.location.href = "/api/spotify/connect?next=/focus";
-  }
-
   const { open: openPip } = useMiniPlayer();
 
   async function openMiniPlayer() {
@@ -261,44 +259,13 @@ export function SpotifyPanel() {
     if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
   }
 
-  const isSessionActive = timerStatus === "running" || timerStatus === "paused";
-
-  if (tokenLoading) return null;
-
-  if (!isConnected) {
-    if (isSessionActive) return null;
-    return (
-      <div className="glass rounded-2xl px-6 py-4 flex items-center gap-4 w-full max-w-[420px] mt-4">
-        <div
-          className="w-9 h-9 rounded-xl flex items-center justify-center shrink-0"
-          style={{ background: "color-mix(in srgb, #1DB954 15%, transparent)" }}
-        >
-          <SpotifyLogo size={18} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold" style={{ color: "var(--color-on-surface)" }}>
-            Connect Spotify
-          </p>
-          <p className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>
-            Play music during focus sessions
-          </p>
-        </div>
-        <button
-          onClick={connectSpotify}
-          className="px-4 py-2 rounded-full text-xs font-semibold shrink-0 transition-all active:scale-95 btn-hover-green"
-          style={{ background: "#1DB954", color: "#000" }}
-        >
-          Connect
-        </button>
-      </div>
-    );
-  }
+  if (tokenLoading || !isConnected) return null;
 
   if (sdkError) {
     return (
-      <div className="glass rounded-2xl px-6 py-3 flex items-center gap-3 w-full max-w-[420px] mt-4">
+      <div className="flex items-center gap-3 h-full">
         <SpotifyLogo size={16} />
-        <p className="text-sm" style={{ color: "var(--color-error)" }}>{sdkError}</p>
+        <p className="text-xs" style={{ color: "var(--color-error)" }}>{sdkError}</p>
       </div>
     );
   }
@@ -327,23 +294,46 @@ export function SpotifyPanel() {
   }
 
   return (
-    <div className="glass rounded-2xl p-4 w-full max-w-[420px] mt-4 space-y-3">
+    <div className="flex flex-col h-full" style={{ gap: 9 }}>
+      {/* Header: label + search + pip */}
+      <div className="flex items-center" style={{ gap: 7 }}>
+        <SpotifyLogo size={13} />
+        <span
+          className="uppercase"
+          style={{
+            fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
+            color: "var(--color-on-surface-variant)", opacity: 0.8,
+          }}
+        >
+          Now playing
+        </span>
+        <div className="flex-1" />
+        <button
+          onClick={openMiniPlayer}
+          title="Pop out mini player"
+          className="icon-btn"
+          style={{ width: 24, height: 24 }}
+        >
+          <PictureInPicture2 size={12} />
+        </button>
+      </div>
+
       {/* Playlist / search selector */}
       <div ref={pickerRef} className="relative">
         <button
           onClick={() => setPickerOpen(!pickerOpen)}
-          className="w-full flex items-center gap-2.5 px-3.5 py-2 rounded-xl text-left transition-colors btn-hover-surface"
+          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors btn-hover-surface"
           style={{
             background: "rgba(255,255,255,0.04)",
             border: "1px solid rgba(255,255,255,0.07)",
             color: "var(--color-on-surface-variant)",
           }}
         >
-          <ListMusic size={14} />
-          <span className="flex-1 text-xs truncate">
+          <ListMusic size={12} />
+          <span className="flex-1 text-[11px] truncate">
             {selectedPlaylist ? selectedPlaylist.name : "Choose music…"}
           </span>
-          <ChevronDown size={13} className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
+          <ChevronDown size={12} className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
         </button>
         {pickerOpen && (
           <SearchPicker
@@ -357,42 +347,31 @@ export function SpotifyPanel() {
         )}
       </div>
 
-      {/* Now playing */}
-      <div className="flex items-center gap-3">
+      {/* Now playing row */}
+      <div className="flex items-center gap-2.5">
         {albumArt ? (
           // eslint-disable-next-line @next/next/no-img-element
-          <img src={albumArt} alt={trackName} className="w-12 h-12 rounded-xl object-cover shrink-0" />
+          <img src={albumArt} alt={trackName} className="w-10 h-10 rounded-lg object-cover shrink-0" />
         ) : (
           <div
-            className="w-12 h-12 rounded-xl shrink-0 flex items-center justify-center"
+            className="w-10 h-10 rounded-lg shrink-0 flex items-center justify-center"
             style={{ background: "var(--color-surface-container-high)" }}
           >
-            <Music size={18} style={{ color: "var(--color-on-surface-variant)" }} />
+            <Music size={16} style={{ color: "var(--color-on-surface-variant)" }} />
           </div>
         )}
         <div className="flex-1 min-w-0">
-          <p className="text-sm font-semibold truncate" style={{ color: "var(--color-on-surface)" }}>
+          <p className="text-[13px] font-semibold truncate" style={{ color: "var(--color-on-surface)" }}>
             {trackName ?? (isReady ? "Ready" : "Connecting…")}
           </p>
-          <p className="text-xs truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
+          <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
             {trackArtists ?? (extTrack ? "" : "Pick something to play")}
+            {isExternal && externalState?.device && (
+              <span className="inline-flex items-center gap-1 ml-1">
+                <ExternalLink size={8} /> {externalState.device.name}
+              </span>
+            )}
           </p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <button
-            onClick={openMiniPlayer}
-            title="Open mini player"
-            className="transition-opacity opacity-60 hover:opacity-100"
-            style={{ color: "var(--color-on-surface-variant)" }}
-          >
-            <PictureInPicture2 size={13} />
-          </button>
-          {isExternal && externalState?.device && (
-            <span className="text-[10px] flex items-center gap-1" style={{ color: "var(--color-on-surface-variant)" }}>
-              <ExternalLink size={9} />
-              {externalState.device.name}
-            </span>
-          )}
         </div>
       </div>
 
@@ -405,44 +384,44 @@ export function SpotifyPanel() {
       </div>
 
       {/* Controls */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between mt-auto">
         {/* Shuffle */}
         <button
           onClick={() => setShuffle(!shuffle)}
           title={shuffle ? "Shuffle on" : "Shuffle off"}
-          className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90"
+          className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90"
           style={{
             color: shuffle ? "#1DB954" : "var(--color-on-surface-variant)",
             background: shuffle ? "rgba(29,185,84,0.12)" : "transparent",
           }}
         >
-          <Shuffle size={14} />
+          <Shuffle size={13} />
         </button>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-3.5">
           <button
             onClick={previous}
             disabled={!isReady && !isExternal}
-            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+            className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
             style={{ color: "var(--color-on-surface-variant)" }}
           >
-            <SkipBack size={17} />
+            <SkipBack size={15} />
           </button>
           <button
             onClick={playPause}
             disabled={!isReady && !isExternal}
-            className="w-11 h-11 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30 btn-hover-green"
+            className="w-10 h-10 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30 btn-hover-green"
             style={{ background: "#1DB954", color: "#000" }}
           >
-            {isPlaying ? <Pause size={19} fill="currentColor" /> : <Play size={19} fill="currentColor" />}
+            {isPlaying ? <Pause size={16} fill="currentColor" /> : <Play size={16} fill="currentColor" />}
           </button>
           <button
             onClick={next}
             disabled={!isReady && !isExternal}
-            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
+            className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90 disabled:opacity-30"
             style={{ color: "var(--color-on-surface-variant)" }}
           >
-            <SkipForward size={17} />
+            <SkipForward size={15} />
           </button>
         </div>
 
@@ -451,10 +430,10 @@ export function SpotifyPanel() {
           <button
             onClick={() => setVolumeOpen((v) => !v)}
             title="Volume"
-            className="w-8 h-8 flex items-center justify-center rounded-full transition-all active:scale-90"
+            className="w-7 h-7 flex items-center justify-center rounded-full transition-all active:scale-90"
             style={{ color: "var(--color-on-surface-variant)" }}
           >
-            {volume === 0 ? <VolumeX size={14} /> : <Volume2 size={14} />}
+            {volume === 0 ? <VolumeX size={13} /> : <Volume2 size={13} />}
           </button>
           {volumeOpen && (
             <div
@@ -475,7 +454,7 @@ export function SpotifyPanel() {
                 max={100}
                 value={volume}
                 onChange={(e) => setVolume(parseInt(e.target.value, 10))}
-                className="flex-1 accent-[#1DB954]"
+                className="flex-1 rng"
               />
               <span className="text-[10px] w-7 text-right" style={{ color: "var(--color-on-surface-variant)" }}>
                 {volume}%
@@ -489,7 +468,7 @@ export function SpotifyPanel() {
       {isExternal && (
         <button
           onClick={() => transferToSdk(true)}
-          className="w-full text-[11px] py-1.5 rounded-lg transition-all btn-hover-surface"
+          className="w-full text-[10.5px] py-1 rounded-lg transition-all btn-hover-surface"
           style={{
             color: "var(--color-on-surface-variant)",
             background: "rgba(255,255,255,0.04)",

@@ -1,9 +1,12 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag, ListChecks, ChevronDown } from "lucide-react";
+import { useTimer } from "@/lib/hooks/useTimer";
+import { useTimerStore } from "@/lib/stores/timer";
+import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag, ListChecks, ChevronDown, Play } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import type { Project, Subtask, Task, Tag as TagType, TaskWithTags } from "@/types/database";
@@ -34,6 +37,8 @@ function randomTagColor() {
 export default function ProjectsPage() {
   const supabase = createClient();
   const qc = useQueryClient();
+  const router = useRouter();
+  const timer = useTimer();
   const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
@@ -553,8 +558,23 @@ export default function ProjectsPage() {
   const todo = tasks.filter((t) => t.status === "todo");
   const done = tasks.filter((t) => t.status === "done");
 
+  // One-tap Run: switch the active task and start a pomodoro, even if a
+  // session is already running (the old one is closed out cleanly first).
+  async function runTask(task: TaskWithTags) {
+    if (timer.status === "running" || timer.status === "paused") {
+      await timer.resetSession();
+    }
+    await timer.startSession({
+      mode: "pomodoro",
+      durationSec: settings?.focus_duration_sec ?? 25 * 60,
+      taskId: task.id,
+      projectId: task.project_id,
+    });
+    router.push("/focus");
+  }
+
   return (
-    <div className="flex h-dvh">
+    <div className="flex h-dvh" style={{ paddingTop: 88 }}>
       {/* Projects sidebar */}
       <div
         className="w-72 shrink-0 flex flex-col py-8"
@@ -1028,6 +1048,7 @@ export default function ProjectsPage() {
                     onToggle={() => toggleTask.mutate(task)}
                     onDelete={() => deleteTask.mutate(task.id)}
                     onEdit={() => startEditingTask(task)}
+                    onRun={() => runTask(task)}
                   />
                 ),
               )}
@@ -1067,6 +1088,38 @@ export default function ProjectsPage() {
   );
 }
 
+function RunButton({ taskId, onRun }: { taskId: string; onRun: () => void }) {
+  const currentTaskId = useTimerStore((s) => s.currentTaskId);
+  const status = useTimerStore((s) => s.status);
+  const live = currentTaskId === taskId && (status === "running" || status === "paused");
+
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); onRun(); }}
+      title="Switch to this task & start the timer"
+      className={`pill hover-lift shrink-0 ${live ? "grad-primary" : ""}`}
+      style={{
+        padding: "7px 14px", fontSize: 12.5,
+        color: live ? "var(--color-on-primary)" : "var(--color-primary)",
+        background: live ? undefined : "color-mix(in srgb, var(--color-primary) 13%, transparent)",
+        border: live ? "1px solid transparent" : "1px solid color-mix(in srgb, var(--color-primary) 28%, transparent)",
+        boxShadow: live ? "0 6px 20px -6px color-mix(in srgb, var(--color-primary) 60%, transparent)" : "none",
+      }}
+    >
+      {live ? (
+        <>
+          <span className="pulse-dot" style={{ width: 7, height: 7, borderRadius: 99, background: "currentColor" }} />
+          Running
+        </>
+      ) : (
+        <>
+          <Play size={12} /> Run
+        </>
+      )}
+    </button>
+  );
+}
+
 function TaskRow({
   task,
   subtasks = [],
@@ -1074,6 +1127,7 @@ function TaskRow({
   onToggle,
   onDelete,
   onEdit,
+  onRun,
   done = false,
 }: {
   task: TaskWithTags;
@@ -1082,6 +1136,7 @@ function TaskRow({
   onToggle: () => void;
   onDelete: () => void;
   onEdit?: () => void;
+  onRun?: () => void;
   done?: boolean;
 }) {
   const priority = PRIORITY_CONFIG[task.priority];
@@ -1178,6 +1233,9 @@ function TaskRow({
             completed={task.completed_pomodoros ?? 0}
           />
         )}
+
+        {/* One-tap Run */}
+        {!done && onRun && <RunButton taskId={task.id} onRun={onRun} />}
 
         <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
           {onEdit && (

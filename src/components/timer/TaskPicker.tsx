@@ -37,8 +37,9 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
         })) as TaskWithTags[],
       }));
     },
-    enabled: open,
-    staleTime: 0,
+    // Kept warm by the app-shell prefetch so the picker opens instantly;
+    // a short staleTime still revalidates after task edits elsewhere.
+    staleTime: 30_000,
   });
 
   const filtered = projects

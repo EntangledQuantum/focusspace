@@ -52,6 +52,8 @@ export type Database = {
           spotify_token_expires_at: string | null;
           spotify_auto_start: boolean;
           spotify_takeover: boolean;
+          glass_tint: number;
+          glass_blur: number;
         };
         Insert: {
           user_id: string;
@@ -73,6 +75,8 @@ export type Database = {
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
           spotify_takeover?: boolean;
+          glass_tint?: number;
+          glass_blur?: number;
         };
         Update: {
           theme?: "dark" | "light" | "system";
@@ -93,6 +97,8 @@ export type Database = {
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
           spotify_takeover?: boolean;
+          glass_tint?: number;
+          glass_blur?: number;
         };
         Relationships: [];
       };

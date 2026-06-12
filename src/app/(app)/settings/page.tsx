@@ -1,15 +1,17 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { SOLID_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { MESH_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { SliderRow } from "@/components/layout/TopNav";
 import { TONE_OPTIONS } from "@/lib/audio/tones";
 import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut } from "lucide-react";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -48,10 +50,34 @@ export default function SettingsPage() {
   const [local, setLocal] = useState<Partial<UserSettings>>({});
   const [uploading, setUploading] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
+  const glassSaveRef = useRef<{ id: ReturnType<typeof setTimeout> | null; v: { tint: number; blur: number } }>({
+    id: null, v: { tint: 0.5, blur: 22 },
+  });
 
   useEffect(() => {
-    if (settings) setLocal(settings);
+    if (settings) {
+      setLocal(settings);
+      glassSaveRef.current.v = { tint: settings.glass_tint ?? 0.5, blur: settings.glass_blur ?? 22 };
+    }
   }, [settings]);
+
+  // Live CSS-var update + debounced write for the glass sliders
+  function updateGlass(partial: Partial<{ tint: number; blur: number }>) {
+    const g = glassSaveRef.current;
+    g.v = { ...g.v, ...partial };
+    if (partial.tint !== undefined) {
+      field("glass_tint", g.v.tint);
+      document.documentElement.style.setProperty("--glass-tint", String(g.v.tint));
+    }
+    if (partial.blur !== undefined) {
+      field("glass_blur", g.v.blur);
+      document.documentElement.style.setProperty("--glass-blur", `${g.v.blur}px`);
+    }
+    if (g.id) clearTimeout(g.id);
+    g.id = setTimeout(() => {
+      save.mutate({ glass_tint: g.v.tint, glass_blur: g.v.blur });
+    }, 300);
+  }
 
   const save = useMutation({
     mutationFn: async (patch: Partial<UserSettings>) => {
@@ -164,7 +190,7 @@ export default function SettingsPage() {
         />
       )}
 
-      <div className="p-8 max-w-3xl mx-auto space-y-6 pb-16">
+      <div className="p-8 max-w-3xl mx-auto space-y-6 pb-16" style={{ paddingTop: 104 }}>
         <div>
           <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
             Settings
@@ -204,18 +230,17 @@ export default function SettingsPage() {
               </p>
             </div>
 
-            {/* Solid / built-in wallpapers */}
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-              {SOLID_WALLPAPERS.map((s) => {
+            {/* Mesh wallpaper presets */}
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {MESH_WALLPAPERS.map((s) => {
                 const isActive = local.active_wallpaper_id === s.id;
                 return (
                   <button
                     key={s.id}
                     onClick={() => saveField("active_wallpaper_id", s.id)}
-                    className="relative rounded-xl overflow-hidden transition-all"
+                    className={`relative rounded-xl overflow-hidden transition-all ${s.id}`}
                     style={{
                       height: 60,
-                      background: s.css,
                       outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
                       outlineOffset: "2px",
                     }}
@@ -320,8 +345,31 @@ export default function SettingsPage() {
           </div>
         </Section>
 
-        {/* Wallpaper Visual Controls */}
-        <Section icon={<Sliders size={18} />} title="Wallpaper Effects">
+        {/* Glass tint + blur — drives every .glass card live */}
+        <Section icon={<Sliders size={18} />} title="Glass">
+          <div className="space-y-4">
+            <p className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>
+              How opaque and frosted the cards over your wallpaper feel. Changes apply live.
+            </p>
+            <SliderRow
+              label="Tint"
+              display={`${Math.round((local.glass_tint ?? 0.5) * 100)}%`}
+              value={local.glass_tint ?? 0.5}
+              min={0} max={1} step={0.01}
+              onChange={(v) => updateGlass({ tint: v })}
+            />
+            <SliderRow
+              label="Blur" accent
+              display={`${local.glass_blur ?? 22}px`}
+              value={local.glass_blur ?? 22}
+              min={0} max={48} step={1}
+              onChange={(v) => updateGlass({ blur: v })}
+            />
+          </div>
+        </Section>
+
+        {/* Photo wallpaper visual controls */}
+        <Section icon={<Sliders size={18} />} title="Photo Wallpaper Effects">
           <Field label="Blur" description={`${local.wallpaper_blur ?? 60}%`}>
             <input
               type="range" min={0} max={100} step={5}
@@ -464,8 +512,37 @@ export default function SettingsPage() {
             />
           </Field>
         </Section>
+
+        {/* Sign out */}
+        <SignOutButton />
       </div>
     </>
+  );
+}
+
+function SignOutButton() {
+  const router = useRouter();
+
+  async function handleSignOut() {
+    const supabase = createClient();
+    await supabase.auth.signOut();
+    router.push("/login");
+    router.refresh();
+  }
+
+  return (
+    <button
+      onClick={handleSignOut}
+      className="pill hover-lift btn-hover-error"
+      style={{
+        padding: "11px 18px", fontSize: 13.5,
+        color: "var(--color-on-surface-variant)",
+        background: "rgba(255,255,255,0.05)",
+        border: "1px solid rgba(255,255,255,0.10)",
+      }}
+    >
+      <LogOut size={16} /> Sign out
+    </button>
   );
 }
 

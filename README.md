@@ -18,15 +18,29 @@ A modern Pomodoro + productivity tracker. Pick one task, run the timer, review t
 
 ## ⚠️ Required after pulling this update
 
-A new migration must be applied once in **Supabase Dashboard → SQL Editor**:
+New migrations must be applied once (in order) in **Supabase Dashboard → SQL Editor**:
 
 ```
-supabase/migrations/0006_subtasks_and_spotify_takeover.sql
+supabase/migrations/0006_subtasks_and_spotify_takeover.sql   (if not applied yet)
+supabase/migrations/0007_glass_controls.sql
 ```
 
-It adds the `subtasks` table and the `spotify_takeover` setting. The app runs without it, but subtasks/descriptions won't save and the "Take over playback" toggle will error until it's applied.
+`0007` adds the `glass_tint` / `glass_blur` settings that drive the live glass sliders. The app runs without it, but moving the sliders won't persist until it's applied.
 
 ## Latest Updates
+
+### Pink/Purple glass redesign (June 2026)
+
+- **New theme** — pink primary + purple accent across the whole app, dark *and* light. The old terracotta/sage palette is gone.
+- **Solo focus timer** — the center of the Focus screen now holds only the gradient ring, the task name, and the transport controls.
+- **Bottom dock** — subtasks, the session timeline + Mark done, and the Spotify player live in a wide three-column glass dock. A **Focus mode** button slides it away (a slim music mini-bar stays if Spotify is connected); `Esc` brings it back.
+- **Horizontal top nav** — the old sidebar is now a floating glass pill with theme toggle and quick glass controls.
+- **Mesh wallpapers** — the solid presets were replaced with CSS-mesh wallpapers (Aurora, Dusk, Mist, Noir) that adapt to the theme; the heavy bottom-to-top gradient overlay is gone.
+- **Live glass sliders** — Tint + Blur sliders (TopNav popover and Settings → Glass) let you dial the frosted feel of every card; persisted per user.
+- **Run from Projects** — every task row has a **Run** pill: switches the active task, starts a pomodoro (cleanly closing any running session), and jumps to Focus.
+- **Instant tabs** — all tab data (projects, tasks, analytics, task picker) is prefetched into the query cache at app start, so switching tabs renders instantly and revalidates in the background.
+
+### Previous round
 
 - **Subtasks + descriptions** — tasks now support a description and a subtask checklist. Add/edit them on the Projects page; check subtasks off from the task row or right on the Focus card, with live progress bars.
 - **Spotify rewritten** — all Web API calls go through one client that auto-refreshes the access token (playback, search, next/prev no longer silently die after an hour). Next/Previous now route to the correct device, so they work in the pop-out mini player too.
@@ -112,6 +126,7 @@ node scripts/setup-env.mjs
 #    supabase/migrations/0004_security_and_performance_fixes.sql
 #    supabase/migrations/0005_wallpaper_settings.sql
 #    supabase/migrations/0006_subtasks_and_spotify_takeover.sql
+#    supabase/migrations/0007_glass_controls.sql
 
 # 4. Start dev server
 npm run dev
@@ -177,6 +192,7 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 | `0004_security_and_performance_fixes.sql` | RLS/perf hardening |
 | `0005_wallpaper_settings.sql` | Wallpaper blur/brightness settings |
 | `0006_subtasks_and_spotify_takeover.sql` | Subtasks table + Spotify takeover setting |
+| `0007_glass_controls.sql` | Glass tint/blur slider settings |
 
 ## Keyboard Shortcuts (Focus screen)
 

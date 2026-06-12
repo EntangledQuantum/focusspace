@@ -1,61 +1,61 @@
 @import "tailwindcss";
 
-/* ─── Serene Interval Design Tokens ─────────────────────────────── */
+/* ─── FocusSpace Design Tokens — pink primary · purple accent ───── */
 @theme inline {
   /* Surfaces */
-  --color-background:                #131313;
-  --color-surface:                   #131313;
-  --color-surface-dim:               #131313;
-  --color-surface-bright:            #393939;
-  --color-surface-container-lowest:  #0e0e0e;
-  --color-surface-container-low:     #1c1b1b;
-  --color-surface-container:         #20201f;
-  --color-surface-container-high:    #2a2a2a;
-  --color-surface-container-highest: #353535;
-  --color-surface-variant:           #353535;
+  --color-background:                #131017;
+  --color-surface:                   #131017;
+  --color-surface-dim:               #131017;
+  --color-surface-bright:            #3a333e;
+  --color-surface-container-lowest:  #0d0b10;
+  --color-surface-container-low:     #1b1720;
+  --color-surface-container:         #201b25;
+  --color-surface-container-high:    #2a2430;
+  --color-surface-container-highest: #352e3b;
+  --color-surface-variant:           #352e3b;
 
   /* On-surface */
-  --color-on-background:       #e5e2e1;
-  --color-on-surface:          #e5e2e1;
-  --color-on-surface-variant:  #ddc0ba;
-  --color-inverse-surface:     #e5e2e1;
+  --color-on-background:       #f4eef3;
+  --color-on-surface:          #f4eef3;
+  --color-on-surface-variant:  #b9abb6;
+  --color-inverse-surface:     #f4eef3;
   --color-inverse-on-surface:  #313030;
 
-  /* Primary — Muted Terracotta */
-  --color-primary:                    #ffb4a5;
-  --color-on-primary:                 #611205;
-  --color-primary-container:          #e2725b;
-  --color-on-primary-container:       #5a0d02;
-  --color-inverse-primary:            #9f402d;
-  --color-primary-fixed:              #ffdad3;
-  --color-primary-fixed-dim:          #ffb4a5;
-  --color-on-primary-fixed:           #3e0500;
-  --color-on-primary-fixed-variant:   #802918;
-  --color-surface-tint:               #ffb4a5;
+  /* Primary — Pink */
+  --color-primary:                    #ff5fa2;
+  --color-on-primary:                 #2b0014;
+  --color-primary-container:          #ff8fbe;
+  --color-on-primary-container:       #3e0020;
+  --color-inverse-primary:            #e11d74;
+  --color-primary-fixed:              #ffd1e6;
+  --color-primary-fixed-dim:          #ff8fbe;
+  --color-on-primary-fixed:           #3e0020;
+  --color-on-primary-fixed-variant:   #8c1d52;
+  --color-surface-tint:               #ff5fa2;
 
-  /* Secondary — Sage Green */
-  --color-secondary:                   #b5ccc1;
-  --color-on-secondary:                #21342d;
-  --color-secondary-container:         #394d45;
-  --color-on-secondary-container:      #a7bdb3;
-  --color-secondary-fixed:             #d1e8dd;
-  --color-secondary-fixed-dim:         #b5ccc1;
-  --color-on-secondary-fixed:          #0b1f18;
-  --color-on-secondary-fixed-variant:  #374b43;
+  /* Secondary / accent — Purple */
+  --color-secondary:                   #b06bf6;
+  --color-on-secondary:                #1c0533;
+  --color-secondary-container:         #c89bff;
+  --color-on-secondary-container:      #24073f;
+  --color-secondary-fixed:             #e6d6ff;
+  --color-secondary-fixed-dim:         #c89bff;
+  --color-on-secondary-fixed:          #24073f;
+  --color-on-secondary-fixed-variant:  #5b2e92;
 
-  /* Tertiary — Dusk Blue */
-  --color-tertiary:                    #adcae4;
-  --color-on-tertiary:                 #153348;
-  --color-tertiary-container:          #7a96af;
-  --color-on-tertiary-container:       #0f2e43;
-  --color-tertiary-fixed:              #cbe6ff;
-  --color-tertiary-fixed-dim:          #adcae4;
-  --color-on-tertiary-fixed:           #001e30;
-  --color-on-tertiary-fixed-variant:   #2d4a5f;
+  /* Tertiary — soft blue (breaks) */
+  --color-tertiary:                    #8fb6ff;
+  --color-on-tertiary:                 #0b1f44;
+  --color-tertiary-container:          #2d4a7f;
+  --color-on-tertiary-container:       #cbe0ff;
+  --color-tertiary-fixed:              #cbe0ff;
+  --color-tertiary-fixed-dim:          #8fb6ff;
+  --color-on-tertiary-fixed:           #001e3c;
+  --color-on-tertiary-fixed-variant:   #2d4a7f;
 
   /* Outline */
-  --color-outline:         #a48b86;
-  --color-outline-variant: #56423e;
+  --color-outline:         #8d7d8a;
+  --color-outline-variant: #4a3d4f;
 
   /* Error */
   --color-error:              #ffb4ab;
@@ -63,47 +63,54 @@
   --color-error-container:    #93000a;
   --color-on-error-container: #ffdad6;
 
+  /* Glass controls (overridden live by the Tint/Blur sliders) */
+  --glass-tint: 0.5;   /* 0 = clear → 1 = solid */
+  --glass-blur: 22px;
+
   /* Border radius */
   --radius-sm:   0.25rem;
   --radius:      0.5rem;
   --radius-md:   0.75rem;
   --radius-lg:   1rem;
-  --radius-xl:   1.5rem;
+  --radius-xl:   1.375rem;
   --radius-2xl:  2rem;
   --radius-full: 9999px;
 
   /* Typography */
   --font-sans:    "Inter", system-ui, sans-serif;
   --font-display: "Plus Jakarta Sans", system-ui, sans-serif;
+
+  /* Motion */
+  --ease: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 /* ─── Light theme (applied via .light class on <html>) ─────────── */
 .light {
-  --color-background:                #faf8f7;
-  --color-surface:                   #faf8f7;
+  --color-background:                #fdf6fa;
+  --color-surface:                   #fdf6fa;
   --color-surface-container-lowest:  #ffffff;
-  --color-surface-container-low:     #f5f0ef;
-  --color-surface-container:         #efe9e8;
-  --color-surface-container-high:    #e9e3e2;
-  --color-surface-container-highest: #e3dddc;
-  --color-surface-variant:           #f5edeb;
-  --color-on-background:             #211a18;
-  --color-on-surface:                #211a18;
-  --color-on-surface-variant:        #53433f;
-  --color-outline:                   #857370;
-  --color-outline-variant:           #d8c2bc;
-  --color-primary:                   #9f402d;
+  --color-surface-container-low:     #f8eff5;
+  --color-surface-container:         #f3e9f0;
+  --color-surface-container-high:    #ece1e9;
+  --color-surface-container-highest: #e5d9e2;
+  --color-surface-variant:           #f3e9f0;
+  --color-on-background:             #2a1623;
+  --color-on-surface:                #2a1623;
+  --color-on-surface-variant:        #6e5462;
+  --color-outline:                   #9b8693;
+  --color-outline-variant:           #e0cdd9;
+  --color-primary:                   #e11d74;
   --color-on-primary:                #ffffff;
-  --color-primary-container:         #ffdad3;
-  --color-on-primary-container:      #3e0500;
-  --color-secondary:                 #4f6b62;
+  --color-primary-container:         #ffd1e6;
+  --color-on-primary-container:      #58002b;
+  --color-secondary:                 #7c3aed;
   --color-on-secondary:              #ffffff;
-  --color-secondary-container:       #d1e8dd;
-  --color-on-secondary-container:    #0b1f18;
-  --color-tertiary:                  #3a6585;
+  --color-secondary-container:       #e6d6ff;
+  --color-on-secondary-container:    #2b0a53;
+  --color-tertiary:                  #2e5b9e;
   --color-on-tertiary:               #ffffff;
-  --color-tertiary-container:        #cbe6ff;
-  --color-on-tertiary-container:     #001e30;
+  --color-tertiary-container:        #cbe0ff;
+  --color-on-tertiary-container:     #001e3c;
 }
 
 /* ─── Base reset ────────────────────────────────────────────────── */
@@ -119,33 +126,144 @@ body {
   overflow: hidden;
 }
 
+::selection { background: color-mix(in srgb, var(--color-primary) 40%, transparent); }
+
 /* ─── Timer display ─────────────────────────────────────────────── */
 .text-timer {
   font-family: var(--font-display);
-  font-size: 80px;
-  line-height: 100px;
-  letter-spacing: -0.02em;
-  font-weight: 500;
+  font-size: 60px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
-/* ─── Glass card utility ────────────────────────────────────────── */
+/* ─── Glass surfaces — driven by the live Tint/Blur sliders ─────── */
 .glass {
-  background: color-mix(in srgb, var(--color-surface-container) 65%, transparent);
-  backdrop-filter: blur(32px);
-  -webkit-backdrop-filter: blur(32px);
+  background: color-mix(in srgb, var(--color-surface-container) calc(var(--glass-tint) * 100%), transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
   box-shadow:
     inset 0 1px 0 0 rgba(255,255,255,0.07),
-    0 40px 80px rgba(0,0,0,0.45);
-  border: 1px solid rgba(255,255,255,0.06);
+    0 24px 60px -18px rgba(0,0,0,0.55);
+}
+.light .glass {
+  border-color: rgba(40,20,35,0.10);
+  box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.6), 0 24px 60px -22px rgba(60,20,50,0.26);
 }
 
-.light .glass {
-  background: color-mix(in srgb, var(--color-surface-container) 80%, transparent);
-  box-shadow:
-    inset 0 1px 0 0 rgba(255,255,255,0.6),
-    0 20px 50px rgba(0,0,0,0.12);
-  border: 1px solid rgba(0,0,0,0.07);
+.glass-soft {
+  background: color-mix(in srgb, var(--color-surface-container) calc(var(--glass-tint) * 60%), transparent);
+  backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(1.3);
+  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(1.3);
+  border: 1px solid rgba(255,255,255,0.06);
 }
+.light .glass-soft { border-color: rgba(40,20,35,0.07); }
+
+/* ─── Wallpaper presets (CSS mesh) ──────────────────────────────── */
+.wp-aurora { background-color:#160a18; background-image:
+  radial-gradient(at 18% 18%, rgba(255,95,162,.55), transparent 42%),
+  radial-gradient(at 82% 6%,  rgba(176,107,246,.55), transparent 46%),
+  radial-gradient(at 72% 82%, rgba(99,102,241,.45), transparent 52%),
+  radial-gradient(at 4% 96%,  rgba(236,72,153,.40), transparent 46%); }
+.wp-dusk { background-color:#1a0c12; background-image:
+  radial-gradient(at 12% 12%, rgba(255,138,160,.55), transparent 44%),
+  radial-gradient(at 88% 18%, rgba(255,166,120,.42), transparent 46%),
+  radial-gradient(at 60% 96%, rgba(176,107,246,.45), transparent 50%); }
+.wp-mist { background-color:#0e1016; background-image:
+  radial-gradient(at 22% 28%, rgba(132,196,236,.40), transparent 46%),
+  radial-gradient(at 80% 14%, rgba(186,152,255,.42), transparent 48%),
+  radial-gradient(at 70% 92%, rgba(120,210,200,.34), transparent 52%); }
+.wp-noir { background-color:#0b0a0d;
+  background-image: radial-gradient(at 30% 20%, rgba(60,50,70,.6), transparent 60%); }
+.wp-photo { background-color:#1a1320; background-image:
+  repeating-linear-gradient(135deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
+  radial-gradient(at 30% 30%, rgba(255,95,162,.30), transparent 50%),
+  radial-gradient(at 75% 70%, rgba(176,107,246,.30), transparent 55%); }
+
+.light .wp-aurora { background-color:#ffeef6; background-image:
+  radial-gradient(at 18% 18%, rgba(255,95,162,.40), transparent 44%),
+  radial-gradient(at 82% 6%,  rgba(176,107,246,.40), transparent 48%),
+  radial-gradient(at 72% 86%, rgba(120,150,255,.32), transparent 54%); }
+.light .wp-dusk { background-color:#fff0ea; background-image:
+  radial-gradient(at 12% 12%, rgba(255,150,170,.45), transparent 46%),
+  radial-gradient(at 88% 20%, rgba(255,190,150,.40), transparent 48%),
+  radial-gradient(at 60% 96%, rgba(186,140,255,.36), transparent 52%); }
+.light .wp-mist { background-color:#eef4fb; background-image:
+  radial-gradient(at 22% 28%, rgba(120,180,236,.40), transparent 48%),
+  radial-gradient(at 80% 14%, rgba(186,152,255,.40), transparent 50%); }
+.light .wp-noir { background-color:#e9e6ee; background-image: radial-gradient(at 30% 20%, rgba(180,170,200,.5), transparent 60%); }
+.light .wp-photo { background-color:#f6ecf7; background-image:
+  repeating-linear-gradient(135deg, rgba(0,0,0,.035) 0 2px, transparent 2px 22px),
+  radial-gradient(at 30% 30%, rgba(255,95,162,.22), transparent 52%),
+  radial-gradient(at 75% 70%, rgba(176,107,246,.22), transparent 55%); }
+
+/* The ONLY wallpaper scrim — gentle, bottom-only (for dock legibility). */
+.wallpaper-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top, rgba(8,5,10,0.42) 0%, transparent 38%);
+}
+.light .wallpaper-scrim { background: linear-gradient(to top, rgba(255,250,253,0.30) 0%, transparent 38%); }
+
+/* ─── Reusable bits ─────────────────────────────────────────────── */
+.pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  border-radius: 999px;
+  font-weight: 600; letter-spacing: 0.01em;
+  transition: all 0.18s var(--ease);
+}
+.chip-primary {
+  background: color-mix(in srgb, var(--color-primary) 16%, transparent);
+  color: var(--color-primary);
+  border: 1px solid color-mix(in srgb, var(--color-primary) 30%, transparent);
+}
+.chip-accent {
+  background: color-mix(in srgb, var(--color-secondary) 16%, transparent);
+  color: var(--color-secondary);
+  border: 1px solid color-mix(in srgb, var(--color-secondary) 30%, transparent);
+}
+
+.icon-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 12px; color: var(--color-on-surface-variant);
+  transition: all 0.16s var(--ease);
+}
+.icon-btn:hover { background: rgba(255,255,255,0.10); color: var(--color-on-surface); }
+.light .icon-btn:hover { background: rgba(40,20,35,0.06); }
+
+.hover-lift { transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease), background 0.18s var(--ease); }
+.hover-lift:hover { transform: translateY(-2px); }
+
+.grad-primary { background: linear-gradient(135deg, var(--color-primary), var(--color-secondary)); }
+
+.hairline-soft { background: rgba(255,255,255,0.06); }
+.light .hairline-soft { background: rgba(40,20,35,0.07); }
+
+/* ─── Range sliders (tint / blur / volume) ──────────────────────── */
+input[type="range"].rng {
+  -webkit-appearance: none; appearance: none;
+  height: 5px; border-radius: 99px; outline: none;
+  background: rgba(255,255,255,0.13);
+}
+.light input[type="range"].rng { background: rgba(40,20,35,0.14); }
+input[type="range"].rng::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 16px; height: 16px; border-radius: 50%;
+  background: var(--color-primary);
+  border: 2px solid rgba(255,255,255,0.85);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-primary) 50%, transparent);
+  cursor: pointer;
+}
+input[type="range"].rng::-moz-range-thumb {
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--color-primary); border: 2px solid rgba(255,255,255,0.85); cursor: pointer;
+}
+input[type="range"].rng.accent::-webkit-slider-thumb {
+  background: var(--color-secondary);
+  box-shadow: 0 2px 8px color-mix(in srgb, var(--color-secondary) 50%, transparent);
+}
+input[type="range"].rng.accent::-moz-range-thumb { background: var(--color-secondary); }
 
 /* ─── Slim scrollbar ────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 4px; height: 4px; }
@@ -153,6 +271,22 @@ body {
 ::-webkit-scrollbar-thumb {
   background: var(--color-outline-variant);
   border-radius: 99px;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { scrollbar-width: none; }
+
+/* ─── Animations ────────────────────────────────────────────────── */
+/* Entrance keyframes must NOT gate opacity to 0 — capture/print/reduced-motion
+   environments freeze the timeline at frame 0, which would hide content. */
+@keyframes fadeUp { from { transform: translateY(16px); } to { transform: none; } }
+@keyframes popIn  { from { transform: scale(0.97); } to { transform: none; } }
+@keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+.fade-up { animation: fadeUp 0.5s var(--ease); }
+.pop     { animation: popIn 0.28s var(--ease); }
+.pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-up, .pop, .pulse-dot { animation: none !important; }
 }
 
 /* ─── Focus ring (buttons/links only — inputs handle their own focus) */
@@ -169,7 +303,7 @@ textarea:focus, textarea:focus-visible {
 
 /* ─── Hover utilities ────────────────────────────────────────────── */
 
-/* Primary button (terracotta) – brightness lift + glow */
+/* Primary button – brightness lift + glow */
 .btn-hover-primary:hover {
   filter: brightness(1.1) !important;
   box-shadow: 0 6px 28px color-mix(in srgb, var(--color-primary) 40%, transparent) !important;

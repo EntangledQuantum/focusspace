@@ -5,15 +5,14 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { useTimerStore } from "@/lib/stores/timer";
+import { useUiStore } from "@/lib/stores/ui";
 import { useNotifications } from "@/lib/hooks/useNotifications";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
 import { TimerRing } from "@/components/timer/TimerRing";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
-import { PomodoroTimeline } from "@/components/timer/PomodoroTimeline";
-import { motion } from "framer-motion";
-import { Pencil, Maximize2, Minimize2, Check, CheckCircle2, Circle, ChevronDown } from "lucide-react";
-import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
+import { FocusDock } from "@/components/timer/FocusDock";
+import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import type { Project, Subtask, TaskWithTags } from "@/types/database";
 
@@ -74,13 +73,11 @@ export default function FocusPage() {
   const { requestPermission, notifyCompletion } = useNotifications(settings ?? null);
 
   const pomoDurationSec = settings?.focus_duration_sec ?? 25 * 60;
-  const shortBreakSec = settings?.short_break_sec ?? 5 * 60;
-  const longBreakSec = settings?.long_break_sec ?? 15 * 60;
   const longBreakEvery = settings?.long_break_every ?? 4;
 
   const isBreak = timer.mode === "short_break" || timer.mode === "long_break";
 
-  // Subtasks for the active task — checkable right from the focus card
+  // Subtasks for the active task — checkable right from the dock
   const { data: subtasks = [] } = useQuery<Subtask[]>({
     queryKey: ["subtasks", activeTask?.id],
     enabled: !!activeTask,
@@ -93,8 +90,15 @@ export default function FocusPage() {
       return (data ?? []) as Subtask[];
     },
   });
-  const [subtasksOpen, setSubtasksOpen] = useState(true);
-  const doneSubtasks = subtasks.filter((s) => s.done).length;
+
+  // Esc exits focus mode
+  const { focusMode, setFocusMode } = useUiStore();
+  useEffect(() => {
+    if (!focusMode) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") setFocusMode(false); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [focusMode, setFocusMode]);
 
   async function toggleSubtask(st: Subtask) {
     await supabase.from("subtasks").update({ done: !st.done }).eq("id", st.id);
@@ -307,62 +311,59 @@ export default function FocusPage() {
 
   useKeyboardShortcuts({ onPlayPause: handlePlayPause, onReset: handleReset, onSkip: handleSkip });
 
+  const locked = timer.status === "running" || timer.status === "paused";
+
   return (
-    <div className="flex-1 flex flex-col items-center justify-center p-6 min-h-dvh relative">
-      {/* Fullscreen toggle */}
-      <button
-        onClick={toggleFullscreen}
-        className="absolute top-6 right-6 w-8 h-8 flex items-center justify-center rounded-lg transition-colors"
-        style={{ color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.04)" }}
-        title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-      >
-        {isFullscreen ? <Minimize2 size={15} /> : <Maximize2 size={15} />}
-      </button>
+    <div
+      className="min-h-dvh flex flex-col items-center justify-center"
+      style={{ padding: "88px 20px 234px" }}
+    >
+      {/* Solo centered timer — ring, task name, controls. Nothing else. */}
+      <div className="fade-up flex flex-col items-center" style={{ gap: 20 }}>
+        {/* Mode pills */}
+        <div className="glass-soft flex rounded-full" style={{ gap: 3, padding: 4 }}>
+          {(["pomodoro", "custom"] as const).map((m) => {
+            const on = timer.mode === m || (isBreak && m === "pomodoro");
+            return (
+              <button
+                key={m}
+                disabled={locked}
+                onClick={() => {
+                  if (!locked) {
+                    timer.setMode(m, m === "custom" ? customMinutes * 60 : pomoDurationSec);
+                  }
+                }}
+                className="pill"
+                style={{
+                  padding: "6px 16px", fontSize: 12.5,
+                  opacity: locked ? 0.5 : 1, cursor: locked ? "default" : "pointer",
+                  color: on ? "var(--color-primary)" : "var(--color-on-surface-variant)",
+                  background: on ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "transparent",
+                }}
+              >
+                {m === "pomodoro" ? "Pomodoro" : "Custom"}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Mode toggle */}
-      <div className="absolute top-6 left-0 right-0 flex justify-center gap-2">
-        {(["pomodoro", "custom"] as const).map((m) => (
-          <button
-            key={m}
-            onClick={() => {
-              if (timer.status === "idle" || timer.status === "completed") {
-                timer.setMode(m, m === "custom" ? customMinutes * 60 : pomoDurationSec);
-              }
-            }}
-            className="px-4 py-1.5 rounded-full text-xs font-semibold uppercase tracking-wider transition-all duration-200"
-            style={{
-              background: timer.mode === m ? "rgba(255,255,255,0.08)" : "transparent",
-              color: timer.mode === m ? "var(--color-primary)" : "var(--color-on-surface-variant)",
-              border: timer.mode === m ? "1px solid rgba(255,255,255,0.1)" : "1px solid transparent",
-            }}
-          >
-            {m === "pomodoro" ? "Pomodoro" : "Custom Target"}
-          </button>
-        ))}
-      </div>
-
-      {/* Main glass card */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.4, ease: [0.4, 0, 0.2, 1] }}
-        className="glass rounded-[2rem] p-10 flex flex-col items-center gap-8 relative overflow-hidden w-full max-w-[420px]"
-      >
-        {/* Subtle inner ring */}
-        <div
-          className="absolute inset-0 rounded-[2rem] pointer-events-none"
-          style={{ boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08)" }}
+        {/* Timer ring */}
+        <TimerRing
+          progress={timer.progress}
+          displayTime={timer.displayTime}
+          status={timer.status}
         />
 
-        {/* Task context */}
-        <div className="flex flex-col items-center gap-2.5 text-center w-full">
+        {/* Task name — the only thing beside the timer */}
+        <div className="flex flex-col items-center text-center" style={{ gap: 10 }}>
           {activeProject && (
             <span
-              className="px-3 py-1 rounded-full text-xs font-semibold uppercase tracking-wider"
+              className="pill uppercase"
               style={{
-                background: "color-mix(in srgb, var(--color-primary) 12%, transparent)",
-                color: "var(--color-primary)",
-                border: "1px solid color-mix(in srgb, var(--color-primary) 25%, transparent)",
+                padding: "4px 12px", fontSize: 11, fontWeight: 700, letterSpacing: ".04em",
+                color: activeProject.color,
+                background: `color-mix(in srgb, ${activeProject.color} 14%, transparent)`,
+                border: `1px solid color-mix(in srgb, ${activeProject.color} 26%, transparent)`,
               }}
             >
               {activeProject.name}
@@ -371,25 +372,20 @@ export default function FocusPage() {
 
           <button
             onClick={() => setTaskPickerOpen(true)}
-            className="flex items-center justify-center gap-2 group w-full"
+            className="hover-lift flex items-center"
+            style={{ gap: 10, padding: "4px 8px", borderRadius: 12 }}
           >
-            {activeTask ? (
-              <h2
-                className="text-xl font-semibold leading-snug text-center break-words"
-                style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}
-              >
-                {activeTask.title}
-              </h2>
-            ) : (
-              <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-                Choose a task to focus on…
-              </span>
-            )}
-            <Pencil
-              size={13}
-              className="opacity-0 group-hover:opacity-60 transition-opacity shrink-0"
-              style={{ color: "var(--color-on-surface-variant)" }}
-            />
+            <span
+              className="break-words"
+              style={{
+                fontFamily: "var(--font-display)", fontSize: 23, fontWeight: 700,
+                letterSpacing: "-.01em", maxWidth: 440,
+                color: activeTask ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
+              }}
+            >
+              {activeTask ? activeTask.title : "Choose a task to focus on"}
+            </span>
+            <Pencil size={15} className="shrink-0" style={{ color: "var(--color-on-surface-variant)", opacity: 0.6 }} />
           </button>
 
           {activeTask && activeTask.tags && activeTask.tags.length > 0 && (
@@ -410,99 +406,23 @@ export default function FocusPage() {
             </div>
           )}
 
-          {activeTask?.notes && (
-            <p
-              className="text-xs leading-relaxed text-center max-w-[320px] line-clamp-3"
-              style={{ color: "var(--color-on-surface-variant)" }}
-            >
-              {activeTask.notes}
-            </p>
-          )}
-
-          {activeTask && subtasks.length > 0 && (
-            <div className="w-full max-w-[320px] mt-1 text-left">
-              <button
-                onClick={() => setSubtasksOpen((v) => !v)}
-                className="w-full flex items-center gap-2 mb-1.5"
-                style={{ color: "var(--color-on-surface-variant)" }}
-              >
-                <span className="text-[10px] font-semibold uppercase tracking-wider">
-                  Subtasks · {doneSubtasks}/{subtasks.length}
-                </span>
-                <div
-                  className="flex-1 h-1 rounded-full overflow-hidden"
-                  style={{ background: "rgba(255,255,255,0.08)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all duration-300"
-                    style={{
-                      width: `${subtasks.length ? (doneSubtasks / subtasks.length) * 100 : 0}%`,
-                      background: "var(--color-secondary)",
-                    }}
-                  />
-                </div>
-                <ChevronDown
-                  size={12}
-                  className={`transition-transform shrink-0 ${subtasksOpen ? "" : "-rotate-90"}`}
-                />
-              </button>
-              {subtasksOpen && (
-                <div className="space-y-0.5 max-h-32 overflow-y-auto pr-1">
-                  {subtasks.map((st) => (
-                    <button
-                      key={st.id}
-                      onClick={() => toggleSubtask(st)}
-                      className="w-full flex items-center gap-2 px-1.5 py-1 rounded-lg text-left transition-colors hover:bg-white/5"
-                    >
-                      {st.done ? (
-                        <CheckCircle2 size={13} className="shrink-0" style={{ color: "var(--color-secondary)" }} />
-                      ) : (
-                        <Circle size={13} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />
-                      )}
-                      <span
-                        className="text-xs truncate"
-                        style={{
-                          color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
-                          textDecoration: st.done ? "line-through" : "none",
-                          opacity: st.done ? 0.6 : 1,
-                        }}
-                      >
-                        {st.title}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {activeTask && (
-            <button
-              onClick={handleFinishTask}
-              title="Mark done & load next task"
-              className="mt-0.5 flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-semibold transition-all active:scale-95 btn-hover-surface"
-              style={{
-                background: "color-mix(in srgb, var(--color-secondary) 14%, transparent)",
-                color: "var(--color-secondary)",
-                border: "1px solid color-mix(in srgb, var(--color-secondary) 28%, transparent)",
-              }}
-            >
-              <Check size={11} strokeWidth={2.5} />
-              Mark done
-            </button>
+          {/* Break badge */}
+          {isBreak && (timer.status === "running" || timer.status === "paused") && (
+            <span className="pill chip-accent" style={{ padding: "4px 14px", fontSize: 12 }}>
+              <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: 99, background: "var(--color-secondary)" }} />
+              {timer.mode === "long_break" ? "Long break" : "Short break"}
+            </span>
           )}
 
           {/* Custom duration input */}
           {timer.mode === "custom" && (timer.status === "idle" || timer.status === "completed") && (
-            <div className="flex items-center gap-2 mt-1">
+            <div className="flex items-center gap-2">
               <input
                 type="number"
                 min={1}
                 max={240}
                 value={customMinutes}
-                onChange={(e) =>
-                  setCustomMinutes(Math.max(1, parseInt(e.target.value) || 1))
-                }
+                onChange={(e) => setCustomMinutes(Math.max(1, parseInt(e.target.value) || 1))}
                 className="w-16 text-center rounded-xl px-2 py-1 text-sm outline-none"
                 style={{
                   background: "var(--color-surface-container-high)",
@@ -510,53 +430,10 @@ export default function FocusPage() {
                   border: "1px solid var(--color-outline-variant)",
                 }}
               />
-              <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-                min
-              </span>
+              <span className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>min</span>
             </div>
           )}
         </div>
-
-        {/* Timer ring */}
-        <TimerRing
-          progress={timer.progress}
-          displayTime={timer.displayTime}
-          status={timer.status}
-        />
-
-        {/* Break badge — only visible while a break is actively running or paused */}
-        {(timer.mode === "short_break" || timer.mode === "long_break") &&
-          (timer.status === "running" || timer.status === "paused") && (
-            <div
-              className="flex items-center gap-2 px-5 py-1.5 rounded-full text-sm font-semibold -mt-4"
-              style={{
-                background:
-                  timer.mode === "long_break"
-                    ? "color-mix(in srgb, var(--color-tertiary) 14%, transparent)"
-                    : "color-mix(in srgb, var(--color-secondary) 14%, transparent)",
-                color:
-                  timer.mode === "long_break"
-                    ? "var(--color-tertiary)"
-                    : "var(--color-secondary)",
-                border: `1px solid ${
-                  timer.mode === "long_break"
-                    ? "color-mix(in srgb, var(--color-tertiary) 28%, transparent)"
-                    : "color-mix(in srgb, var(--color-secondary) 28%, transparent)"
-                }`,
-              }}
-            >
-              <span
-                className="w-1.5 h-1.5 rounded-full animate-pulse shrink-0"
-                style={{
-                  background:
-                    timer.mode === "long_break"
-                      ? "var(--color-tertiary)"
-                      : "var(--color-secondary)",
-                }}
-              />
-              {timer.mode === "short_break" ? "Short Break" : "Long Break"}
-            </div>
-          )}
 
         {/* Controls */}
         <TimerControls
@@ -566,24 +443,23 @@ export default function FocusPage() {
           onSkip={handleSkip}
           disabled={false}
         />
+      </div>
 
-        {/* Session timeline — task-relative */}
-        <PomodoroTimeline
-          mode={timer.mode}
-          status={timer.status}
-          progress={timer.progress}
-          remainingSec={timer.remaining}
-          estimatedPomodoros={activeTask?.estimated_pomodoros ?? 1}
-          completedPomodoros={activeTask?.completed_pomodoros ?? 0}
-          pomoDurationSec={pomoDurationSec}
-          shortBreakSec={shortBreakSec}
-          longBreakSec={longBreakSec}
-          cycleOffset={activeTask ? 0 : timer.pomodoroCount}
-          longBreakEvery={longBreakEvery}
-        />
-      </motion.div>
-
-      <SpotifyPanel />
+      {/* Bottom dock: subtasks · session timeline · music */}
+      <FocusDock
+        activeTask={activeTask}
+        subtasks={subtasks}
+        onToggleSubtask={toggleSubtask}
+        onFinishTask={handleFinishTask}
+        estimated={activeTask?.estimated_pomodoros ?? 1}
+        completed={activeTask?.completed_pomodoros ?? 0}
+        progress={timer.progress}
+        timerStatus={timer.status}
+        timerMode={timer.mode}
+        longBreakEvery={longBreakEvery}
+        isFullscreen={isFullscreen}
+        onToggleFullscreen={toggleFullscreen}
+      />
 
       <TaskPicker
         open={taskPickerOpen}

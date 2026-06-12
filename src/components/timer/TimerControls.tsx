@@ -13,38 +13,33 @@ interface Props {
 
 export function TimerControls({ status, onPlayPause, onReset, onSkip, disabled }: Props) {
   const isRunning = status === "running";
-  const isIdle = status === "idle";
 
   return (
-    <div className="flex items-center gap-6">
+    <div className="flex items-center" style={{ gap: 20 }}>
       {/* Reset */}
       <motion.button
         onClick={onReset}
         whileTap={{ scale: 0.92 }}
         whileHover={{ scale: 1.06 }}
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 btn-hover-surface"
-        style={{
-          background: "color-mix(in srgb, var(--color-surface-variant) 40%, transparent)",
-          color: "var(--color-on-surface-variant)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
+        className="glass-soft rounded-full flex items-center justify-center"
+        style={{ width: 52, height: 52, color: "var(--color-on-surface-variant)" }}
         aria-label="Reset timer"
       >
-        <RotateCcw size={20} />
+        <RotateCcw size={19} />
       </motion.button>
 
-      {/* Play / Pause — main action */}
+      {/* Play / Pause — main action, pink → purple gradient */}
       <motion.button
         onClick={onPlayPause}
         disabled={disabled}
         whileTap={{ scale: 0.93 }}
         whileHover={{ scale: 1.04 }}
-        className="w-20 h-20 rounded-full flex items-center justify-center transition-all duration-300"
+        className="grad-primary rounded-full flex items-center justify-center"
         style={{
-          background: "var(--color-primary)",
+          width: 76,
+          height: 76,
           color: "var(--color-on-primary)",
-          boxShadow: "0 8px 32px color-mix(in srgb, var(--color-primary) 30%, transparent)",
-          border: "1px solid rgba(255,255,255,0.1)",
+          boxShadow: "0 14px 40px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)",
           opacity: disabled ? 0.6 : 1,
         }}
         aria-label={isRunning ? "Pause timer" : "Start timer"}
@@ -57,15 +52,11 @@ export function TimerControls({ status, onPlayPause, onReset, onSkip, disabled }
         onClick={onSkip}
         whileTap={{ scale: 0.92 }}
         whileHover={{ scale: 1.06 }}
-        className="w-14 h-14 rounded-full flex items-center justify-center transition-all duration-200 btn-hover-surface"
-        style={{
-          background: "color-mix(in srgb, var(--color-surface-variant) 40%, transparent)",
-          color: "var(--color-on-surface-variant)",
-          border: "1px solid rgba(255,255,255,0.06)",
-        }}
+        className="glass-soft rounded-full flex items-center justify-center"
+        style={{ width: 52, height: 52, color: "var(--color-on-surface-variant)" }}
         aria-label="Skip session"
       >
-        <SkipForward size={20} />
+        <SkipForward size={19} />
       </motion.button>
     </div>
   );

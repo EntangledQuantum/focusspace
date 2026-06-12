@@ -59,15 +59,20 @@ export default function AnalyticsPage() {
   const PIE_COLORS = ["var(--color-primary)", "var(--color-secondary)", "var(--color-tertiary)", "var(--color-primary-container)", "#c0b0ff", "#a4cfb4"];
 
   return (
-    <div className="p-8 max-w-5xl mx-auto space-y-8 pb-16">
+    <div className="fade-up p-8 max-w-5xl mx-auto space-y-8 pb-16 w-full" style={{ paddingTop: 104 }}>
       {/* Header + filters */}
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-            Analytics Overview
+          <h1
+            style={{
+              fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800,
+              letterSpacing: "-.02em", color: "var(--color-on-surface)",
+            }}
+          >
+            Analytics
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-            Your productivity trends.
+          <p className="text-sm mt-1" style={{ color: "var(--color-on-surface-variant)" }}>
+            Your deep-work trends.
           </p>
         </div>
 
