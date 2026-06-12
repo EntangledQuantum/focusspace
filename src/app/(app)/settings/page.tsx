@@ -193,32 +193,35 @@ export default function SettingsPage() {
 
       <div className="p-8 max-w-3xl mx-auto space-y-6 pb-16" style={{ paddingTop: 104 }}>
         <div>
-          <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
+          <h1 style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, letterSpacing: "-.02em", color: "var(--color-on-surface)" }}>
             Settings
           </h1>
-          <p className="text-sm mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-            Personalize your focus environment.
+          <p className="text-sm mt-1" style={{ color: "var(--color-on-surface-variant)" }}>
+            Tune the space to disappear into.
           </p>
         </div>
 
         {/* Appearance */}
-        <Section icon={<Paintbrush size={18} />} title="Appearance">
-          <Field label="Interface Theme" description="Select your preferred color scheme.">
-            <div className="flex gap-2">
-              {THEME_OPTIONS.map((opt) => (
-                <button
-                  key={opt.value}
-                  onClick={() => saveField("theme", opt.value)}
-                  className="px-4 py-1.5 rounded-full text-sm font-medium transition-all"
-                  style={{
-                    background: local.theme === opt.value ? "var(--color-surface-container-highest)" : "transparent",
-                    color: local.theme === opt.value ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
-                    border: local.theme === opt.value ? "1px solid rgba(255,255,255,0.12)" : "1px solid var(--color-outline-variant)",
-                  }}
-                >
-                  {opt.label}
-                </button>
-              ))}
+        <Section icon={<Paintbrush size={18} />} title="Appearance" desc="Theme, wallpaper, and the glass over it.">
+          <Field label="Theme" description="Dark or light surface tones.">
+            <div className="glass-soft flex rounded-full" style={{ gap: 3, padding: 4 }}>
+              {THEME_OPTIONS.map((opt) => {
+                const on = local.theme === opt.value;
+                return (
+                  <button
+                    key={opt.value}
+                    onClick={() => saveField("theme", opt.value)}
+                    className="pill"
+                    style={{
+                      padding: "6px 14px", fontSize: 12.5,
+                      color: on ? "var(--color-primary)" : "var(--color-on-surface-variant)",
+                      background: on ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "transparent",
+                    }}
+                  >
+                    {opt.label}
+                  </button>
+                );
+              })}
             </div>
           </Field>
 
@@ -241,7 +244,7 @@ export default function SettingsPage() {
                     onClick={() => saveField("active_wallpaper_id", s.id)}
                     className={`relative rounded-xl overflow-hidden transition-all ${s.id}`}
                     style={{
-                      height: 60,
+                      aspectRatio: "16/9",
                       outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
                       outlineOffset: "2px",
                     }}
@@ -268,7 +271,7 @@ export default function SettingsPage() {
               <p className="text-xs font-medium mb-1.5" style={{ color: "var(--color-on-surface-variant)" }}>
                 Animated — generated live, no images
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {ANIMATED_WALLPAPERS.map((s) => {
                   const isActive = local.active_wallpaper_id === s.id;
                   return (
@@ -277,7 +280,7 @@ export default function SettingsPage() {
                       onClick={() => saveField("active_wallpaper_id", s.id)}
                       className={`relative rounded-xl overflow-hidden transition-all ${s.base}`}
                       style={{
-                        height: 60,
+                        aspectRatio: "16/9",
                         outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
                         outlineOffset: "2px",
                       }}
@@ -565,7 +568,7 @@ function SignOutButton() {
   async function handleSignOut() {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.push("/");
     router.refresh();
   }
 
@@ -663,29 +666,41 @@ function MusicSection({
   );
 }
 
-function Section({ icon, title, children }: { icon: React.ReactNode; title: string; children: React.ReactNode }) {
+function Section({ icon, title, desc, children }: { icon: React.ReactNode; title: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div className="glass rounded-2xl p-6 space-y-5">
-      <div className="flex items-center gap-3">
-        <div className="w-8 h-8 rounded-xl flex items-center justify-center"
-          style={{ background: "color-mix(in srgb, var(--color-primary) 12%, transparent)", color: "var(--color-primary)" }}>
+    <div className="glass" style={{ borderRadius: 22, padding: 22 }}>
+      <div className="flex items-center" style={{ gap: 11, marginBottom: 14 }}>
+        <div
+          className="flex items-center justify-center shrink-0"
+          style={{
+            width: 34, height: 34, borderRadius: 11,
+            background: "color-mix(in srgb, var(--color-primary) 14%, transparent)",
+            color: "var(--color-primary)",
+          }}
+        >
           {icon}
         </div>
-        <h2 className="font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-          {title}
-        </h2>
+        <div>
+          <p style={{ fontFamily: "var(--font-display)", fontSize: 15.5, fontWeight: 700, color: "var(--color-on-surface)" }}>
+            {title}
+          </p>
+          {desc && <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", opacity: 0.8, marginTop: 1 }}>{desc}</p>}
+        </div>
       </div>
-      <div className="space-y-4 pl-1">{children}</div>
+      <div>{children}</div>
     </div>
   );
 }
 
 function Field({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4">
-      <div>
-        <p className="text-sm font-medium" style={{ color: "var(--color-on-surface)" }}>{label}</p>
-        {description && <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>{description}</p>}
+    <div
+      className="flex items-center justify-between gap-4"
+      style={{ padding: "11px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}
+    >
+      <div className="min-w-0">
+        <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--color-on-surface)" }}>{label}</p>
+        {description && <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.8, marginTop: 2 }}>{description}</p>}
       </div>
       <div className="flex items-center gap-2 shrink-0">{children}</div>
     </div>
@@ -698,14 +713,17 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       role="switch"
       aria-checked={checked}
       onClick={() => onChange(!checked)}
-      className="relative w-11 h-6 rounded-full transition-all duration-300"
-      style={{ background: checked ? "var(--color-primary-container)" : "var(--color-surface-container-high)" }}
+      className={`flex shrink-0 ${checked ? "grad-primary justify-end" : "justify-start"}`}
+      style={{
+        width: 46, height: 27, borderRadius: 99, padding: 3,
+        background: checked ? undefined : "rgba(255,255,255,0.13)",
+        transition: "background .2s",
+      }}
     >
-      <div
-        className="absolute top-0.5 w-5 h-5 rounded-full transition-transform duration-300"
+      <span
         style={{
-          background: checked ? "var(--color-on-primary)" : "var(--color-on-surface-variant)",
-          transform: checked ? "translateX(22px)" : "translateX(2px)",
+          width: 21, height: 21, borderRadius: "50%", background: "#fff",
+          boxShadow: "0 1px 4px rgba(0,0,0,0.3)", transition: "all .2s",
         }}
       />
     </button>

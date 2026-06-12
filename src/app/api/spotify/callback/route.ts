@@ -55,7 +55,7 @@ export async function GET(request: NextRequest) {
 
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    return NextResponse.redirect(`${origin}/login`);
+    return NextResponse.redirect(`${origin}/`);
   }
 
   const expiry = new Date(Date.now() + (tokens.expires_in as number) * 1000).toISOString();

@@ -1,18 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import {
   fetchDailyFocus, fetchTagFocus, fetchRecentSessions, fetchStreak,
   type AnalyticsFilter,
 } from "@/lib/analytics/queries";
 import { createClient } from "@/lib/supabase/client";
-import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Sector,
-} from "recharts";
 import { fmtDuration, fmtTime } from "@/lib/utils";
-import { Clock, CheckSquare, Flame, Calendar } from "lucide-react";
+import { Clock, Target, Flame, Check } from "lucide-react";
 import type { Project } from "@/types/database";
 
 const RANGE_OPTIONS: { value: AnalyticsFilter["range"]; label: string }[] = [
@@ -21,16 +17,52 @@ const RANGE_OPTIONS: { value: AnalyticsFilter["range"]; label: string }[] = [
   { value: "all", label: "All time" },
 ];
 
+const PROJECT_FALLBACK_COLORS = ["#ff5fa2", "#b06bf6", "#5fb0ff", "#46c98b", "#f2a341", "#ff8fbe"];
+
+function StatCard({ icon: Icon, label, value, sub, color }: {
+  icon: React.ElementType;
+  label: string;
+  value: string;
+  sub?: string;
+  color: string;
+}) {
+  return (
+    <div className="glass hover-lift" style={{ borderRadius: 20, padding: 18, flex: 1, minWidth: 160 }}>
+      <div className="flex items-center" style={{ gap: 9, marginBottom: 14 }}>
+        <div
+          className="flex items-center justify-center"
+          style={{
+            width: 32, height: 32, borderRadius: 10,
+            color, background: `color-mix(in srgb, ${color} 15%, transparent)`,
+          }}
+        >
+          <Icon size={17} />
+        </div>
+        <span style={{ fontSize: 12, fontWeight: 600, color: "var(--color-on-surface-variant)", opacity: 0.8 }}>{label}</span>
+      </div>
+      <p className="tabular-nums" style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, color: "var(--color-on-surface)", letterSpacing: "-.02em" }}>
+        {value}
+      </p>
+      {sub && <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", marginTop: 3 }}>{sub}</p>}
+    </div>
+  );
+}
+
+function Empty({ label }: { label: string }) {
+  return (
+    <div className="py-8 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>{label}</div>
+  );
+}
+
 export default function AnalyticsPage() {
   const supabase = createClient();
   const [range, setRange] = useState<AnalyticsFilter["range"]>("7d");
   const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
-  const [filterTagId, setFilterTagId] = useState<string | null>(null);
 
-  const filter: AnalyticsFilter = { range, projectId: filterProjectId, tagId: filterTagId };
+  const filter: AnalyticsFilter = { range, projectId: filterProjectId, tagId: null };
 
   const { data: daily = [] } = useQuery({ queryKey: ["analytics", "daily", filter], queryFn: () => fetchDailyFocus(filter) });
-  const { data: tagFocus = [] } = useQuery({ queryKey: ["analytics", "tags", filter], queryFn: () => fetchTagFocus(filter) });
+  useQuery({ queryKey: ["analytics", "tags", filter], queryFn: () => fetchTagFocus(filter) });
   const { data: sessions = [] } = useQuery({ queryKey: ["sessions", filter], queryFn: () => fetchRecentSessions(filter) });
   const { data: streak = { current: 0, best: 0 } } = useQuery({ queryKey: ["analytics", "streak"], queryFn: fetchStreak });
   const { data: projects = [] } = useQuery<Project[]>({
@@ -41,259 +73,245 @@ export default function AnalyticsPage() {
     },
   });
 
+  // Tasks completed in range
+  const { data: tasksDone = 0 } = useQuery({
+    queryKey: ["analytics", "tasks-done", range],
+    queryFn: async () => {
+      let q = supabase.from("tasks").select("id", { count: "exact", head: true }).eq("status", "done");
+      if (range !== "all") {
+        const d = new Date();
+        d.setDate(d.getDate() - (range === "7d" ? 7 : 30));
+        q = q.gte("completed_at", d.toISOString());
+      }
+      const { count } = await q;
+      return count ?? 0;
+    },
+  });
+
   const totalSeconds = daily.reduce((s, d) => s + d.total_seconds, 0);
   const completedSessions = sessions.filter((s) => s.completed).length;
+  const totalHours = totalSeconds / 3600;
 
-  // Heatmap — last 26 weeks (built client-side to avoid calling new Date() during pre-rendering)
+  // "Focus by day" — last 14 entries max, rendered as gradient bars
+  const dayBars = useMemo(() => {
+    return daily.slice(-14).map((d) => ({
+      label: new Date(d.day).toLocaleDateString(undefined, { weekday: "short" }),
+      hours: d.total_seconds / 3600,
+    }));
+  }, [daily]);
+  const maxDayHours = Math.max(...dayBars.map((b) => b.hours), 0.1);
+
+  // "By project" — share of focus time per project from recent sessions
+  const projectBreakdown = useMemo(() => {
+    const byProject = new Map<string, number>();
+    for (const s of sessions) {
+      const key = s.project_name ?? "No project";
+      byProject.set(key, (byProject.get(key) ?? 0) + (s.actual_duration_sec ?? 0));
+    }
+    const total = Array.from(byProject.values()).reduce((a, b) => a + b, 0);
+    if (total === 0) return [];
+    return Array.from(byProject.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, secs], i) => {
+        const project = projects.find((p) => p.name === name);
+        return {
+          name,
+          pct: Math.round((secs / total) * 100),
+          color: project?.color ?? PROJECT_FALLBACK_COLORS[i % PROJECT_FALLBACK_COLORS.length],
+        };
+      });
+  }, [sessions, projects]);
+
+  // Heatmap — built in an effect because `new Date()` (current time) isn't
+  // allowed during Next's client prerender pass.
   const [heatmapDays, setHeatmapDays] = useState<(null | { date: string; seconds: number })[][]>([]);
   useEffect(() => {
     setHeatmapDays(buildHeatmapDays(daily.map((d) => ({ date: d.day, seconds: d.total_seconds }))));
   }, [daily]);
   const maxSeconds = Math.max(...heatmapDays.flat().map((d) => d?.seconds ?? 0), 1);
 
-  const weeklyBars = daily.map((d) => ({
-    name: new Date(d.day).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
-    minutes: Math.round(d.total_seconds / 60),
-  }));
-
-  const PIE_COLORS = ["var(--color-primary)", "var(--color-secondary)", "var(--color-tertiary)", "var(--color-primary-container)", "#c0b0ff", "#a4cfb4"];
-
   return (
-    <div className="fade-up p-8 max-w-5xl mx-auto space-y-8 pb-16 w-full" style={{ paddingTop: 104 }}>
-      {/* Header + filters */}
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1
-            style={{
-              fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800,
-              letterSpacing: "-.02em", color: "var(--color-on-surface)",
-            }}
-          >
-            Analytics
-          </h1>
-          <p className="text-sm mt-1" style={{ color: "var(--color-on-surface-variant)" }}>
-            Your deep-work trends.
-          </p>
-        </div>
+    <div className="min-h-dvh flex justify-center" style={{ padding: "104px 20px 60px" }}>
+      <div className="fade-up w-full" style={{ maxWidth: 880 }}>
+        {/* Header + filters */}
+        <div className="flex items-end justify-between gap-4 flex-wrap" style={{ marginBottom: 22 }}>
+          <div>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, letterSpacing: "-.02em", color: "var(--color-on-surface)" }}>
+              Analytics
+            </h1>
+            <p style={{ fontSize: 14, color: "var(--color-on-surface-variant)", marginTop: 4 }}>
+              Your deep-work trends.
+            </p>
+          </div>
 
-        <div className="flex gap-2 flex-wrap">
-          {RANGE_OPTIONS.map((opt) => (
-            <button
-              key={opt.value}
-              onClick={() => setRange(opt.value)}
-              className="px-3 py-1.5 rounded-full text-xs font-semibold transition-all"
-              style={{
-                background: range === opt.value ? "rgba(255,255,255,0.08)" : "transparent",
-                color: range === opt.value ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
-                border: range === opt.value ? "1px solid rgba(255,255,255,0.1)" : "1px solid var(--color-outline-variant)",
-              }}
-            >
-              {opt.label}
-            </button>
-          ))}
-          <select
-            value={filterProjectId ?? ""}
-            onChange={(e) => setFilterProjectId(e.target.value || null)}
-            className="px-3 py-1.5 rounded-full text-xs outline-none"
-            style={{
-              background: "var(--color-surface-container-high)",
-              color: "var(--color-on-surface)",
-              border: "1px solid var(--color-outline-variant)",
-            }}
-          >
-            <option value="">All Projects</option>
-            {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        </div>
-      </div>
-
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiCard
-          icon={<Clock size={18} />}
-          label="Total Focus Time"
-          value={fmtDuration(totalSeconds)}
-          color="var(--color-primary)"
-        />
-        <KpiCard
-          icon={<CheckSquare size={18} />}
-          label="Sessions Completed"
-          value={String(completedSessions)}
-          color="var(--color-secondary)"
-        />
-        <KpiCard
-          icon={<Flame size={18} />}
-          label="Current Streak"
-          value={`${streak.current} days`}
-          sub={`Best: ${streak.best} days`}
-          color="var(--color-tertiary)"
-        />
-      </div>
-
-      {/* Charts row */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-        {/* Weekly bar chart */}
-        <div className="glass rounded-2xl p-5 lg:col-span-2">
-          <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--color-on-surface-variant)" }}>
-            Daily Activity
-          </p>
-          {weeklyBars.length > 0 ? (
-            <ResponsiveContainer width="100%" height={180}>
-              <BarChart data={weeklyBars} barSize={12}>
-                <XAxis dataKey="name" tick={{ fontSize: 10, fill: "var(--color-on-surface-variant)" }} axisLine={false} tickLine={false} />
-                <YAxis hide />
-                <Tooltip
-                  contentStyle={{
-                    background: "var(--color-surface-container-high)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    borderRadius: "12px",
-                    color: "var(--color-on-surface)",
-                    fontSize: 12,
+          <div className="flex gap-2 flex-wrap items-center">
+            <div className="glass-soft flex rounded-full" style={{ gap: 3, padding: 4 }}>
+              {RANGE_OPTIONS.map((opt) => (
+                <button
+                  key={opt.value}
+                  onClick={() => setRange(opt.value)}
+                  className="pill"
+                  style={{
+                    padding: "6px 14px", fontSize: 12.5,
+                    color: range === opt.value ? "var(--color-primary)" : "var(--color-on-surface-variant)",
+                    background: range === opt.value ? "color-mix(in srgb, var(--color-primary) 15%, transparent)" : "transparent",
                   }}
-                  formatter={(v: unknown) => [`${v} min`, "Focus"]}
-                />
-                <Bar dataKey="minutes" radius={[4, 4, 0, 0]} fill="var(--color-primary)" fillOpacity={0.85} />
-              </BarChart>
-            </ResponsiveContainer>
-          ) : (
-            <Empty label="No sessions yet in this range." />
-          )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+            <select
+              value={filterProjectId ?? ""}
+              onChange={(e) => setFilterProjectId(e.target.value || null)}
+              className="glass-soft px-3 py-2 rounded-full text-xs outline-none"
+              style={{ color: "var(--color-on-surface)" }}
+            >
+              <option value="">All Projects</option>
+              {projects.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+            </select>
+          </div>
         </div>
 
-        {/* Tag donut */}
-        <div className="glass rounded-2xl p-5 flex flex-col">
-          <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--color-on-surface-variant)" }}>
-            Time by Tag
-          </p>
-          {tagFocus.length > 0 ? (
-            <>
-              <ResponsiveContainer width="100%" height={140}>
-                <PieChart>
-                  <Pie data={tagFocus} dataKey="total_seconds" nameKey="tag_name" cx="50%" cy="50%" innerRadius={40} outerRadius={65} paddingAngle={3}>
-                    {tagFocus.map((_, i) => (
-                      <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{ background: "var(--color-surface-container-high)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: "12px", color: "var(--color-on-surface)", fontSize: 12 }}
-                    formatter={(v: unknown, name: unknown) => [fmtDuration(Number(v)), `#${String(name ?? "tag")}`]}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              <div className="mt-3 space-y-1.5">
-                {tagFocus.slice(0, 4).map((t, i) => {
-                  const pct = Math.round((t.total_seconds / totalSeconds) * 100) || 0;
-                  return (
-                    <div key={t.tag_id} className="flex items-center gap-2 text-xs">
-                      <div className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: PIE_COLORS[i % PIE_COLORS.length] }} />
-                      <span className="flex-1 truncate" style={{ color: "var(--color-on-surface)" }}>{t.tag_name}</span>
-                      <span style={{ color: "var(--color-on-surface-variant)" }}>{pct}%</span>
-                    </div>
-                  );
-                })}
-              </div>
-            </>
-          ) : (
-            <Empty label="Tag some tasks to see breakdown." />
-          )}
+        {/* Stat cards */}
+        <div className="flex flex-wrap" style={{ gap: 14, marginBottom: 16 }}>
+          <StatCard icon={Clock} label="Focus time" value={totalHours >= 1 ? `${totalHours.toFixed(1)}h` : fmtDuration(totalSeconds)} sub={range === "all" ? "all time" : `last ${range === "7d" ? "7" : "30"} days`} color="#ff5fa2" />
+          <StatCard icon={Target} label="Sessions" value={String(completedSessions)} sub="completed" color="#b06bf6" />
+          <StatCard icon={Flame} label="Streak" value={String(streak.current)} sub={`best: ${streak.best} days`} color="#f2a341" />
+          <StatCard icon={Check} label="Tasks done" value={String(tasksDone)} sub={range === "all" ? "all time" : "in this range"} color="#46c98b" />
         </div>
-      </div>
 
-      {/* Heatmap */}
-      <div className="glass rounded-2xl p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--color-on-surface-variant)" }}>
-          Activity Heatmap — last 26 weeks
-        </p>
-        <div className="overflow-x-auto">
-          <div className="flex gap-1 min-w-max">
-            {heatmapDays.map((week, wi) => (
-              <div key={wi} className="flex flex-col gap-1">
-                {week.map((day, di) => {
-                  const intensity = day ? Math.min(1, day.seconds / maxSeconds) : 0;
-                  return (
+        {/* Charts row */}
+        <div className="grid grid-cols-1 lg:grid-cols-[1.5fr_1fr]" style={{ gap: 16, marginBottom: 16 }}>
+          {/* Focus by day — gradient bars */}
+          <div className="glass" style={{ borderRadius: 22, padding: 22 }}>
+            <p style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--color-on-surface)", marginBottom: 20 }}>
+              Focus by day
+            </p>
+            {dayBars.length > 0 ? (
+              <div className="flex items-end" style={{ gap: 10, height: 180 }}>
+                {dayBars.map((b, i) => (
+                  <div key={i} className="flex flex-col items-center flex-1" style={{ gap: 9, minWidth: 0 }}>
+                    <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 600, color: "var(--color-on-surface-variant)" }}>
+                      {b.hours >= 0.95 ? `${b.hours.toFixed(1)}h` : b.hours > 0 ? `${Math.round(b.hours * 60)}m` : ""}
+                    </span>
                     <div
-                      key={di}
-                      title={day ? `${day.date}: ${fmtDuration(day.seconds)}` : ""}
-                      className="w-3 h-3 rounded-sm transition-all"
+                      className="w-full rounded-lg"
                       style={{
-                        background: day && day.seconds > 0
-                          ? `color-mix(in srgb, var(--color-primary) ${Math.round(15 + intensity * 85)}%, var(--color-surface-container-high))`
-                          : "var(--color-surface-container-high)",
+                        maxWidth: 34,
+                        height: Math.max((b.hours / maxDayHours) * 130, b.hours > 0 ? 6 : 2),
+                        background: b.hours > 0
+                          ? "linear-gradient(to top, var(--color-primary), var(--color-secondary))"
+                          : "rgba(255,255,255,0.08)",
+                        boxShadow: b.hours > 0 ? "0 4px 14px -4px color-mix(in srgb, var(--color-primary) 50%, transparent)" : "none",
                       }}
                     />
-                  );
-                })}
+                    <span style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.7 }}>{b.label}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            ) : (
+              <Empty label="No sessions yet in this range." />
+            )}
+          </div>
+
+          {/* By project */}
+          <div className="glass" style={{ borderRadius: 22, padding: 22 }}>
+            <p style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--color-on-surface)", marginBottom: 20 }}>
+              By project
+            </p>
+            {projectBreakdown.length > 0 ? (
+              <div className="flex flex-col" style={{ gap: 16 }}>
+                {projectBreakdown.map((b) => (
+                  <div key={b.name}>
+                    <div className="flex justify-between" style={{ marginBottom: 7 }}>
+                      <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--color-on-surface)" }}>{b.name}</span>
+                      <span className="tabular-nums" style={{ fontSize: 12.5, fontWeight: 700, color: b.color }}>{b.pct}%</span>
+                    </div>
+                    <div className="rounded-full overflow-hidden" style={{ height: 7, background: "rgba(255,255,255,0.13)" }}>
+                      <div className="h-full rounded-full" style={{ width: `${b.pct}%`, background: b.color }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Empty label="Run some sessions to see the split." />
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Recent sessions */}
-      <div className="glass rounded-2xl p-5">
-        <p className="text-xs font-semibold uppercase tracking-wider mb-4" style={{ color: "var(--color-on-surface-variant)" }}>
-          Recent Sessions
-        </p>
-        {sessions.length === 0 ? (
-          <Empty label="No sessions recorded yet." />
-        ) : (
-          <div className="space-y-2">
-            {sessions.slice(0, 15).map((s) => (
-              <div key={s.id} className="flex items-center gap-4 py-2.5 text-sm"
-                style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}>
-                <div className="w-1 self-stretch rounded-full shrink-0"
-                  style={{ background: s.completed ? "var(--color-secondary)" : "var(--color-outline)" }} />
-                <div className="flex-1 min-w-0">
-                  <p className="truncate" style={{ color: "var(--color-on-surface)" }}>
-                    {s.task_title ?? "Untitled session"}
-                  </p>
-                  <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-                    {s.project_name ?? "—"} · {fmtTime(s.started_at)}
-                  </p>
+        {/* Heatmap */}
+        <div className="glass" style={{ borderRadius: 22, padding: 22, marginBottom: 16 }}>
+          <p style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--color-on-surface)", marginBottom: 16 }}>
+            Activity — last 26 weeks
+          </p>
+          <div className="overflow-x-auto">
+            <div className="flex gap-1 min-w-max">
+              {heatmapDays.map((week, wi) => (
+                <div key={wi} className="flex flex-col gap-1">
+                  {week.map((day, di) => {
+                    const intensity = day ? Math.min(1, day.seconds / maxSeconds) : 0;
+                    return (
+                      <div
+                        key={di}
+                        title={day ? `${day.date}: ${fmtDuration(day.seconds)}` : ""}
+                        className="w-3 h-3 rounded-sm transition-all"
+                        style={{
+                          background: day && day.seconds > 0
+                            ? `color-mix(in srgb, var(--color-primary) ${Math.round(15 + intensity * 85)}%, var(--color-surface-container-high))`
+                            : "var(--color-surface-container-high)",
+                        }}
+                      />
+                    );
+                  })}
                 </div>
-                {s.tags.slice(0, 2).map((tag) => (
-                  <span key={tag.id} className="px-2 py-0.5 rounded-full text-xs shrink-0"
-                    style={{ background: "color-mix(in srgb, var(--color-secondary) 15%, transparent)", color: "var(--color-secondary)" }}>
-                    {tag.name}
-                  </span>
-                ))}
-                <span className="text-xs shrink-0 font-medium" style={{ color: "var(--color-on-surface-variant)" }}>
-                  {s.actual_duration_sec ? fmtDuration(s.actual_duration_sec) : "—"}
-                </span>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        )}
+        </div>
+
+        {/* Recent sessions */}
+        <div className="glass" style={{ borderRadius: 22, padding: 22 }}>
+          <p style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--color-on-surface)", marginBottom: 12 }}>
+            Recent sessions
+          </p>
+          {sessions.length === 0 ? (
+            <Empty label="No sessions recorded yet." />
+          ) : (
+            <div>
+              {sessions.slice(0, 15).map((s) => (
+                <div key={s.id} className="flex items-center gap-4 py-2.5 text-sm"
+                  style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  <div className="w-1 self-stretch rounded-full shrink-0"
+                    style={{ background: s.completed ? "var(--color-primary)" : "var(--color-outline)" }} />
+                  <div className="flex-1 min-w-0">
+                    <p className="truncate" style={{ color: "var(--color-on-surface)", fontWeight: 500 }}>
+                      {s.task_title ?? "Untitled session"}
+                    </p>
+                    <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)", opacity: 0.8 }}>
+                      {s.project_name ?? "—"} · {fmtTime(s.started_at)}
+                    </p>
+                  </div>
+                  {s.tags.slice(0, 2).map((tag) => (
+                    <span key={tag.id} className="px-2 py-0.5 rounded-full text-xs shrink-0"
+                      style={{
+                        background: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
+                        color: tag.color,
+                      }}>
+                      #{tag.name}
+                    </span>
+                  ))}
+                  <span className="text-xs shrink-0 font-medium tabular-nums" style={{ color: "var(--color-on-surface-variant)" }}>
+                    {s.actual_duration_sec ? fmtDuration(s.actual_duration_sec) : "—"}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
     </div>
-  );
-}
-
-function KpiCard({ icon, label, value, sub, color }: {
-  icon: React.ReactNode;
-  label: string;
-  value: string;
-  sub?: string;
-  color: string;
-}) {
-  return (
-    <div className="glass rounded-2xl p-5 flex items-start gap-4">
-      <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-        style={{ background: `color-mix(in srgb, ${color} 15%, transparent)`, color }}>
-        {icon}
-      </div>
-      <div>
-        <p className="text-xs uppercase tracking-wider font-semibold mb-1" style={{ color: "var(--color-on-surface-variant)" }}>{label}</p>
-        <p className="text-2xl font-bold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>{value}</p>
-        {sub && <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>{sub}</p>}
-      </div>
-    </div>
-  );
-}
-
-function Empty({ label }: { label: string }) {
-  return (
-    <div className="py-8 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>{label}</div>
   );
 }
 

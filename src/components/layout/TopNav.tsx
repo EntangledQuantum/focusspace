@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
+import appIcon from "@/app/icon.png";
 import { useRef, useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -16,23 +18,6 @@ const NAV_LINKS = [
   { href: "/analytics", label: "Analytics", icon: BarChart2 },
   { href: "/settings",  label: "Settings",  icon: Settings },
 ] as const;
-
-function Logo({ size = 28 }: { size?: number }) {
-  return (
-    <div
-      className="grad-primary shrink-0"
-      style={{
-        width: size, height: size, borderRadius: 9, display: "grid", placeItems: "center",
-        boxShadow: "0 4px 16px color-mix(in srgb, var(--color-primary) 45%, transparent)",
-      }}
-    >
-      <div style={{
-        width: size * 0.34, height: size * 0.34, borderRadius: "50%",
-        border: "2.5px solid rgba(255,255,255,0.95)",
-      }} />
-    </div>
-  );
-}
 
 function GlassControls({ settings }: { settings: UserSettings | null | undefined }) {
   const supabase = createClient();
@@ -183,15 +168,21 @@ export function TopNav() {
       }}
     >
       <nav
-        className="glass flex items-center"
+        className="flex items-center"
         style={{
           pointerEvents: hidden ? "none" : "auto",
-          gap: 6, borderRadius: 999, padding: "8px 10px 8px 14px",
+          gap: 6, borderRadius: 999, padding: "8px 10px 8px 12px",
           width: "100%", maxWidth: 880,
+          // More opaque than .glass so the bar stays readable over any wallpaper
+          background: "color-mix(in srgb, var(--color-surface-container) 88%, transparent)",
+          backdropFilter: "blur(24px) saturate(1.4)",
+          WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+          border: "1px solid rgba(255,255,255,0.10)",
+          boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07), 0 18px 48px -16px rgba(0,0,0,0.6)",
         }}
       >
         <div className="flex items-center" style={{ gap: 10, paddingRight: 6 }}>
-          <Logo size={28} />
+          <Image src={appIcon} alt="FocusSpace" width={30} height={30} className="rounded-[9px] shrink-0" />
           <span
             className="hidden sm:inline"
             style={{

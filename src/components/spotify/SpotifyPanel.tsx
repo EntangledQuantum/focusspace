@@ -4,11 +4,9 @@ import { useState, useEffect, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useSpotifyContext, type PlayableContext } from "@/lib/context/SpotifyContext";
 import { spotifyFetch, spotifyJson } from "@/lib/spotify/api";
-import { useMiniPlayer } from "@/lib/hooks/useMiniPlayer";
-import { toast } from "sonner";
 import {
   Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic,
-  Shuffle, Volume2, VolumeX, ExternalLink, PictureInPicture2,
+  Shuffle, Volume2, VolumeX, ExternalLink,
 } from "lucide-react";
 
 type SearchType = "playlist" | "track" | "album" | "artist";
@@ -79,7 +77,7 @@ function SearchPicker({
           return;
         }
         const data = await res.json();
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+         
         const key = (searchType + "s") as keyof typeof data;
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const items = ((data[key]?.items ?? []) as any[]).filter(Boolean);
@@ -252,13 +250,6 @@ export function SpotifyPanel() {
     return () => document.removeEventListener("mousedown", handler);
   }, [pickerOpen, volumeOpen]);
 
-  const { open: openPip } = useMiniPlayer();
-
-  async function openMiniPlayer() {
-    const ok = await openPip();
-    if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
-  }
-
   if (tokenLoading || !isConnected) return null;
 
   if (sdkError) {
@@ -295,11 +286,11 @@ export function SpotifyPanel() {
 
   return (
     <div className="flex flex-col h-full" style={{ gap: 9 }}>
-      {/* Header: label + search + pip */}
-      <div className="flex items-center" style={{ gap: 7 }}>
+      {/* Header — the pop-out button lives in the dock corner, not here */}
+      <div className="flex items-center" style={{ gap: 7, paddingRight: 104 }}>
         <SpotifyLogo size={13} />
         <span
-          className="uppercase"
+          className="uppercase truncate"
           style={{
             fontSize: 11, fontWeight: 700, letterSpacing: ".06em",
             color: "var(--color-on-surface-variant)", opacity: 0.8,
@@ -307,15 +298,6 @@ export function SpotifyPanel() {
         >
           Now playing
         </span>
-        <div className="flex-1" />
-        <button
-          onClick={openMiniPlayer}
-          title="Pop out mini player"
-          className="icon-btn"
-          style={{ width: 24, height: 24 }}
-        >
-          <PictureInPicture2 size={12} />
-        </button>
       </div>
 
       {/* Playlist / search selector */}

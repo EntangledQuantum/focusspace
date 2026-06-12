@@ -8,6 +8,8 @@ interface Props {
   variant: BackdropVariant;
   /** Pointer-follow + click-burst effects (landing page). Off for wallpapers. */
   interactive?: boolean;
+  /** 0–1 multiplier on glow/alpha — lower = subtler colors. */
+  intensity?: number;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -35,7 +37,7 @@ const BLUE = "143,182,255";
  * Variants: aurora (drifting gradient blobs), rain, snow, starfield, fireflies.
  * Pauses when the tab is hidden; renders one static frame for reduced motion.
  */
-export function AnimatedBackdrop({ variant, interactive = false, className, style }: Props) {
+export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, className, style }: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -141,7 +143,7 @@ export function AnimatedBackdrop({ variant, interactive = false, className, styl
           const cy = (b.y + py) * H;
           const r = b.r * Math.max(W, H) * (1 + Math.sin(b.t * 1.4) * 0.06);
           const g = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
-          g.addColorStop(0, `rgba(${b.color},0.34)`);
+          g.addColorStop(0, `rgba(${b.color},${0.34 * intensity})`);
           g.addColorStop(1, `rgba(${b.color},0)`);
           ctx!.fillStyle = g;
           ctx!.beginPath();
@@ -308,7 +310,7 @@ export function AnimatedBackdrop({ variant, interactive = false, className, styl
         window.removeEventListener("click", onClick);
       }
     };
-  }, [variant, interactive]);
+  }, [variant, interactive, intensity]);
 
   return (
     <canvas

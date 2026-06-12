@@ -29,6 +29,13 @@ supabase/migrations/0007_glass_controls.sql
 
 ## Latest Updates
 
+### Design-polish round
+
+- **Whole app on the new design** — Projects, Analytics, Settings and the task picker now use the prototype layout: centered 880px pages, stacked glass project cards with icon tiles, session dots, expandable subtasks and the Run pill; Analytics got stat cards, gradient day bars and a by-project breakdown; Settings got the icon-tile sections, hairline rows and gradient switches.
+- **One-door auth** — login/signup pages are gone. The landing CTA opens a single modal: Google/Spotify sign in *or* create the account automatically, and email+password does both too (new email → account is created on the spot).
+- **Landing polish** — dimmer aurora, badge removed, single CTA, real app logo and a more opaque nav bar; feature cards now have live micro-animations (equalizer waves on the music card, looping ring, rising chart bars, drifting wallpaper blob).
+- **Fixes** — dock corner buttons (fullscreen · pop-out · focus mode) no longer overlap the music column; wallpaper preset swatches are 16:9.
+
 ### Landing page + living wallpapers
 
 - **New homepage** — `/` is now a public landing page: animated aurora background that follows your cursor and bursts on click, a live demo timer ring, rotating headline, and a compact feature grid. Signed-in users skip straight to `/focus`.

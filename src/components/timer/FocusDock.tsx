@@ -3,10 +3,12 @@
 import { useState } from "react";
 import {
   Check, ChevronDown, CheckCircle2, Circle, ListChecks,
-  Shrink, Expand, Maximize2, Minimize2, Play, Pause, Music,
+  Shrink, Expand, Maximize2, Minimize2, Play, Pause, Music, PictureInPicture2,
 } from "lucide-react";
+import { toast } from "sonner";
 import { SpotifyPanel } from "@/components/spotify/SpotifyPanel";
 import { useSpotifyContext } from "@/lib/context/SpotifyContext";
+import { useMiniPlayer } from "@/lib/hooks/useMiniPlayer";
 import { useUiStore } from "@/lib/stores/ui";
 import type { TimerMode, TimerStatus } from "@/lib/stores/timer";
 import type { Subtask, TaskWithTags } from "@/types/database";
@@ -223,6 +225,12 @@ export function FocusDock(props: Props) {
   const { focusMode, setFocusMode } = useUiStore();
   const { isConnected } = useSpotifyContext();
   const { isFullscreen, onToggleFullscreen } = props;
+  const { open: openPip } = useMiniPlayer();
+
+  async function openMiniPlayer() {
+    const ok = await openPip();
+    if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
+  }
 
   const divider = <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.06)" }} />;
 
@@ -241,7 +249,8 @@ export function FocusDock(props: Props) {
         }}
       >
         <div className="glass relative" style={{ borderRadius: 22, padding: "16px 18px" }}>
-          <div className="absolute flex" style={{ top: 12, right: 12, gap: 4, zIndex: 2 }}>
+          {/* Corner controls: fullscreen · pop-out · focus mode */}
+          <div className="absolute flex items-center" style={{ top: 12, right: 12, gap: 6, zIndex: 2 }}>
             <button
               onClick={onToggleFullscreen}
               className="icon-btn"
@@ -251,12 +260,20 @@ export function FocusDock(props: Props) {
               {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
             </button>
             <button
+              onClick={openMiniPlayer}
+              className="icon-btn"
+              title="Pop out mini player"
+              style={{ width: 30, height: 30 }}
+            >
+              <PictureInPicture2 size={14} />
+            </button>
+            <button
               onClick={() => setFocusMode(true)}
               className="icon-btn"
               title="Enter focus mode — hide the dock"
               style={{ width: 30, height: 30 }}
             >
-              <Shrink size={16} />
+              <Shrink size={15} />
             </button>
           </div>
           <div

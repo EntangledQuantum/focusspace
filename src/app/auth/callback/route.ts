@@ -12,9 +12,9 @@ export async function GET(request: NextRequest) {
 
   if (oauthError) {
     if (errorCode === "provider_email_needs_verification") {
-      return NextResponse.redirect(`${origin}/login?error=spotify_email_verify`);
+      return NextResponse.redirect(`${origin}/?error=spotify_email_verify`);
     }
-    return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+    return NextResponse.redirect(`${origin}/?error=auth_callback_failed`);
   }
 
   if (code) {
@@ -49,5 +49,5 @@ export async function GET(request: NextRequest) {
     }
   }
 
-  return NextResponse.redirect(`${origin}/login?error=auth_callback_failed`);
+  return NextResponse.redirect(`${origin}/?error=auth_callback_failed`);
 }

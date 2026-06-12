@@ -6,1088 +6,32 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
 import { useTimerStore } from "@/lib/stores/timer";
-import { Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag, ListChecks, ChevronDown, Play } from "lucide-react";
+import {
+  Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag,
+  ChevronDown, Play, Target,
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import type { Project, Subtask, Task, Tag as TagType, TaskWithTags } from "@/types/database";
-import { PomodoroRating, PomodoroMiniPips } from "@/components/timer/PomodoroRating";
-import type { UserSettings } from "@/types/database";
+import type { Project, Subtask, Task, Tag as TagType, TaskWithTags, UserSettings } from "@/types/database";
+import { PomodoroRating } from "@/components/timer/PomodoroRating";
 
 const PROJECT_COLORS = [
-  "#ffb4a5", "#b5ccc1", "#adcae4", "#e2725b",
-  "#7a96af", "#a48b86", "#394d45", "#c0b0ff",
+  "#ff5fa2", "#b06bf6", "#5fb0ff", "#46c98b",
+  "#f2a341", "#ff8fbe", "#8fb6ff", "#c89bff",
 ];
 
 const TAG_COLORS = [
-  "#ffb4a5", "#b5ccc1", "#adcae4", "#c0b0ff",
-  "#80c0a0", "#e2725b", "#7a96af", "#f0c060",
+  "#ff5fa2", "#b06bf6", "#5fb0ff", "#46c98b",
+  "#f2a341", "#ff8fbe", "#8fb6ff", "#c89bff",
 ];
-
-const PRIORITY_CONFIG = {
-  urgent: { label: "Urgent", color: "#ffb4ab" },
-  high:   { label: "High",   color: "#ffb4a5" },
-  med:    { label: "Med",    color: "#b5ccc1" },
-  low:    { label: "Low",    color: "#a48b86" },
-} as const;
 
 function randomTagColor() {
   return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
 }
 
-export default function ProjectsPage() {
-  const supabase = createClient();
-  const qc = useQueryClient();
-  const router = useRouter();
-  const timer = useTimer();
-  const [selectedProjectId, setSelectedProjectId] = useState<string | null>(null);
-  const [newProjectName, setNewProjectName] = useState("");
-  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
-  const [addingProject, setAddingProject] = useState(false);
-  const [newTaskTitle, setNewTaskTitle] = useState("");
-  const [newTaskPomos, setNewTaskPomos] = useState(1);
-  const [newTaskDesc, setNewTaskDesc] = useState("");
-  const [newTaskSubs, setNewTaskSubs] = useState<{ title: string; done: boolean }[]>([]);
-  const [addingTask, setAddingTask] = useState(false);
-  const [editingProjectId, setEditingProjectId] = useState<string | null>(null);
-  const [editingProjectName, setEditingProjectName] = useState("");
+const HAIRLINE = "1px solid rgba(255,255,255,0.06)";
 
-  // Tag state
-  const [newTaskTags, setNewTaskTags] = useState<TagType[]>([]);
-  const [tagQuery, setTagQuery] = useState("");
-  const [showTagSugs, setShowTagSugs] = useState(false);
-  const [deleteTagConfirm, setDeleteTagConfirm] = useState<TagType | null>(null);
-  const [showTagInput, setShowTagInput] = useState(false);
-  const [addingTagName, setAddingTagName] = useState("");
-  const titleInputRef = useRef<HTMLInputElement>(null);
-  const tagSugRef = useRef<HTMLDivElement>(null);
-
-  // Task edit state
-  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
-  const [editTitle, setEditTitle] = useState("");
-  const [editPomos, setEditPomos] = useState(1);
-  const [editDesc, setEditDesc] = useState("");
-  const [editSubs, setEditSubs] = useState<{ title: string; done: boolean }[]>([]);
-  const [editTags, setEditTags] = useState<TagType[]>([]);
-  const [editTagQuery, setEditTagQuery] = useState("");
-  const [showEditTagSugs, setShowEditTagSugs] = useState(false);
-  const editInputRef = useRef<HTMLInputElement>(null);
-  const editTagSugRef = useRef<HTMLDivElement>(null);
-
-  const { data: settings } = useQuery<UserSettings | null>({
-    queryKey: ["settings"],
-    queryFn: async () => {
-      const { data } = await supabase.from("user_settings").select("*").maybeSingle();
-      return data as UserSettings | null;
-    },
-    staleTime: 5 * 60_000,
-  });
-
-  const { data: projects = [] } = useQuery<Project[]>({
-    queryKey: ["projects"],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from("projects")
-        .select("*")
-        .is("archived_at", null)
-        .order("sort_order");
-      if (error) throw error;
-      return data ?? [];
-    },
-  });
-
-  const selectedProject = projects.find((p) => p.id === selectedProjectId) ?? projects[0] ?? null;
-
-  const { data: tasks = [] } = useQuery<TaskWithTags[]>({
-    queryKey: ["tasks", selectedProject?.id],
-    queryFn: async () => {
-      if (!selectedProject) return [];
-      const { data, error } = await supabase
-        .from("tasks")
-        .select("*, task_tags(tag_id, tags(id, name, color))")
-        .eq("project_id", selectedProject.id)
-        .order("sort_order");
-      if (error) throw error;
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return (data ?? []).map((t: any) => ({
-        ...t,
-        tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
-      })) as TaskWithTags[];
-    },
-    enabled: !!selectedProject,
-  });
-
-  const { data: tags = [] } = useQuery<TagType[]>({
-    queryKey: ["tags"],
-    queryFn: async () => {
-      const { data } = await supabase.from("tags").select("*").order("name");
-      return data ?? [];
-    },
-  });
-
-  // Subtasks for the visible tasks, grouped by task — fetched separately so a
-  // missing subtasks table (migration not yet applied) doesn't break the list.
-  const taskIds = tasks.map((t) => t.id);
-  const { data: subtasksByTask = {} } = useQuery<Record<string, Subtask[]>>({
-    queryKey: ["subtasks-by-task", selectedProject?.id, taskIds.join(",")],
-    enabled: taskIds.length > 0,
-    queryFn: async () => {
-      const { data } = await supabase
-        .from("subtasks")
-        .select("*")
-        .in("task_id", taskIds)
-        .order("sort_order");
-      const grouped: Record<string, Subtask[]> = {};
-      for (const st of (data ?? []) as Subtask[]) {
-        (grouped[st.task_id] ??= []).push(st);
-      }
-      return grouped;
-    },
-  });
-
-  const toggleSubtask = useMutation({
-    mutationFn: async (st: Subtask) => {
-      const { error } = await supabase.from("subtasks").update({ done: !st.done }).eq("id", st.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
-      qc.invalidateQueries({ queryKey: ["subtasks"] });
-    },
-  });
-
-  // Suggestions: filter by current tagQuery
-  const tagSuggestions = tags.filter(
-    (t) =>
-      t.name.startsWith(tagQuery) &&
-      !newTaskTags.find((nt) => nt.id === t.id)
-  );
-  const canCreateTag =
-    tagQuery.length > 0 &&
-    !tags.find((t) => t.name === tagQuery) &&
-    !newTaskTags.find((t) => t.name === tagQuery);
-
-  const editTagSuggestions = tags.filter(
-    (t) => t.name.startsWith(editTagQuery) && !editTags.find((nt) => nt.id === t.id),
-  );
-  const canCreateEditTag =
-    editTagQuery.length > 0 &&
-    !tags.find((t) => t.name === editTagQuery) &&
-    !editTags.find((t) => t.name === editTagQuery);
-
-  // Close tag suggestions on outside click
-  useEffect(() => {
-    function onDown(e: MouseEvent) {
-      if (
-        tagSugRef.current &&
-        !tagSugRef.current.contains(e.target as Node) &&
-        titleInputRef.current !== e.target
-      ) {
-        setShowTagSugs(false);
-      }
-      if (
-        editTagSugRef.current &&
-        !editTagSugRef.current.contains(e.target as Node) &&
-        editInputRef.current !== e.target
-      ) {
-        setShowEditTagSugs(false);
-      }
-    }
-    document.addEventListener("mousedown", onDown);
-    return () => document.removeEventListener("mousedown", onDown);
-  }, []);
-
-  function startEditingTask(task: TaskWithTags) {
-    setEditingTaskId(task.id);
-    setEditTitle(task.title);
-    setEditPomos(task.estimated_pomodoros ?? 1);
-    setEditDesc(task.notes ?? "");
-    setEditSubs((subtasksByTask[task.id] ?? []).map((st) => ({ title: st.title, done: st.done })));
-    setEditTags(task.tags ?? []);
-    setEditTagQuery("");
-    setShowEditTagSugs(false);
-  }
-
-  function cancelEditingTask() {
-    setEditingTaskId(null);
-    setEditTitle("");
-    setEditPomos(1);
-    setEditDesc("");
-    setEditSubs([]);
-    setEditTags([]);
-    setEditTagQuery("");
-    setShowEditTagSugs(false);
-  }
-
-  function handleEditTitleChange(val: string) {
-    setEditTitle(val);
-    const match = val.match(/#(\w*)$/);
-    if (match) {
-      setEditTagQuery(match[1].toLowerCase());
-      setShowEditTagSugs(true);
-    } else {
-      setShowEditTagSugs(false);
-      setEditTagQuery("");
-    }
-  }
-
-  function selectEditTagSuggestion(tag: TagType) {
-    setEditTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
-    setShowEditTagSugs(false);
-    setEditTagQuery("");
-    if (!editTags.find((t) => t.id === tag.id)) {
-      setEditTags((prev) => [...prev, tag]);
-    }
-  }
-
-  async function createAndSelectEditTag() {
-    if (!editTagQuery) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    const existing = tags.find((t) => t.name === editTagQuery);
-    if (existing) {
-      selectEditTagSuggestion(existing);
-      return;
-    }
-    const { data: created } = await supabase
-      .from("tags")
-      .insert({ user_id: user!.id, name: editTagQuery, color: randomTagColor() })
-      .select()
-      .single();
-    if (created) {
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      setEditTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
-      setShowEditTagSugs(false);
-      setEditTagQuery("");
-      setEditTags((prev) => [...prev, created as TagType]);
-    }
-  }
-
-  const addProject = useMutation({
-    mutationFn: async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("projects")
-        .insert({ name: newProjectName, color: newProjectColor, user_id: user!.id, sort_order: projects.length })
-        .select()
-        .single();
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (p) => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      setSelectedProjectId(p.id);
-      setNewProjectName("");
-      setAddingProject(false);
-      toast.success(`Project "${p.name}" created`);
-    },
-    onError: () => toast.error("Failed to create project"),
-  });
-
-  const renameProject = useMutation({
-    mutationFn: async ({ id, name }: { id: string; name: string }) => {
-      const { error } = await supabase.from("projects").update({ name }).eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-      setEditingProjectId(null);
-    },
-    onError: () => toast.error("Failed to rename project"),
-  });
-
-  const deleteProject = useMutation({
-    mutationFn: async (id: string) => {
-      await supabase.from("tasks").delete().eq("project_id", id);
-      const { error } = await supabase.from("projects").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: (_, id) => {
-      if (selectedProjectId === id) setSelectedProjectId(null);
-      qc.invalidateQueries({ queryKey: ["projects"] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-      toast.success("Project deleted");
-    },
-    onError: () => toast.error("Failed to delete project"),
-  });
-
-  const addTask = useMutation({
-    mutationFn: async () => {
-      if (!selectedProject) return;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Extract inline #tags and clean title
-      const hashTagNames = (newTaskTitle.match(/#(\w+)/g) ?? []).map((m) => m.slice(1).toLowerCase());
-      const cleanTitle = newTaskTitle.replace(/#\w+/g, "").trim() || newTaskTitle.trim();
-
-      const { data: task, error } = await supabase
-        .from("tasks")
-        .insert({
-          title: cleanTitle,
-          notes: newTaskDesc.trim() || null,
-          project_id: selectedProject.id,
-          user_id: user!.id,
-          sort_order: tasks.length,
-          estimated_pomodoros: newTaskPomos,
-        })
-        .select("id")
-        .single();
-      if (error) throw error;
-
-      if (newTaskSubs.length > 0) {
-        await supabase.from("subtasks").insert(
-          newTaskSubs.map((st, i) => ({
-            task_id: task.id,
-            user_id: user!.id,
-            title: st.title,
-            done: st.done,
-            sort_order: i,
-          }))
-        );
-      }
-
-      // Resolve all tags: chips already selected + inline #tags
-      const chipIds = new Set(newTaskTags.map((t) => t.id));
-      const resolvedTagIds: string[] = [...chipIds];
-
-      for (const name of hashTagNames) {
-        const existing = tags.find((t) => t.name === name);
-        if (existing) {
-          if (!chipIds.has(existing.id)) resolvedTagIds.push(existing.id);
-        } else {
-          const { data: created } = await supabase
-            .from("tags")
-            .insert({ user_id: user!.id, name, color: randomTagColor() })
-            .select("id")
-            .single();
-          if (created) resolvedTagIds.push(created.id);
-        }
-      }
-
-      if (resolvedTagIds.length > 0) {
-        await supabase.from("task_tags").insert(
-          resolvedTagIds.map((tagId) => ({ task_id: task.id, tag_id: tagId }))
-        );
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      setNewTaskTitle("");
-      setNewTaskPomos(1);
-      setNewTaskDesc("");
-      setNewTaskSubs([]);
-      setNewTaskTags([]);
-      setAddingTask(false);
-    },
-    onError: () => toast.error("Failed to add task"),
-  });
-
-  const createTag = useMutation({
-    mutationFn: async (name: string) => {
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from("tags")
-        .insert({ user_id: user!.id, name: name.toLowerCase(), color: randomTagColor() })
-        .select()
-        .single();
-      if (error) throw error;
-      return data as TagType;
-    },
-    onSuccess: (tag) => {
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      setAddingTagName("");
-      setShowTagInput(false);
-      toast.success(`Tag #${tag.name} created`);
-    },
-    onError: () => toast.error("Failed to create tag"),
-  });
-
-  const deleteTag = useMutation({
-    mutationFn: async (tag: TagType) => {
-      await supabase.from("task_tags").delete().eq("tag_id", tag.id);
-      const { error } = await supabase.from("tags").delete().eq("id", tag.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
-      qc.invalidateQueries({ queryKey: ["analytics"] });
-      setDeleteTagConfirm(null);
-      toast.success("Tag deleted");
-    },
-    onError: () => toast.error("Failed to delete tag"),
-  });
-
-  const updateTask = useMutation({
-    mutationFn: async () => {
-      if (!editingTaskId) return;
-      const { data: { user } } = await supabase.auth.getUser();
-
-      // Extract inline #tags from title
-      const hashTagNames = (editTitle.match(/#(\w+)/g) ?? []).map((m) => m.slice(1).toLowerCase());
-      const cleanTitle = editTitle.replace(/#\w+/g, "").trim() || editTitle.trim();
-
-      const { error } = await supabase
-        .from("tasks")
-        .update({ title: cleanTitle, notes: editDesc.trim() || null, estimated_pomodoros: editPomos })
-        .eq("id", editingTaskId);
-      if (error) throw error;
-
-      // Replace subtasks with the edited list (done state preserved from local edit)
-      await supabase.from("subtasks").delete().eq("task_id", editingTaskId);
-      if (editSubs.length > 0) {
-        await supabase.from("subtasks").insert(
-          editSubs.map((st, i) => ({
-            task_id: editingTaskId,
-            user_id: user!.id,
-            title: st.title,
-            done: st.done,
-            sort_order: i,
-          }))
-        );
-      }
-
-      // Resolve tags (chips + inline)
-      const chipIds = new Set(editTags.map((t) => t.id));
-      const resolvedTagIds: string[] = [...chipIds];
-      for (const name of hashTagNames) {
-        const existing = tags.find((t) => t.name === name);
-        if (existing) {
-          if (!chipIds.has(existing.id)) resolvedTagIds.push(existing.id);
-        } else {
-          const { data: created } = await supabase
-            .from("tags")
-            .insert({ user_id: user!.id, name, color: randomTagColor() })
-            .select("id")
-            .single();
-          if (created) resolvedTagIds.push(created.id);
-        }
-      }
-
-      // Replace task_tags: delete existing then insert
-      await supabase.from("task_tags").delete().eq("task_id", editingTaskId);
-      if (resolvedTagIds.length > 0) {
-        await supabase.from("task_tags").insert(
-          resolvedTagIds.map((tagId) => ({ task_id: editingTaskId, tag_id: tagId })),
-        );
-      }
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
-      qc.invalidateQueries({ queryKey: ["subtasks"] });
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      cancelEditingTask();
-      toast.success("Task updated");
-    },
-    onError: () => toast.error("Failed to update task"),
-  });
-
-  const toggleTask = useMutation({
-    mutationFn: async (task: Task) => {
-      const newStatus = task.status === "done" ? "todo" : "done";
-      const { error } = await supabase
-        .from("tasks")
-        .update({ status: newStatus, completed_at: newStatus === "done" ? new Date().toISOString() : null })
-        .eq("id", task.id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-    },
-  });
-
-  const deleteTask = useMutation({
-    mutationFn: async (id: string) => {
-      const { error } = await supabase.from("tasks").delete().eq("id", id);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["tasks", selectedProject?.id] });
-      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
-    },
-  });
-
-  function handleTitleChange(val: string) {
-    setNewTaskTitle(val);
-    const match = val.match(/#(\w*)$/);
-    if (match) {
-      setTagQuery(match[1].toLowerCase());
-      setShowTagSugs(true);
-    } else {
-      setShowTagSugs(false);
-      setTagQuery("");
-    }
-  }
-
-  function selectTagSuggestion(tag: TagType) {
-    setNewTaskTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
-    setShowTagSugs(false);
-    setTagQuery("");
-    if (!newTaskTags.find((t) => t.id === tag.id)) {
-      setNewTaskTags((prev) => [...prev, tag]);
-    }
-  }
-
-  async function createAndSelectTag() {
-    if (!tagQuery) return;
-    const { data: { user } } = await supabase.auth.getUser();
-    const existing = tags.find((t) => t.name === tagQuery);
-    if (existing) {
-      selectTagSuggestion(existing);
-      return;
-    }
-    const { data: created } = await supabase
-      .from("tags")
-      .insert({ user_id: user!.id, name: tagQuery, color: randomTagColor() })
-      .select()
-      .single();
-    if (created) {
-      qc.invalidateQueries({ queryKey: ["tags"] });
-      setNewTaskTitle((prev) => prev.replace(/#\w*$/, "").trimEnd());
-      setShowTagSugs(false);
-      setTagQuery("");
-      setNewTaskTags((prev) => [...prev, created as TagType]);
-    }
-  }
-
-  const todo = tasks.filter((t) => t.status === "todo");
-  const done = tasks.filter((t) => t.status === "done");
-
-  // One-tap Run: switch the active task and start a pomodoro, even if a
-  // session is already running (the old one is closed out cleanly first).
-  async function runTask(task: TaskWithTags) {
-    if (timer.status === "running" || timer.status === "paused") {
-      await timer.resetSession();
-    }
-    await timer.startSession({
-      mode: "pomodoro",
-      durationSec: settings?.focus_duration_sec ?? 25 * 60,
-      taskId: task.id,
-      projectId: task.project_id,
-    });
-    router.push("/focus");
-  }
-
-  return (
-    <div className="flex h-dvh" style={{ paddingTop: 88 }}>
-      {/* Projects sidebar */}
-      <div
-        className="w-72 shrink-0 flex flex-col py-8"
-        style={{ borderRight: "1px solid rgba(255,255,255,0.06)" }}
-      >
-        <div className="px-5 mb-6">
-          <h2 className="text-lg font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-            Projects
-          </h2>
-          <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-            Focus on what matters today.
-          </p>
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-3 space-y-1">
-          {projects.map((project) => {
-            const isActive = (selectedProject?.id ?? projects[0]?.id) === project.id;
-            const isEditing = editingProjectId === project.id;
-            return (
-              <div key={project.id} className="group relative">
-                {isEditing ? (
-                  <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
-                    style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
-                    <input
-                      autoFocus
-                      value={editingProjectName}
-                      onChange={(e) => setEditingProjectName(e.target.value)}
-                      className="flex-1 bg-transparent text-sm outline-none font-medium"
-                      style={{ color: "var(--color-on-surface)" }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && editingProjectName.trim())
-                          renameProject.mutate({ id: project.id, name: editingProjectName.trim() });
-                        if (e.key === "Escape") setEditingProjectId(null);
-                      }}
-                    />
-                    <button onClick={() => editingProjectName.trim() && renameProject.mutate({ id: project.id, name: editingProjectName.trim() })}
-                      style={{ color: "var(--color-primary)" }}>
-                      <Check size={13} />
-                    </button>
-                    <button onClick={() => setEditingProjectId(null)}
-                      style={{ color: "var(--color-on-surface-variant)" }}>
-                      <X size={13} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setSelectedProjectId(project.id)}
-                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm text-left transition-all duration-150 ${!isActive ? "nav-link-hover" : ""}`}
-                    style={{
-                      background: isActive ? "rgba(255,255,255,0.06)" : "transparent",
-                      color: isActive ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
-                      border: isActive ? "1px solid rgba(255,255,255,0.08)" : "1px solid transparent",
-                    }}
-                  >
-                    <div className="w-3 h-3 rounded-full shrink-0" style={{ background: project.color }} />
-                    <span className="flex-1 truncate font-medium">{project.name}</span>
-                    <div className="opacity-0 group-hover:opacity-100 flex items-center gap-1 shrink-0">
-                      <span
-                        role="button"
-                        onClick={(e) => { e.stopPropagation(); setEditingProjectId(project.id); setEditingProjectName(project.name); }}
-                        className="p-1 rounded transition-opacity"
-                        style={{ color: "var(--color-on-surface-variant)" }}
-                      >
-                        <Pencil size={11} />
-                      </span>
-                      <span
-                        role="button"
-                        onClick={(e) => { e.stopPropagation(); deleteProject.mutate(project.id); }}
-                        className="p-1 rounded transition-opacity"
-                        style={{ color: "var(--color-error)" }}
-                      >
-                        <Trash2 size={11} />
-                      </span>
-                    </div>
-                  </button>
-                )}
-              </div>
-            );
-          })}
-
-          <AnimatePresence>
-            {addingProject ? (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: "auto" }}
-                exit={{ opacity: 0, height: 0 }}
-                className="mt-2 p-3 rounded-xl"
-                style={{ background: "var(--color-surface-container-high)", border: "1px solid var(--color-outline-variant)" }}
-              >
-                <input
-                  autoFocus
-                  value={newProjectName}
-                  onChange={(e) => setNewProjectName(e.target.value)}
-                  placeholder="Project name"
-                  className="w-full bg-transparent text-sm outline-none mb-3"
-                  style={{ color: "var(--color-on-surface)" }}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && newProjectName.trim()) addProject.mutate();
-                    if (e.key === "Escape") setAddingProject(false);
-                  }}
-                />
-                <div className="flex gap-1.5 flex-wrap mb-3">
-                  {PROJECT_COLORS.map((c) => (
-                    <button
-                      key={c}
-                      onClick={() => setNewProjectColor(c)}
-                      className="w-5 h-5 rounded-full transition-transform"
-                      style={{
-                        background: c,
-                        transform: newProjectColor === c ? "scale(1.3)" : "scale(1)",
-                        outline: newProjectColor === c ? `2px solid ${c}` : "none",
-                        outlineOffset: "2px",
-                      }}
-                    />
-                  ))}
-                </div>
-                <div className="flex gap-2">
-                  <button
-                    onClick={() => newProjectName.trim() && addProject.mutate()}
-                    className="flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all btn-hover-primary"
-                    style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
-                  >
-                    Add
-                  </button>
-                  <button
-                    onClick={() => setAddingProject(false)}
-                    className="flex-1 py-1.5 rounded-lg text-xs transition-all btn-hover-surface"
-                    style={{ background: "var(--color-surface-variant)", color: "var(--color-on-surface-variant)" }}
-                  >
-                    Cancel
-                  </button>
-                </div>
-              </motion.div>
-            ) : (
-              <button
-                onClick={() => setAddingProject(true)}
-                className="w-full flex items-center gap-2 px-3 py-2.5 rounded-xl text-sm mt-1 transition-all nav-link-hover"
-                style={{ color: "var(--color-on-surface-variant)" }}
-              >
-                <Plus size={15} />
-                Add Project
-              </button>
-            )}
-          </AnimatePresence>
-        </div>
-      </div>
-
-      {/* Tasks pane */}
-      <div className="flex-1 overflow-y-auto p-8">
-        {selectedProject ? (
-          <>
-            {/* Project header */}
-            <div className="flex items-start justify-between mb-5">
-              <div>
-                <div className="flex items-center gap-3">
-                  <div className="w-4 h-4 rounded-full" style={{ background: selectedProject.color }} />
-                  <h1 className="text-2xl font-semibold" style={{ fontFamily: "var(--font-display)", color: "var(--color-on-surface)" }}>
-                    {selectedProject.name}
-                  </h1>
-                </div>
-                <p className="text-sm mt-1" style={{ color: "var(--color-on-surface-variant)" }}>
-                  {todo.length} open · {done.length} done
-                </p>
-              </div>
-            </div>
-
-            {/* Tags strip */}
-            <div className="mb-5">
-              {/* Delete warning */}
-              <AnimatePresence>
-                {deleteTagConfirm && (
-                  <motion.div
-                    initial={{ opacity: 0, height: 0 }}
-                    animate={{ opacity: 1, height: "auto" }}
-                    exit={{ opacity: 0, height: 0 }}
-                    className="mb-3 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm"
-                    style={{
-                      background: "color-mix(in srgb, var(--color-error) 12%, transparent)",
-                      border: "1px solid color-mix(in srgb, var(--color-error) 30%, transparent)",
-                      color: "var(--color-error)",
-                    }}
-                  >
-                    <span className="flex-1 text-xs">
-                      Deleting <strong>#{deleteTagConfirm.name}</strong> will remove it from all tasks and affects analytics. This cannot be undone.
-                    </span>
-                    <button
-                      onClick={() => deleteTag.mutate(deleteTagConfirm)}
-                      className="text-xs px-2.5 py-1 rounded-lg font-semibold shrink-0"
-                      style={{ background: "var(--color-error)", color: "#fff" }}
-                    >
-                      Delete
-                    </button>
-                    <button
-                      onClick={() => setDeleteTagConfirm(null)}
-                      className="shrink-0"
-                      style={{ color: "var(--color-on-surface-variant)" }}
-                    >
-                      <X size={14} />
-                    </button>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-
-              <div className="flex items-center gap-2 flex-wrap">
-                <Tag size={12} style={{ color: "var(--color-on-surface-variant)", opacity: 0.5 }} />
-                {tags.map((tag) => (
-                  <div
-                    key={tag.id}
-                    className="group flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                    style={{
-                      background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                      color: tag.color,
-                      border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
-                    }}
-                  >
-                    <span>#{tag.name}</span>
-                    <button
-                      onClick={() => setDeleteTagConfirm(tag)}
-                      className="opacity-0 group-hover:opacity-80 transition-opacity ml-0.5"
-                      style={{ color: tag.color }}
-                      title="Delete tag"
-                    >
-                      <X size={10} />
-                    </button>
-                  </div>
-                ))}
-
-                {/* Add tag inline */}
-                {showTagInput ? (
-                  <div className="flex items-center gap-1">
-                    <input
-                      autoFocus
-                      value={addingTagName}
-                      onChange={(e) => setAddingTagName(e.target.value.toLowerCase().replace(/[^a-z0-9_]/g, ""))}
-                      placeholder="tagname"
-                      className="bg-transparent text-xs outline-none w-20 px-2 py-0.5 rounded-full"
-                      style={{
-                        border: "1px solid var(--color-outline-variant)",
-                        color: "var(--color-on-surface)",
-                      }}
-                      onKeyDown={(e) => {
-                        if (e.key === "Enter" && addingTagName.trim()) createTag.mutate(addingTagName.trim());
-                        if (e.key === "Escape") { setShowTagInput(false); setAddingTagName(""); }
-                      }}
-                    />
-                    <button
-                      onClick={() => addingTagName.trim() && createTag.mutate(addingTagName.trim())}
-                      style={{ color: "var(--color-primary)" }}
-                    >
-                      <Check size={12} />
-                    </button>
-                    <button onClick={() => { setShowTagInput(false); setAddingTagName(""); }}
-                      style={{ color: "var(--color-on-surface-variant)" }}>
-                      <X size={12} />
-                    </button>
-                  </div>
-                ) : (
-                  <button
-                    onClick={() => setShowTagInput(true)}
-                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs transition-all"
-                    style={{
-                      color: "var(--color-on-surface-variant)",
-                      border: "1px dashed var(--color-outline-variant)",
-                    }}
-                  >
-                    <Plus size={10} />
-                    Tag
-                  </button>
-                )}
-              </div>
-            </div>
-
-            {/* Inline add task */}
-            <div className="mb-6">
-              <AnimatePresence>
-                {addingTask ? (
-                  <motion.div
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0 }}
-                    className="rounded-xl px-4 py-3 flex flex-col gap-2.5"
-                    style={{ background: "var(--color-surface-container-high)", border: "1px solid var(--color-primary)" }}
-                  >
-                    {/* Title row with tag suggestions */}
-                    <div className="relative">
-                      <div className="flex items-center gap-3">
-                        <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
-                        <input
-                          ref={titleInputRef}
-                          autoFocus
-                          value={newTaskTitle}
-                          onChange={(e) => handleTitleChange(e.target.value)}
-                          placeholder="Task title… or type #tag"
-                          className="flex-1 bg-transparent text-sm outline-none"
-                          style={{ color: "var(--color-on-surface)" }}
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter" && !showTagSugs && newTaskTitle.trim()) addTask.mutate();
-                            if (e.key === "Escape") {
-                              if (showTagSugs) { setShowTagSugs(false); }
-                              else { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskDesc(""); setNewTaskSubs([]); setNewTaskTags([]); }
-                            }
-                          }}
-                        />
-                      </div>
-
-                      {/* Tag autocomplete dropdown */}
-                      <AnimatePresence>
-                        {showTagSugs && (tagSuggestions.length > 0 || canCreateTag) && (
-                          <motion.div
-                            ref={tagSugRef}
-                            initial={{ opacity: 0, y: -4 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -4 }}
-                            className="absolute left-7 top-full mt-1 z-50 rounded-xl py-1 min-w-40"
-                            style={{
-                              background: "var(--color-surface-container-high)",
-                              border: "1px solid var(--color-outline-variant)",
-                              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-                            }}
-                          >
-                            {tagSuggestions.map((tag) => (
-                              <button
-                                key={tag.id}
-                                onMouseDown={(e) => { e.preventDefault(); selectTagSuggestion(tag); }}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
-                                style={{ color: "var(--color-on-surface)" }}
-                              >
-                                <span
-                                  className="w-2 h-2 rounded-full shrink-0"
-                                  style={{ background: tag.color }}
-                                />
-                                #{tag.name}
-                              </button>
-                            ))}
-                            {canCreateTag && (
-                              <button
-                                onMouseDown={(e) => { e.preventDefault(); createAndSelectTag(); }}
-                                className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
-                                style={{ color: "var(--color-primary)" }}
-                              >
-                                <Plus size={10} />
-                                Create #{tagQuery}
-                              </button>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
-                    {/* Selected tag chips */}
-                    {newTaskTags.length > 0 && (
-                      <div className="flex items-center gap-1.5 pl-7 flex-wrap">
-                        {newTaskTags.map((tag) => (
-                          <div
-                            key={tag.id}
-                            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
-                            style={{
-                              background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                              color: tag.color,
-                              border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
-                            }}
-                          >
-                            #{tag.name}
-                            <button onClick={() => setNewTaskTags((prev) => prev.filter((t) => t.id !== tag.id))}>
-                              <X size={9} />
-                            </button>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-
-                    {/* Description */}
-                    <div className="pl-7">
-                      <textarea
-                        value={newTaskDesc}
-                        onChange={(e) => setNewTaskDesc(e.target.value)}
-                        placeholder="Description (optional)"
-                        rows={2}
-                        className="w-full bg-transparent text-xs outline-none resize-none rounded-lg px-2 py-1.5"
-                        style={{
-                          color: "var(--color-on-surface)",
-                          border: "1px solid var(--color-outline-variant)",
-                        }}
-                      />
-                    </div>
-
-                    {/* Subtasks */}
-                    <div className="pl-7">
-                      <SubtaskListEditor subs={newTaskSubs} onChange={setNewTaskSubs} />
-                    </div>
-
-                    {/* Pomodoro picker + actions row */}
-                    <div className="flex items-center justify-between pl-7">
-                      <PomodoroRating
-                        value={newTaskPomos}
-                        onChange={setNewTaskPomos}
-                        pomoDurationSec={settings?.focus_duration_sec ?? 25 * 60}
-                        shortBreakSec={settings?.short_break_sec ?? 5 * 60}
-                      />
-                      <div className="flex items-center gap-2">
-                        <button
-                          onClick={() => newTaskTitle.trim() && addTask.mutate()}
-                          className="text-xs px-3 py-1 rounded-full font-semibold transition-all btn-hover-primary"
-                          style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
-                        >
-                          Add
-                        </button>
-                        <button
-                          onClick={() => { setAddingTask(false); setNewTaskTitle(""); setNewTaskPomos(1); setNewTaskDesc(""); setNewTaskSubs([]); setNewTaskTags([]); }}
-                          className="text-xs transition-all btn-hover-ghost px-2 py-1 rounded-lg"
-                          style={{ color: "var(--color-on-surface-variant)" }}
-                        >
-                          Cancel
-                        </button>
-                      </div>
-                    </div>
-                  </motion.div>
-                ) : (
-                  <button
-                    onClick={() => setAddingTask(true)}
-                    className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm transition-all btn-hover-surface"
-                    style={{
-                      background: "color-mix(in srgb, var(--color-surface-container) 50%, transparent)",
-                      color: "var(--color-on-surface-variant)",
-                      border: "1px dashed var(--color-outline-variant)",
-                    }}
-                  >
-                    <Plus size={16} />
-                    Add a new task…
-                  </button>
-                )}
-              </AnimatePresence>
-            </div>
-
-            {/* Todo tasks */}
-            <div className="space-y-2">
-              {todo.map((task) =>
-                editingTaskId === task.id ? (
-                  <TaskEditor
-                    key={task.id}
-                    editTitle={editTitle}
-                    editPomos={editPomos}
-                    editDesc={editDesc}
-                    editSubs={editSubs}
-                    onDescChange={setEditDesc}
-                    onSubsChange={setEditSubs}
-                    editTags={editTags}
-                    editTagQuery={editTagQuery}
-                    showEditTagSugs={showEditTagSugs}
-                    editTagSuggestions={editTagSuggestions}
-                    canCreateEditTag={canCreateEditTag}
-                    editInputRef={editInputRef}
-                    editTagSugRef={editTagSugRef}
-                    onTitleChange={handleEditTitleChange}
-                    onPomosChange={setEditPomos}
-                    onRemoveTag={(id) => setEditTags((prev) => prev.filter((t) => t.id !== id))}
-                    onSelectTagSug={selectEditTagSuggestion}
-                    onCreateAndSelectTag={createAndSelectEditTag}
-                    onSave={() => editTitle.trim() && updateTask.mutate()}
-                    onCancel={cancelEditingTask}
-                    pomoDurationSec={settings?.focus_duration_sec ?? 25 * 60}
-                    shortBreakSec={settings?.short_break_sec ?? 5 * 60}
-                  />
-                ) : (
-                  <TaskRow
-                    key={task.id}
-                    task={task}
-                    subtasks={subtasksByTask[task.id] ?? []}
-                    onToggleSubtask={(st) => toggleSubtask.mutate(st)}
-                    onToggle={() => toggleTask.mutate(task)}
-                    onDelete={() => deleteTask.mutate(task.id)}
-                    onEdit={() => startEditingTask(task)}
-                    onRun={() => runTask(task)}
-                  />
-                ),
-              )}
-            </div>
-
-            {/* Done tasks */}
-            {done.length > 0 && (
-              <div className="mt-8">
-                <p className="text-xs font-semibold uppercase tracking-wider mb-3" style={{ color: "var(--color-on-surface-variant)" }}>
-                  Completed ({done.length})
-                </p>
-                <div className="space-y-2 opacity-50">
-                  {done.map((task) => (
-                    <TaskRow
-                      key={task.id}
-                      task={task}
-                      subtasks={subtasksByTask[task.id] ?? []}
-                      onToggle={() => toggleTask.mutate(task)}
-                      onDelete={() => deleteTask.mutate(task.id)}
-                      done
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-          </>
-        ) : (
-          <div className="h-full flex flex-col items-center justify-center gap-4">
-            <FolderPlus size={40} style={{ color: "var(--color-outline)" }} />
-            <p className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-              Create a project to get started.
-            </p>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
+/* ─── One-tap Run pill ─────────────────────────────────────────── */
 function RunButton({ taskId, onRun }: { taskId: string; onRun: () => void }) {
   const currentTaskId = useTimerStore((s) => s.currentTaskId);
   const status = useTimerStore((s) => s.status);
@@ -1099,7 +43,7 @@ function RunButton({ taskId, onRun }: { taskId: string; onRun: () => void }) {
       title="Switch to this task & start the timer"
       className={`pill hover-lift shrink-0 ${live ? "grad-primary" : ""}`}
       style={{
-        padding: "7px 14px", fontSize: 12.5,
+        padding: "8px 15px", fontSize: 13,
         color: live ? "var(--color-on-primary)" : "var(--color-primary)",
         background: live ? undefined : "color-mix(in srgb, var(--color-primary) 13%, transparent)",
         border: live ? "1px solid transparent" : "1px solid color-mix(in srgb, var(--color-primary) 28%, transparent)",
@@ -1113,15 +57,17 @@ function RunButton({ taskId, onRun }: { taskId: string; onRun: () => void }) {
         </>
       ) : (
         <>
-          <Play size={12} /> Run
+          <Play size={13} /> Run
         </>
       )}
     </button>
   );
 }
 
+/* ─── Task row (prototype look) ────────────────────────────────── */
 function TaskRow({
   task,
+  project,
   subtasks = [],
   onToggleSubtask,
   onToggle,
@@ -1131,6 +77,7 @@ function TaskRow({
   done = false,
 }: {
   task: TaskWithTags;
+  project: Project;
   subtasks?: Subtask[];
   onToggleSubtask?: (st: Subtask) => void;
   onToggle: () => void;
@@ -1139,26 +86,29 @@ function TaskRow({
   onRun?: () => void;
   done?: boolean;
 }) {
-  const priority = PRIORITY_CONFIG[task.priority];
-  const [expanded, setExpanded] = useState(false);
-  const doneSubs = subtasks.filter((st) => st.done).length;
+  const [open, setOpen] = useState(false);
+  const currentTaskId = useTimerStore((s) => s.currentTaskId);
+  const isActive = currentTaskId === task.id && !done;
+  const est = Math.max(1, Math.ceil(task.estimated_pomodoros ?? 1));
+  const subsDone = subtasks.filter((s) => s.done).length;
 
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0, x: -10 }}
-      animate={{ opacity: 1, x: 0 }}
-      exit={{ opacity: 0, x: 10 }}
-      className="px-4 py-3 rounded-xl group transition-all"
+    <div
+      className="group"
       style={{
-        background: "color-mix(in srgb, var(--color-surface-container) 60%, transparent)",
-        border: "1px solid rgba(255,255,255,0.04)",
+        borderRadius: 16, overflow: "hidden",
+        border: isActive
+          ? "1px solid color-mix(in srgb, var(--color-primary) 32%, transparent)"
+          : "1px solid rgba(255,255,255,0.06)",
+        background: isActive
+          ? "color-mix(in srgb, var(--color-primary) 7%, transparent)"
+          : "rgba(255,255,255,0.03)",
+        opacity: done ? 0.55 : 1,
       }}
-      onMouseEnter={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)")}
-      onMouseLeave={(e) => (e.currentTarget.style.borderColor = "rgba(255,255,255,0.04)")}
     >
-      <div className="flex items-center gap-3">
-        <button onClick={onToggle} className="shrink-0 transition-all">
+      <div className="flex items-center" style={{ gap: 14, padding: "13px 15px" }}>
+        {/* done toggle */}
+        <button onClick={onToggle} className="shrink-0" title={done ? "Mark as to-do" : "Mark done"}>
           {done ? (
             <CheckCircle2 size={18} style={{ color: "var(--color-secondary)" }} />
           ) : (
@@ -1166,118 +116,120 @@ function TaskRow({
           )}
         </button>
 
-        <div className="flex-1 min-w-0">
-          <span
-            className="text-sm truncate block"
+        {/* icon tile + title + meta */}
+        <button
+          onClick={() => subtasks.length && setOpen((v) => !v)}
+          className="flex items-center text-left flex-1 min-w-0"
+          style={{ gap: 13, cursor: subtasks.length ? "pointer" : "default" }}
+        >
+          <div
+            className="shrink-0 flex items-center justify-center"
             style={{
-              color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
-              textDecoration: done ? "line-through" : "none",
+              width: 38, height: 38, borderRadius: 11,
+              background: `color-mix(in srgb, ${project.color} 16%, transparent)`,
             }}
           >
-            {task.title}
-          </span>
-          {task.notes && (
-            <span
-              className="text-[11px] truncate block mt-0.5"
-              style={{ color: "var(--color-on-surface-variant)", opacity: 0.75 }}
+            <Target size={18} style={{ color: project.color }} />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p
+              className="truncate"
+              style={{
+                fontSize: 14.5, fontWeight: 600,
+                color: done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+                textDecoration: done ? "line-through" : "none",
+              }}
             >
-              {task.notes}
-            </span>
-          )}
-          {task.tags && task.tags.length > 0 && (
-            <div className="flex items-center gap-1 mt-1 flex-wrap">
-              {task.tags.map((tag) => (
+              {task.title}
+            </p>
+            <div className="flex items-center flex-wrap" style={{ gap: 9, marginTop: 4 }}>
+              <span className="tabular-nums" style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.8 }}>
+                {task.completed_pomodoros ?? 0}/{est} sessions
+              </span>
+              {subtasks.length > 0 && (
+                <span className="tabular-nums" style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.8 }}>
+                  · {subsDone}/{subtasks.length} subtasks
+                </span>
+              )}
+              {task.notes && (
+                <span className="truncate" style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.6, maxWidth: 200 }}>
+                  · {task.notes}
+                </span>
+              )}
+              {task.tags?.map((tag) => (
                 <span
                   key={tag.id}
-                  className="px-1.5 py-0.5 rounded-full text-[10px] font-medium leading-none"
                   style={{
-                    background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                    fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
                     color: tag.color,
+                    background: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
                   }}
                 >
                   #{tag.name}
                 </span>
               ))}
             </div>
-          )}
-        </div>
+          </div>
+        </button>
 
-        {/* Subtask progress chip */}
+        {/* session dots */}
+        {!done && (
+          <div className="hidden sm:flex shrink-0" style={{ gap: 4 }}>
+            {Array.from({ length: Math.min(est, 6) }).map((_, i) => (
+              <span
+                key={i}
+                className={i < (task.completed_pomodoros ?? 0) ? "grad-primary" : ""}
+                style={{
+                  width: 7, height: 7, borderRadius: 99,
+                  background: i < (task.completed_pomodoros ?? 0) ? undefined : "rgba(255,255,255,0.13)",
+                }}
+              />
+            ))}
+          </div>
+        )}
+
+        {!done && onRun && <RunButton taskId={task.id} onRun={onRun} />}
+
         {subtasks.length > 0 && (
-          <button
-            onClick={() => setExpanded((v) => !v)}
-            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold shrink-0 transition-all"
-            style={{
-              background: doneSubs === subtasks.length
-                ? "color-mix(in srgb, var(--color-secondary) 15%, transparent)"
-                : "rgba(255,255,255,0.06)",
-              color: doneSubs === subtasks.length
-                ? "var(--color-secondary)"
-                : "var(--color-on-surface-variant)",
-            }}
-            title="Show subtasks"
-          >
-            <ListChecks size={10} />
-            {doneSubs}/{subtasks.length}
-            <ChevronDown size={10} className={`transition-transform ${expanded ? "rotate-180" : ""}`} />
+          <button className="icon-btn shrink-0" onClick={() => setOpen((v) => !v)} style={{ width: 30, height: 30 }}>
+            <ChevronDown size={15} style={{ transform: open ? "none" : "rotate(-90deg)", transition: "transform .2s" }} />
           </button>
         )}
 
-        {/* Priority dot */}
-        <div className="w-2 h-2 rounded-full shrink-0 opacity-70" style={{ background: priority.color }} title={priority.label} />
-
-        {/* Pomodoro pips */}
-        {(task.estimated_pomodoros ?? 0) > 0 && (
-          <PomodoroMiniPips
-            estimated={task.estimated_pomodoros ?? 1}
-            completed={task.completed_pomodoros ?? 0}
-          />
-        )}
-
-        {/* One-tap Run */}
-        {!done && onRun && <RunButton taskId={task.id} onRun={onRun} />}
-
-        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+        {/* hover actions */}
+        <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
           {onEdit && (
-            <button
-              onClick={onEdit}
-              title="Edit task"
-              style={{ color: "var(--color-on-surface-variant)" }}
-            >
+            <button onClick={onEdit} title="Edit task" className="icon-btn" style={{ width: 26, height: 26 }}>
               <Pencil size={13} />
             </button>
           )}
-          <button
-            onClick={onDelete}
-            title="Delete task"
-            style={{ color: "var(--color-error)" }}
-          >
+          <button onClick={onDelete} title="Delete task" className="icon-btn" style={{ width: 26, height: 26, color: "var(--color-error)" }}>
             <Trash2 size={14} />
           </button>
         </div>
       </div>
 
-      {/* Expanded subtask checklist */}
-      {expanded && subtasks.length > 0 && (
-        <div className="mt-2 ml-8 space-y-0.5">
+      {/* expanded subtasks */}
+      {open && subtasks.length > 0 && (
+        <div className="flex flex-col" style={{ padding: "2px 15px 13px 80px", gap: 1 }}>
           {subtasks.map((st) => (
             <button
               key={st.id}
               onClick={() => onToggleSubtask?.(st)}
               disabled={!onToggleSubtask}
-              className="w-full flex items-center gap-2 px-2 py-1 rounded-lg text-left transition-colors hover:bg-white/5"
+              className="flex items-center text-left rounded-lg transition-colors hover:bg-white/5"
+              style={{ gap: 10, padding: "6px 8px" }}
             >
               {st.done ? (
-                <CheckCircle2 size={13} className="shrink-0" style={{ color: "var(--color-secondary)" }} />
+                <CheckCircle2 size={15} className="shrink-0" style={{ color: "var(--color-primary)" }} />
               ) : (
-                <Circle size={13} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />
+                <Circle size={15} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />
               )}
               <span
-                className="text-xs truncate"
                 style={{
+                  fontSize: 13,
                   color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
                   textDecoration: st.done ? "line-through" : "none",
-                  opacity: st.done ? 0.6 : 1,
                 }}
               >
                 {st.title}
@@ -1286,10 +238,11 @@ function TaskRow({
           ))}
         </div>
       )}
-    </motion.div>
+    </div>
   );
 }
 
+/* ─── Subtask list editor (add/edit forms) ─────────────────────── */
 function SubtaskListEditor({
   subs,
   onChange,
@@ -1360,87 +313,121 @@ function SubtaskListEditor({
   );
 }
 
-function TaskEditor({
-  editTitle,
-  editPomos,
-  editDesc,
-  editSubs,
-  onDescChange,
-  onSubsChange,
-  editTags,
-  editTagQuery,
-  showEditTagSugs,
-  editTagSuggestions,
-  canCreateEditTag,
-  editInputRef,
-  editTagSugRef,
-  onTitleChange,
-  onPomosChange,
-  onRemoveTag,
-  onSelectTagSug,
-  onCreateAndSelectTag,
-  onSave,
+/* ─── Inline task form (used for add + edit) ───────────────────── */
+interface TaskFormState {
+  title: string;
+  desc: string;
+  pomos: number;
+  subs: { title: string; done: boolean }[];
+  chips: TagType[];
+}
+
+function TaskForm({
+  state,
+  setState,
+  tags,
+  settings,
+  submitLabel,
+  onSubmit,
   onCancel,
-  pomoDurationSec,
-  shortBreakSec,
+  onCreateTag,
 }: {
-  editTitle: string;
-  editPomos: number;
-  editDesc: string;
-  editSubs: { title: string; done: boolean }[];
-  onDescChange: (val: string) => void;
-  onSubsChange: (subs: { title: string; done: boolean }[]) => void;
-  editTags: TagType[];
-  editTagQuery: string;
-  showEditTagSugs: boolean;
-  editTagSuggestions: TagType[];
-  canCreateEditTag: boolean;
-  editInputRef: React.RefObject<HTMLInputElement | null>;
-  editTagSugRef: React.RefObject<HTMLDivElement | null>;
-  onTitleChange: (val: string) => void;
-  onPomosChange: (n: number) => void;
-  onRemoveTag: (id: string) => void;
-  onSelectTagSug: (tag: TagType) => void;
-  onCreateAndSelectTag: () => void;
-  onSave: () => void;
+  state: TaskFormState;
+  setState: (s: TaskFormState) => void;
+  tags: TagType[];
+  settings: UserSettings | null | undefined;
+  submitLabel: string;
+  onSubmit: () => void;
   onCancel: () => void;
-  pomoDurationSec: number;
-  shortBreakSec: number;
+  onCreateTag: (name: string) => Promise<TagType | null>;
 }) {
+  const [tagQuery, setTagQuery] = useState("");
+  const [showSugs, setShowSugs] = useState(false);
+  const sugRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    function onDown(e: MouseEvent) {
+      if (sugRef.current && !sugRef.current.contains(e.target as Node) && inputRef.current !== e.target) {
+        setShowSugs(false);
+      }
+    }
+    document.addEventListener("mousedown", onDown);
+    return () => document.removeEventListener("mousedown", onDown);
+  }, []);
+
+  const suggestions = tags.filter(
+    (t) => t.name.startsWith(tagQuery) && !state.chips.find((c) => c.id === t.id),
+  );
+  const canCreate =
+    tagQuery.length > 0 &&
+    !tags.find((t) => t.name === tagQuery) &&
+    !state.chips.find((t) => t.name === tagQuery);
+
+  function handleTitleChange(val: string) {
+    const match = val.match(/#(\w*)$/);
+    if (match) {
+      setTagQuery(match[1].toLowerCase());
+      setShowSugs(true);
+    } else {
+      setShowSugs(false);
+      setTagQuery("");
+    }
+    setState({ ...state, title: val });
+  }
+
+  function selectSuggestion(tag: TagType) {
+    setShowSugs(false);
+    setTagQuery("");
+    setState({
+      ...state,
+      title: state.title.replace(/#\w*$/, "").trimEnd(),
+      chips: state.chips.find((c) => c.id === tag.id) ? state.chips : [...state.chips, tag],
+    });
+  }
+
+  async function createAndSelect() {
+    if (!tagQuery) return;
+    const existing = tags.find((t) => t.name === tagQuery);
+    if (existing) { selectSuggestion(existing); return; }
+    const created = await onCreateTag(tagQuery);
+    if (created) selectSuggestion(created);
+  }
+
   return (
-    <motion.div
-      layout
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-      className="rounded-xl px-4 py-3 flex flex-col gap-2.5"
-      style={{ background: "var(--color-surface-container-high)", border: "1px solid var(--color-primary)" }}
+    <div
+      className="rounded-2xl flex flex-col"
+      style={{
+        gap: 10, padding: "13px 15px",
+        background: "rgba(255,255,255,0.04)",
+        border: "1px solid color-mix(in srgb, var(--color-primary) 40%, transparent)",
+      }}
     >
       <div className="relative">
         <div className="flex items-center gap-3">
           <Circle size={18} style={{ color: "var(--color-on-surface-variant)" }} />
           <input
-            ref={editInputRef}
+            ref={inputRef}
             autoFocus
-            value={editTitle}
-            onChange={(e) => onTitleChange(e.target.value)}
+            value={state.title}
+            onChange={(e) => handleTitleChange(e.target.value)}
             placeholder="Task title… or type #tag"
             className="flex-1 bg-transparent text-sm outline-none"
             style={{ color: "var(--color-on-surface)" }}
             onKeyDown={(e) => {
-              if (e.key === "Enter" && !showEditTagSugs && editTitle.trim()) onSave();
+              if (e.key === "Enter" && !showSugs && state.title.trim()) onSubmit();
               if (e.key === "Escape") {
-                if (showEditTagSugs) return;
-                onCancel();
+                if (showSugs) setShowSugs(false);
+                else onCancel();
               }
             }}
           />
         </div>
 
         <AnimatePresence>
-          {showEditTagSugs && (editTagSuggestions.length > 0 || canCreateEditTag) && (
+          {showSugs && (suggestions.length > 0 || canCreate) && (
             <motion.div
-              ref={editTagSugRef}
+              ref={sugRef}
               initial={{ opacity: 0, y: -4 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -4 }}
@@ -1451,25 +438,25 @@ function TaskEditor({
                 boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
               }}
             >
-              {editTagSuggestions.map((tag) => (
+              {suggestions.map((tag) => (
                 <button
                   key={tag.id}
-                  onMouseDown={(e) => { e.preventDefault(); onSelectTagSug(tag); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                  onMouseDown={(e) => { e.preventDefault(); selectSuggestion(tag); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-white/5"
                   style={{ color: "var(--color-on-surface)" }}
                 >
                   <span className="w-2 h-2 rounded-full shrink-0" style={{ background: tag.color }} />
                   #{tag.name}
                 </button>
               ))}
-              {canCreateEditTag && (
+              {canCreate && (
                 <button
-                  onMouseDown={(e) => { e.preventDefault(); onCreateAndSelectTag(); }}
-                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors"
+                  onMouseDown={(e) => { e.preventDefault(); createAndSelect(); }}
+                  className="w-full flex items-center gap-2 px-3 py-1.5 text-xs text-left transition-colors hover:bg-white/5"
                   style={{ color: "var(--color-primary)" }}
                 >
                   <Plus size={10} />
-                  Create #{editTagQuery}
+                  Create #{tagQuery}
                 </button>
               )}
             </motion.div>
@@ -1477,9 +464,9 @@ function TaskEditor({
         </AnimatePresence>
       </div>
 
-      {editTags.length > 0 && (
+      {state.chips.length > 0 && (
         <div className="flex items-center gap-1.5 pl-7 flex-wrap">
-          {editTags.map((tag) => (
+          {state.chips.map((tag) => (
             <div
               key={tag.id}
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
@@ -1490,7 +477,7 @@ function TaskEditor({
               }}
             >
               #{tag.name}
-              <button onClick={() => onRemoveTag(tag.id)}>
+              <button onClick={() => setState({ ...state, chips: state.chips.filter((t) => t.id !== tag.id) })}>
                 <X size={9} />
               </button>
             </div>
@@ -1498,40 +485,35 @@ function TaskEditor({
         </div>
       )}
 
-      {/* Description */}
       <div className="pl-7">
         <textarea
-          value={editDesc}
-          onChange={(e) => onDescChange(e.target.value)}
+          value={state.desc}
+          onChange={(e) => setState({ ...state, desc: e.target.value })}
           placeholder="Description (optional)"
           rows={2}
           className="w-full bg-transparent text-xs outline-none resize-none rounded-lg px-2 py-1.5"
-          style={{
-            color: "var(--color-on-surface)",
-            border: "1px solid var(--color-outline-variant)",
-          }}
+          style={{ color: "var(--color-on-surface)", border: HAIRLINE }}
         />
       </div>
 
-      {/* Subtasks */}
       <div className="pl-7">
-        <SubtaskListEditor subs={editSubs} onChange={onSubsChange} />
+        <SubtaskListEditor subs={state.subs} onChange={(subs) => setState({ ...state, subs })} />
       </div>
 
       <div className="flex items-center justify-between pl-7">
         <PomodoroRating
-          value={editPomos}
-          onChange={onPomosChange}
-          pomoDurationSec={pomoDurationSec}
-          shortBreakSec={shortBreakSec}
+          value={state.pomos}
+          onChange={(pomos) => setState({ ...state, pomos })}
+          pomoDurationSec={settings?.focus_duration_sec ?? 25 * 60}
+          shortBreakSec={settings?.short_break_sec ?? 5 * 60}
         />
         <div className="flex items-center gap-2">
           <button
-            onClick={onSave}
-            className="text-xs px-3 py-1 rounded-full font-semibold transition-all btn-hover-primary"
-            style={{ background: "var(--color-primary-container)", color: "var(--color-on-primary-container)" }}
+            onClick={() => state.title.trim() && onSubmit()}
+            className="pill grad-primary text-xs px-4 py-1.5 font-semibold transition-all btn-hover-primary"
+            style={{ color: "var(--color-on-primary)" }}
           >
-            Save
+            {submitLabel}
           </button>
           <button
             onClick={onCancel}
@@ -1542,6 +524,670 @@ function TaskEditor({
           </button>
         </div>
       </div>
-    </motion.div>
+    </div>
+  );
+}
+
+const EMPTY_FORM: TaskFormState = { title: "", desc: "", pomos: 1, subs: [], chips: [] };
+
+/* ─── Project card ─────────────────────────────────────────────── */
+function ProjectCard({
+  project,
+  tags,
+  settings,
+  onRun,
+  onCreateTag,
+}: {
+  project: Project;
+  tags: TagType[];
+  settings: UserSettings | null | undefined;
+  onRun: (task: TaskWithTags) => void;
+  onCreateTag: (name: string) => Promise<TagType | null>;
+}) {
+  const supabase = createClient();
+  const qc = useQueryClient();
+
+  const [adding, setAdding] = useState(false);
+  const [addForm, setAddForm] = useState<TaskFormState>(EMPTY_FORM);
+  const [editingTaskId, setEditingTaskId] = useState<string | null>(null);
+  const [editForm, setEditForm] = useState<TaskFormState>(EMPTY_FORM);
+  const [renaming, setRenaming] = useState(false);
+  const [renameValue, setRenameValue] = useState(project.name);
+  const [showDone, setShowDone] = useState(false);
+
+  const { data: tasks = [] } = useQuery<TaskWithTags[]>({
+    queryKey: ["tasks", project.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("tasks")
+        .select("*, task_tags(tag_id, tags(id, name, color))")
+        .eq("project_id", project.id)
+        .order("sort_order");
+      if (error) throw error;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      return (data ?? []).map((t: any) => ({
+        ...t,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+      })) as TaskWithTags[];
+    },
+  });
+
+  const taskIds = tasks.map((t) => t.id);
+  const { data: subtasksByTask = {} } = useQuery<Record<string, Subtask[]>>({
+    queryKey: ["subtasks-by-task", project.id, taskIds.join(",")],
+    enabled: taskIds.length > 0,
+    queryFn: async () => {
+      const { data } = await supabase
+        .from("subtasks")
+        .select("*")
+        .in("task_id", taskIds)
+        .order("sort_order");
+      const grouped: Record<string, Subtask[]> = {};
+      for (const st of (data ?? []) as Subtask[]) {
+        (grouped[st.task_id] ??= []).push(st);
+      }
+      return grouped;
+    },
+  });
+
+  function invalidate() {
+    qc.invalidateQueries({ queryKey: ["tasks", project.id] });
+    qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+    qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
+    qc.invalidateQueries({ queryKey: ["subtasks"] });
+    qc.invalidateQueries({ queryKey: ["tags"] });
+  }
+
+  /** Resolve inline #tags + chips into tag ids, creating new tags as needed. */
+  async function resolveTags(form: TaskFormState, userId: string) {
+    const hashTagNames = (form.title.match(/#(\w+)/g) ?? []).map((m) => m.slice(1).toLowerCase());
+    const cleanTitle = form.title.replace(/#\w+/g, "").trim() || form.title.trim();
+    const chipIds = new Set(form.chips.map((t) => t.id));
+    const resolved: string[] = [...chipIds];
+    for (const name of hashTagNames) {
+      const existing = tags.find((t) => t.name === name);
+      if (existing) {
+        if (!chipIds.has(existing.id)) resolved.push(existing.id);
+      } else {
+        const { data: created } = await supabase
+          .from("tags")
+          .insert({ user_id: userId, name, color: randomTagColor() })
+          .select("id")
+          .single();
+        if (created) resolved.push(created.id);
+      }
+    }
+    return { cleanTitle, tagIds: resolved };
+  }
+
+  const addTask = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { cleanTitle, tagIds } = await resolveTags(addForm, user!.id);
+
+      const { data: task, error } = await supabase
+        .from("tasks")
+        .insert({
+          title: cleanTitle,
+          notes: addForm.desc.trim() || null,
+          project_id: project.id,
+          user_id: user!.id,
+          sort_order: tasks.length,
+          estimated_pomodoros: addForm.pomos,
+        })
+        .select("id")
+        .single();
+      if (error) throw error;
+
+      if (addForm.subs.length > 0) {
+        await supabase.from("subtasks").insert(
+          addForm.subs.map((st, i) => ({
+            task_id: task.id, user_id: user!.id, title: st.title, done: st.done, sort_order: i,
+          }))
+        );
+      }
+      if (tagIds.length > 0) {
+        await supabase.from("task_tags").insert(tagIds.map((tagId) => ({ task_id: task.id, tag_id: tagId })));
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      setAddForm(EMPTY_FORM);
+      setAdding(false);
+    },
+    onError: () => toast.error("Failed to add task"),
+  });
+
+  const updateTask = useMutation({
+    mutationFn: async () => {
+      if (!editingTaskId) return;
+      const { data: { user } } = await supabase.auth.getUser();
+      const { cleanTitle, tagIds } = await resolveTags(editForm, user!.id);
+
+      const { error } = await supabase
+        .from("tasks")
+        .update({ title: cleanTitle, notes: editForm.desc.trim() || null, estimated_pomodoros: editForm.pomos })
+        .eq("id", editingTaskId);
+      if (error) throw error;
+
+      await supabase.from("subtasks").delete().eq("task_id", editingTaskId);
+      if (editForm.subs.length > 0) {
+        await supabase.from("subtasks").insert(
+          editForm.subs.map((st, i) => ({
+            task_id: editingTaskId, user_id: user!.id, title: st.title, done: st.done, sort_order: i,
+          }))
+        );
+      }
+
+      await supabase.from("task_tags").delete().eq("task_id", editingTaskId);
+      if (tagIds.length > 0) {
+        await supabase.from("task_tags").insert(tagIds.map((tagId) => ({ task_id: editingTaskId, tag_id: tagId })));
+      }
+    },
+    onSuccess: () => {
+      invalidate();
+      setEditingTaskId(null);
+      setEditForm(EMPTY_FORM);
+      toast.success("Task updated");
+    },
+    onError: () => toast.error("Failed to update task"),
+  });
+
+  const toggleTask = useMutation({
+    mutationFn: async (task: Task) => {
+      const newStatus = task.status === "done" ? "todo" : "done";
+      const { error } = await supabase
+        .from("tasks")
+        .update({ status: newStatus, completed_at: newStatus === "done" ? new Date().toISOString() : null })
+        .eq("id", task.id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const deleteTask = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from("tasks").delete().eq("id", id);
+      if (error) throw error;
+    },
+    onSuccess: invalidate,
+  });
+
+  const toggleSubtask = useMutation({
+    mutationFn: async (st: Subtask) => {
+      const { error } = await supabase.from("subtasks").update({ done: !st.done }).eq("id", st.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["subtasks-by-task"] });
+      qc.invalidateQueries({ queryKey: ["subtasks"] });
+    },
+  });
+
+  const renameProject = useMutation({
+    mutationFn: async (name: string) => {
+      const { error } = await supabase.from("projects").update({ name }).eq("id", project.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      setRenaming(false);
+    },
+    onError: () => toast.error("Failed to rename project"),
+  });
+
+  const deleteProject = useMutation({
+    mutationFn: async () => {
+      await supabase.from("tasks").delete().eq("project_id", project.id);
+      const { error } = await supabase.from("projects").delete().eq("id", project.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+      toast.success("Project deleted");
+    },
+    onError: () => toast.error("Failed to delete project"),
+  });
+
+  function startEditing(task: TaskWithTags) {
+    setEditingTaskId(task.id);
+    setEditForm({
+      title: task.title,
+      desc: task.notes ?? "",
+      pomos: task.estimated_pomodoros ?? 1,
+      subs: (subtasksByTask[task.id] ?? []).map((st) => ({ title: st.title, done: st.done })),
+      chips: task.tags ?? [],
+    });
+  }
+
+  const todo = tasks.filter((t) => t.status === "todo");
+  const done = tasks.filter((t) => t.status === "done");
+
+  return (
+    <div className="glass group/card" style={{ borderRadius: 22, padding: 18 }}>
+      {/* Header */}
+      <div className="flex items-center" style={{ gap: 11, marginBottom: 14 }}>
+        <span
+          className="shrink-0"
+          style={{ width: 11, height: 11, borderRadius: 99, background: project.color, boxShadow: `0 0 12px ${project.color}` }}
+        />
+        {renaming ? (
+          <>
+            <input
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              className="bg-transparent outline-none flex-1"
+              style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "var(--color-on-surface)" }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && renameValue.trim()) renameProject.mutate(renameValue.trim());
+                if (e.key === "Escape") setRenaming(false);
+              }}
+            />
+            <button onClick={() => renameValue.trim() && renameProject.mutate(renameValue.trim())} style={{ color: "var(--color-primary)" }}>
+              <Check size={15} />
+            </button>
+            <button onClick={() => setRenaming(false)} style={{ color: "var(--color-on-surface-variant)" }}>
+              <X size={15} />
+            </button>
+          </>
+        ) : (
+          <>
+            <h2 style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "var(--color-on-surface)" }}>
+              {project.name}
+            </h2>
+            <span className="tabular-nums" style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.7 }}>
+              {todo.length} {todo.length === 1 ? "task" : "tasks"}
+            </span>
+            <div className="flex-1" />
+            <div className="flex items-center gap-1 opacity-0 group-hover/card:opacity-100 transition-opacity">
+              <button
+                onClick={() => { setRenaming(true); setRenameValue(project.name); }}
+                className="icon-btn" style={{ width: 28, height: 28 }} title="Rename project"
+              >
+                <Pencil size={13} />
+              </button>
+              <button
+                onClick={() => deleteProject.mutate()}
+                className="icon-btn" style={{ width: 28, height: 28, color: "var(--color-error)" }} title="Delete project"
+              >
+                <Trash2 size={14} />
+              </button>
+            </div>
+          </>
+        )}
+      </div>
+
+      {/* Tasks */}
+      <div className="flex flex-col" style={{ gap: 9 }}>
+        {todo.map((task) =>
+          editingTaskId === task.id ? (
+            <TaskForm
+              key={task.id}
+              state={editForm}
+              setState={setEditForm}
+              tags={tags}
+              settings={settings}
+              submitLabel="Save"
+              onSubmit={() => updateTask.mutate()}
+              onCancel={() => { setEditingTaskId(null); setEditForm(EMPTY_FORM); }}
+              onCreateTag={onCreateTag}
+            />
+          ) : (
+            <TaskRow
+              key={task.id}
+              task={task}
+              project={project}
+              subtasks={subtasksByTask[task.id] ?? []}
+              onToggleSubtask={(st) => toggleSubtask.mutate(st)}
+              onToggle={() => toggleTask.mutate(task)}
+              onDelete={() => deleteTask.mutate(task.id)}
+              onEdit={() => startEditing(task)}
+              onRun={() => onRun(task)}
+            />
+          ),
+        )}
+
+        {/* Add task */}
+        {adding ? (
+          <TaskForm
+            state={addForm}
+            setState={setAddForm}
+            tags={tags}
+            settings={settings}
+            submitLabel="Add"
+            onSubmit={() => addTask.mutate()}
+            onCancel={() => { setAdding(false); setAddForm(EMPTY_FORM); }}
+            onCreateTag={onCreateTag}
+          />
+        ) : (
+          <button
+            onClick={() => setAdding(true)}
+            className="flex items-center rounded-2xl transition-all btn-hover-surface"
+            style={{
+              gap: 12, padding: "11px 15px", fontSize: 13,
+              color: "var(--color-on-surface-variant)",
+              border: "1px dashed rgba(255,255,255,0.14)",
+              background: "transparent",
+            }}
+          >
+            <Plus size={15} />
+            Add a task…
+          </button>
+        )}
+
+        {/* Completed */}
+        {done.length > 0 && (
+          <div style={{ marginTop: 4 }}>
+            <button
+              onClick={() => setShowDone((v) => !v)}
+              className="flex items-center"
+              style={{ gap: 7, fontSize: 11, fontWeight: 700, letterSpacing: ".05em", textTransform: "uppercase", color: "var(--color-on-surface-variant)", opacity: 0.7, padding: "4px 2px" }}
+            >
+              Completed ({done.length})
+              <ChevronDown size={12} style={{ transform: showDone ? "none" : "rotate(-90deg)", transition: "transform .2s" }} />
+            </button>
+            {showDone && (
+              <div className="flex flex-col" style={{ gap: 9, marginTop: 8 }}>
+                {done.map((task) => (
+                  <TaskRow
+                    key={task.id}
+                    task={task}
+                    project={project}
+                    subtasks={subtasksByTask[task.id] ?? []}
+                    onToggle={() => toggleTask.mutate(task)}
+                    onDelete={() => deleteTask.mutate(task.id)}
+                    done
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/* ─── Page ─────────────────────────────────────────────────────── */
+export default function ProjectsPage() {
+  const supabase = createClient();
+  const qc = useQueryClient();
+  const router = useRouter();
+  const timer = useTimer();
+
+  const [addingProject, setAddingProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
+  const [deleteTagConfirm, setDeleteTagConfirm] = useState<TagType | null>(null);
+
+  const { data: settings } = useQuery<UserSettings | null>({
+    queryKey: ["settings"],
+    queryFn: async () => {
+      const { data } = await supabase.from("user_settings").select("*").maybeSingle();
+      return data as UserSettings | null;
+    },
+    staleTime: 5 * 60_000,
+  });
+
+  const { data: projects = [] } = useQuery<Project[]>({
+    queryKey: ["projects"],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("projects")
+        .select("*")
+        .is("archived_at", null)
+        .order("sort_order");
+      if (error) throw error;
+      return data ?? [];
+    },
+  });
+
+  const { data: tags = [] } = useQuery<TagType[]>({
+    queryKey: ["tags"],
+    queryFn: async () => {
+      const { data } = await supabase.from("tags").select("*").order("name");
+      return data ?? [];
+    },
+  });
+
+  const addProject = useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { data, error } = await supabase
+        .from("projects")
+        .insert({ name: newProjectName, color: newProjectColor, user_id: user!.id, sort_order: projects.length })
+        .select()
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: (p) => {
+      qc.invalidateQueries({ queryKey: ["projects"] });
+      setNewProjectName("");
+      setAddingProject(false);
+      toast.success(`Project "${p.name}" created`);
+    },
+    onError: () => toast.error("Failed to create project"),
+  });
+
+  const deleteTag = useMutation({
+    mutationFn: async (tag: TagType) => {
+      await supabase.from("task_tags").delete().eq("tag_id", tag.id);
+      const { error } = await supabase.from("tags").delete().eq("id", tag.id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["tags"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      qc.invalidateQueries({ queryKey: ["analytics"] });
+      setDeleteTagConfirm(null);
+      toast.success("Tag deleted");
+    },
+    onError: () => toast.error("Failed to delete tag"),
+  });
+
+  async function createTag(name: string): Promise<TagType | null> {
+    const { data: { user } } = await supabase.auth.getUser();
+    const { data: created, error } = await supabase
+      .from("tags")
+      .insert({ user_id: user!.id, name: name.toLowerCase(), color: randomTagColor() })
+      .select()
+      .single();
+    if (error) { toast.error("Failed to create tag"); return null; }
+    qc.invalidateQueries({ queryKey: ["tags"] });
+    return created as TagType;
+  }
+
+  // One-tap Run: switch the active task and start a pomodoro, even if a
+  // session is already running (the old one is closed out cleanly first).
+  async function runTask(task: TaskWithTags) {
+    if (timer.status === "running" || timer.status === "paused") {
+      await timer.resetSession();
+    }
+    await timer.startSession({
+      mode: "pomodoro",
+      durationSec: settings?.focus_duration_sec ?? 25 * 60,
+      taskId: task.id,
+      projectId: task.project_id,
+    });
+    router.push("/focus");
+  }
+
+  const totalOpenHint = projects.length > 0
+    ? `Open tasks across ${projects.length} ${projects.length === 1 ? "project" : "projects"} · hit `
+    : "Create a project to get started · hit ";
+
+  return (
+    <div className="min-h-dvh flex justify-center" style={{ padding: "104px 20px 60px" }}>
+      <div className="fade-up w-full" style={{ maxWidth: 880 }}>
+        {/* Header */}
+        <div className="flex items-end justify-between flex-wrap" style={{ gap: 16, marginBottom: 22 }}>
+          <div>
+            <h1 style={{ fontFamily: "var(--font-display)", fontSize: 30, fontWeight: 800, letterSpacing: "-.02em", color: "var(--color-on-surface)" }}>
+              Projects
+            </h1>
+            <p style={{ fontSize: 14, color: "var(--color-on-surface-variant)", marginTop: 4 }}>
+              {totalOpenHint}
+              <strong style={{ color: "var(--color-primary)" }}>Run</strong> to jump straight into focus.
+            </p>
+          </div>
+          <button
+            onClick={() => setAddingProject(true)}
+            className="pill glass-soft hover-lift"
+            style={{ padding: "10px 16px", fontSize: 13.5, color: "var(--color-on-surface)" }}
+          >
+            <Plus size={16} /> New project
+          </button>
+        </div>
+
+        {/* Tag strip */}
+        {(tags.length > 0 || deleteTagConfirm) && (
+          <div style={{ marginBottom: 18 }}>
+            <AnimatePresence>
+              {deleteTagConfirm && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="mb-3 flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm"
+                  style={{
+                    background: "color-mix(in srgb, var(--color-error) 12%, transparent)",
+                    border: "1px solid color-mix(in srgb, var(--color-error) 30%, transparent)",
+                    color: "var(--color-error)",
+                  }}
+                >
+                  <span className="flex-1 text-xs">
+                    Deleting <strong>#{deleteTagConfirm.name}</strong> will remove it from all tasks and affects analytics. This cannot be undone.
+                  </span>
+                  <button
+                    onClick={() => deleteTag.mutate(deleteTagConfirm)}
+                    className="text-xs px-2.5 py-1 rounded-lg font-semibold shrink-0"
+                    style={{ background: "var(--color-error)", color: "#fff" }}
+                  >
+                    Delete
+                  </button>
+                  <button onClick={() => setDeleteTagConfirm(null)} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }}>
+                    <X size={14} />
+                  </button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <Tag size={12} style={{ color: "var(--color-on-surface-variant)", opacity: 0.5 }} />
+              {tags.map((tag) => (
+                <div
+                  key={tag.id}
+                  className="group flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
+                  style={{
+                    background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
+                    color: tag.color,
+                    border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
+                  }}
+                >
+                  <span>#{tag.name}</span>
+                  <button
+                    onClick={() => setDeleteTagConfirm(tag)}
+                    className="opacity-0 group-hover:opacity-80 transition-opacity ml-0.5"
+                    style={{ color: tag.color }}
+                    title="Delete tag"
+                  >
+                    <X size={10} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* New project form */}
+        <AnimatePresence>
+          {addingProject && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              exit={{ opacity: 0, height: 0 }}
+              className="overflow-hidden"
+              style={{ marginBottom: 18 }}
+            >
+              <div className="glass" style={{ borderRadius: 22, padding: 18 }}>
+                <input
+                  autoFocus
+                  value={newProjectName}
+                  onChange={(e) => setNewProjectName(e.target.value)}
+                  placeholder="Project name"
+                  className="w-full bg-transparent outline-none mb-4"
+                  style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 700, color: "var(--color-on-surface)" }}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && newProjectName.trim()) addProject.mutate();
+                    if (e.key === "Escape") setAddingProject(false);
+                  }}
+                />
+                <div className="flex items-center justify-between flex-wrap" style={{ gap: 12 }}>
+                  <div className="flex gap-1.5 flex-wrap">
+                    {PROJECT_COLORS.map((c) => (
+                      <button
+                        key={c}
+                        onClick={() => setNewProjectColor(c)}
+                        className="w-5 h-5 rounded-full transition-transform"
+                        style={{
+                          background: c,
+                          transform: newProjectColor === c ? "scale(1.3)" : "scale(1)",
+                          outline: newProjectColor === c ? `2px solid ${c}` : "none",
+                          outlineOffset: "2px",
+                        }}
+                      />
+                    ))}
+                  </div>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => newProjectName.trim() && addProject.mutate()}
+                      className="pill grad-primary text-xs px-4 py-1.5 font-semibold btn-hover-primary"
+                      style={{ color: "var(--color-on-primary)" }}
+                    >
+                      Add
+                    </button>
+                    <button
+                      onClick={() => setAddingProject(false)}
+                      className="text-xs btn-hover-ghost px-3 py-1.5 rounded-lg"
+                      style={{ color: "var(--color-on-surface-variant)" }}
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Project cards */}
+        {projects.length === 0 && !addingProject ? (
+          <div className="flex flex-col items-center justify-center gap-4" style={{ padding: "80px 0" }}>
+            <FolderPlus size={40} style={{ color: "var(--color-outline)" }} />
+            <p className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
+              Create a project to get started.
+            </p>
+          </div>
+        ) : (
+          <div className="flex flex-col" style={{ gap: 18 }}>
+            {projects.map((p) => (
+              <ProjectCard
+                key={p.id}
+                project={p}
+                tags={tags}
+                settings={settings}
+                onRun={runTask}
+                onCreateTag={createTag}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
   );
 }

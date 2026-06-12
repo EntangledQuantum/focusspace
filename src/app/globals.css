@@ -285,8 +285,24 @@ input[type="range"].rng.accent::-moz-range-thumb { background: var(--color-secon
 .pop     { animation: popIn 0.28s var(--ease); }
 .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
 
+/* Feature-card micro animations (landing) */
+@keyframes eqBar { 0%,100% { transform: scaleY(0.35); } 50% { transform: scaleY(1); } }
+.eq-bar { transform-origin: bottom; animation: eqBar 1.2s ease-in-out infinite; }
+@keyframes riseBar { 0%,100% { transform: scaleY(0.55); } 50% { transform: scaleY(1); } }
+.rise-bar { transform-origin: bottom; animation: riseBar 2.6s ease-in-out infinite; }
+@keyframes ringLoop { from { stroke-dashoffset: 113; } to { stroke-dashoffset: 0; } }
+.ring-loop { animation: ringLoop 4s linear infinite; }
+@keyframes blobShift {
+  0%,100% { transform: translate(0,0) scale(1); }
+  33% { transform: translate(6px,-4px) scale(1.12); }
+  66% { transform: translate(-5px,4px) scale(0.94); }
+}
+.blob-shift { animation: blobShift 7s ease-in-out infinite; }
+@keyframes floatTick { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
+.float-tick { animation: floatTick 3s ease-in-out infinite; }
+
 @media (prefers-reduced-motion: reduce) {
-  .fade-up, .pop, .pulse-dot { animation: none !important; }
+  .fade-up, .pop, .pulse-dot, .eq-bar, .rise-bar, .ring-loop, .blob-shift, .float-tick { animation: none !important; }
 }
 
 /* ─── Focus ring (buttons/links only — inputs handle their own focus) */
