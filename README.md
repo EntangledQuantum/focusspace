@@ -22,10 +22,15 @@ New migrations must be applied once (in order) in **Supabase Dashboard → SQL E
 
 ```
 supabase/migrations/0006_subtasks_and_spotify_takeover.sql   (if not applied yet)
-supabase/migrations/0007_glass_controls.sql
+supabase/migrations/0007_glass_controls.sql                  (if not applied yet)
+supabase/migrations/0008_effects.sql
 ```
 
-`0007` adds the `glass_tint` / `glass_blur` settings that drive the live glass sliders. The app runs without it, but moving the sliders won't persist until it's applied.
+`0008` adds `active_effect` / `effect_settings` for the live-effects system. The app runs without it, but choosing/customising an effect won't persist until it's applied.
+
+## Backgrounds vs. effects
+
+A **background** is what you focus over — a CSS-mesh preset (Aurora / Dusk / Mist / Noir) or your own uploaded photo. A **live effect** (Aurora glow, Rainfall, Snowfall, Starfield, Fireflies) is layered *on top* of any background and is optional (default: none). Each effect has its own Intensity / Speed / (Density) sliders. Both live under **Settings → Appearance / Live Effect**; photo blur/brightness controls only appear when an uploaded photo is the active background.
 
 ## Latest Updates
 
@@ -140,6 +145,7 @@ node scripts/setup-env.mjs
 #    supabase/migrations/0005_wallpaper_settings.sql
 #    supabase/migrations/0006_subtasks_and_spotify_takeover.sql
 #    supabase/migrations/0007_glass_controls.sql
+#    supabase/migrations/0008_effects.sql
 
 # 4. Start dev server
 npm run dev
@@ -206,6 +212,7 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 | `0005_wallpaper_settings.sql` | Wallpaper blur/brightness settings |
 | `0006_subtasks_and_spotify_takeover.sql` | Subtasks table + Spotify takeover setting |
 | `0007_glass_controls.sql` | Glass tint/blur slider settings |
+| `0008_effects.sql` | Live-effect selection + per-effect settings |
 
 ## Keyboard Shortcuts (Focus screen)
 

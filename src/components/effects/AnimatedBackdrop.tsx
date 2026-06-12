@@ -10,6 +10,10 @@ interface Props {
   interactive?: boolean;
   /** 0–1 multiplier on glow/alpha — lower = subtler colors. */
   intensity?: number;
+  /** 0.25–2 animation-rate multiplier. */
+  speed?: number;
+  /** 0.3–1.5 particle-count multiplier (ignored by aurora). */
+  density?: number;
   className?: string;
   style?: React.CSSProperties;
 }
@@ -37,8 +41,16 @@ const BLUE = "143,182,255";
  * Variants: aurora (drifting gradient blobs), rain, snow, starfield, fireflies.
  * Pauses when the tab is hidden; renders one static frame for reduced motion.
  */
-export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, className, style }: Props) {
+export function AnimatedBackdrop({
+  variant, interactive = false, intensity = 1, speed = 1, density = 1, className, style,
+}: Props) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  // intensity + speed update live (no canvas rebuild); density rebuilds particles.
+  const intensityRef = useRef(intensity);
+  const speedRef = useRef(speed);
+  useEffect(() => { intensityRef.current = intensity; }, [intensity]);
+  useEffect(() => { speedRef.current = speed; }, [speed]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -70,8 +82,10 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
     const blobs: Blob[] = [];
     const parts: Particle[] = [];
 
+    const d = Math.max(0.2, density);
     if (variant === "aurora") {
-      const palette = [PINK, PURPLE, INDIGO, PINK];
+      // One pink only (it dominates) — purple/indigo carry the rest.
+      const palette = [PINK, PURPLE, INDIGO, PURPLE];
       for (let i = 0; i < 4; i++) {
         blobs.push({
           x: rand(0.1, 0.9), y: rand(0.1, 0.9),
@@ -81,7 +95,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         });
       }
     } else if (variant === "rain") {
-      for (let i = 0; i < 110; i++) {
+      for (let i = 0; i < Math.round(110 * d); i++) {
         parts.push({
           x: Math.random(), y: Math.random(), vx: 0, vy: rand(0.55, 1.15),
           r: rand(7, 16), life: 0, maxLife: 1, hue: i % 4 === 0 ? PURPLE : BLUE,
@@ -89,7 +103,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         });
       }
     } else if (variant === "snow") {
-      for (let i = 0; i < 130; i++) {
+      for (let i = 0; i < Math.round(130 * d); i++) {
         parts.push({
           x: Math.random(), y: Math.random(), vx: rand(-0.02, 0.02), vy: rand(0.03, 0.1),
           r: rand(1, 3.2), life: 0, maxLife: 1, hue: "255,255,255",
@@ -97,7 +111,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         });
       }
     } else if (variant === "starfield") {
-      for (let i = 0; i < 160; i++) {
+      for (let i = 0; i < Math.round(160 * d); i++) {
         parts.push({
           x: Math.random(), y: Math.random(), vx: 0, vy: 0,
           r: rand(0.4, 1.7), life: 0, maxLife: 1,
@@ -106,7 +120,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         });
       }
     } else if (variant === "fireflies") {
-      for (let i = 0; i < 38; i++) {
+      for (let i = 0; i < Math.round(38 * d); i++) {
         parts.push({
           x: Math.random(), y: Math.random(), vx: rand(-0.02, 0.02), vy: rand(-0.02, 0.02),
           r: rand(1.4, 3), life: 0, maxLife: 1,
@@ -121,8 +135,11 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
     /* ── frame ──────────────────────────────────────────────────── */
     let last = performance.now();
     function frame(now: number) {
-      const dt = Math.min((now - last) / 1000, 0.05);
+      const rawDt = Math.min((now - last) / 1000, 0.05);
       last = now;
+      const sp = speedRef.current;
+      const dt = rawDt * sp;
+      const I = intensityRef.current;
       ctx!.clearRect(0, 0, W, H);
 
       pointer.x += (pointer.tx - pointer.x) * 0.03;
@@ -143,7 +160,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
           const cy = (b.y + py) * H;
           const r = b.r * Math.max(W, H) * (1 + Math.sin(b.t * 1.4) * 0.06);
           const g = ctx!.createRadialGradient(cx, cy, 0, cx, cy, r);
-          g.addColorStop(0, `rgba(${b.color},${0.34 * intensity})`);
+          g.addColorStop(0, `rgba(${b.color},${0.6 * I})`);
           g.addColorStop(1, `rgba(${b.color},0)`);
           ctx!.fillStyle = g;
           ctx!.beginPath();
@@ -159,7 +176,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
           if (p.y > 1.05) { p.y = -0.05; p.x = Math.random() * 1.1; }
           const x = p.x * W, y = p.y * H;
           const len = p.r * p.depth;
-          ctx!.strokeStyle = `rgba(${p.hue},${0.16 + p.depth * 0.22})`;
+          ctx!.strokeStyle = `rgba(${p.hue},${(0.16 + p.depth * 0.22) * I})`;
           ctx!.lineWidth = p.depth * 1.4;
           ctx!.beginPath();
           ctx!.moveTo(x, y);
@@ -174,7 +191,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
           if (p.y > 1.03) { p.y = -0.03; p.x = Math.random(); }
           if (p.x > 1.03) p.x = -0.03;
           if (p.x < -0.03) p.x = 1.03;
-          ctx!.fillStyle = `rgba(${p.hue},${0.25 + p.depth * 0.5})`;
+          ctx!.fillStyle = `rgba(${p.hue},${(0.25 + p.depth * 0.5) * I})`;
           ctx!.beginPath();
           ctx!.arc(p.x * W, p.y * H, p.r * p.depth, 0, TAU);
           ctx!.fill();
@@ -183,12 +200,12 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         for (const p of parts) {
           p.phase += dt * rand(0.6, 1.4);
           const tw = 0.35 + Math.abs(Math.sin(p.phase)) * 0.65;
-          ctx!.fillStyle = `rgba(${p.hue},${tw * p.depth})`;
+          ctx!.fillStyle = `rgba(${p.hue},${tw * p.depth * I})`;
           ctx!.beginPath();
           ctx!.arc(p.x * W, p.y * H, p.r, 0, TAU);
           ctx!.fill();
         }
-        if (!shootingStar && Math.random() < 0.003) {
+        if (!shootingStar && Math.random() < 0.003 * sp) {
           shootingStar = { x: rand(0.1, 0.8), y: rand(0.05, 0.3), vx: rand(0.4, 0.7), vy: rand(0.15, 0.3), life: 1 };
         }
         if (shootingStar) {
@@ -196,7 +213,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
           s.x += s.vx * dt; s.y += s.vy * dt; s.life -= dt * 1.4;
           const x = s.x * W, y = s.y * H;
           const grad = ctx!.createLinearGradient(x, y, x - 70, y - 28);
-          grad.addColorStop(0, `rgba(255,255,255,${Math.max(s.life, 0)})`);
+          grad.addColorStop(0, `rgba(255,255,255,${Math.max(s.life, 0) * I})`);
           grad.addColorStop(1, "rgba(255,255,255,0)");
           ctx!.strokeStyle = grad;
           ctx!.lineWidth = 1.6;
@@ -219,7 +236,7 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
           const glow = 0.25 + Math.abs(Math.sin(p.phase * 1.6)) * 0.75;
           const x = p.x * W, y = p.y * H;
           const g = ctx!.createRadialGradient(x, y, 0, x, y, p.r * 7);
-          g.addColorStop(0, `rgba(${p.hue},${glow * 0.8})`);
+          g.addColorStop(0, `rgba(${p.hue},${glow * 0.8 * I})`);
           g.addColorStop(1, `rgba(${p.hue},0)`);
           ctx!.fillStyle = g;
           ctx!.beginPath();
@@ -310,7 +327,9 @@ export function AnimatedBackdrop({ variant, interactive = false, intensity = 1, 
         window.removeEventListener("click", onClick);
       }
     };
-  }, [variant, interactive, intensity]);
+  // Canvas is transparent by default, so it composites over any background.
+  // intensity/speed live via refs; density change rebuilds the particle set.
+  }, [variant, interactive, density]);
 
   return (
     <canvas

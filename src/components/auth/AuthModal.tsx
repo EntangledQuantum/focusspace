@@ -194,14 +194,9 @@ export function AuthModal({ open, onClose, urlError }: Props) {
                 <div className="relative">
                   <div className="flex items-center" style={{ gap: 10, marginBottom: 18 }}>
                     <Image src={appIcon} alt="FocusSpace" width={34} height={34} className="rounded-xl" />
-                    <div>
-                      <p style={{ fontFamily: "var(--font-display)", fontSize: 17, fontWeight: 800, lineHeight: 1.1, color: "var(--color-on-surface)" }}>
-                        Enter your space
-                      </p>
-                      <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)" }}>
-                        One door — sign in or create an account, same way.
-                      </p>
-                    </div>
+                    <p style={{ fontFamily: "var(--font-display)", fontSize: 18, fontWeight: 800, lineHeight: 1.1, color: "var(--color-on-surface)" }}>
+                      Enter your space
+                    </p>
                   </div>
 
                   {bannerMessage && (

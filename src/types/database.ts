@@ -54,6 +54,8 @@ export type Database = {
           spotify_takeover: boolean;
           glass_tint: number;
           glass_blur: number;
+          active_effect: string | null;
+          effect_settings: Json;
         };
         Insert: {
           user_id: string;
@@ -77,6 +79,8 @@ export type Database = {
           spotify_takeover?: boolean;
           glass_tint?: number;
           glass_blur?: number;
+          active_effect?: string | null;
+          effect_settings?: Json;
         };
         Update: {
           theme?: "dark" | "light" | "system";
@@ -99,6 +103,8 @@ export type Database = {
           spotify_takeover?: boolean;
           glass_tint?: number;
           glass_blur?: number;
+          active_effect?: string | null;
+          effect_settings?: Json;
         };
         Relationships: [];
       };

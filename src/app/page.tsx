@@ -265,7 +265,7 @@ export default function LandingPage() {
 
       {/* Living background — drifts with your cursor, bursts on click */}
       <div className="wp-noir fixed inset-0 z-0">
-        <AnimatedBackdrop variant="aurora" interactive intensity={0.45} className="absolute inset-0" />
+        <AnimatedBackdrop variant="aurora" interactive intensity={0.26} className="absolute inset-0" />
         <div className="wallpaper-scrim" />
       </div>
 

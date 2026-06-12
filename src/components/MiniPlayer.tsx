@@ -2,18 +2,18 @@
 
 import { useTimer } from "@/lib/hooks/useTimer";
 import { useSpotifyContext } from "@/lib/context/SpotifyContext";
-import { Play, Pause, RotateCcw, SkipForward as SkipFwd, Music, Shuffle, SkipBack } from "lucide-react";
+import { Play, Pause, RotateCcw, SkipForward as SkipFwd, Music, SkipBack } from "lucide-react";
 
 /**
- * Compact player rendered inside a Document PiP window.
- * Shows the focus timer + controls and current Spotify track + controls.
- * Shares React state with the main app via portal, so no cross-window sync needed.
+ * Compact player rendered inside a Document PiP window (300×400).
+ * Shows the focus timer + controls and the current Spotify track + controls.
+ * Shares React state with the main app via portal — no cross-window sync needed.
  */
 export function MiniPlayer() {
   const timer = useTimer();
   const {
     state, externalState, isReady, isConnected,
-    playPause, next, previous, shuffle, setShuffle,
+    playPause, next, previous,
   } = useSpotifyContext();
 
   const track = state?.track_window?.current_track;
@@ -36,185 +36,123 @@ export function MiniPlayer() {
     }
   }
 
+  const modeLabel =
+    timer.mode === "short_break" ? "Short Break"
+      : timer.mode === "long_break" ? "Long Break"
+      : timer.mode === "custom" ? "Custom" : "Focus";
+
+  const card: React.CSSProperties = {
+    borderRadius: 16,
+    background: "color-mix(in srgb, var(--color-surface-container) 80%, transparent)",
+    border: "1px solid rgba(255,255,255,0.07)",
+  };
+  const ghostBtn: React.CSSProperties = {
+    width: 34, height: 34, borderRadius: 999, border: "none",
+    background: "rgba(255,255,255,0.06)",
+    color: "var(--color-on-surface-variant)",
+    display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
+  };
+
   return (
     <div
       style={{
-        padding: "min(18px, 3vmin)",
         height: "100dvh",
         boxSizing: "border-box",
+        padding: 14,
         display: "flex",
         flexDirection: "column",
-        gap: "min(14px, 2.5vmin)",
+        gap: 12,
         background: "var(--color-background)",
+        color: "var(--color-on-surface)",
         overflow: "hidden",
       }}
     >
-      {/* Timer block */}
-      <div
-        style={{
-          padding: 16,
-          borderRadius: 18,
-          background: "color-mix(in srgb, var(--color-surface-container) 60%, transparent)",
-          border: "1px solid rgba(255,255,255,0.06)",
-          textAlign: "center",
-        }}
-      >
-        <p style={{ fontSize: 10, letterSpacing: 2, textTransform: "uppercase", opacity: 0.5, marginBottom: 4 }}>
-          {timer.mode === "short_break" ? "Short Break"
-            : timer.mode === "long_break" ? "Long Break"
-            : timer.mode === "custom" ? "Custom" : "Focus"}
+      {/* Timer */}
+      <div style={{ ...card, padding: 16, textAlign: "center" }}>
+        <p style={{ fontSize: 9.5, letterSpacing: 2, textTransform: "uppercase", opacity: 0.5, marginBottom: 6 }}>
+          {modeLabel}
         </p>
-        <p style={{ fontSize: "clamp(28px, 16vmin, 64px)", fontFamily: "var(--font-display)", fontWeight: 600, lineHeight: 1 }}>
+        <p style={{ fontSize: 46, fontFamily: "var(--font-display)", fontWeight: 600, lineHeight: 1, fontVariantNumeric: "tabular-nums" }}>
           {timer.displayTime}
         </p>
-        <div style={{ display: "flex", justifyContent: "center", gap: 14, marginTop: 12 }}>
-          <button
-            onClick={timer.resetSession}
-            title="Reset"
-            style={{
-              width: 36, height: 36, borderRadius: 999,
-              background: "rgba(255,255,255,0.06)",
-              color: "var(--color-on-surface-variant)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
+        <div style={{ display: "flex", justifyContent: "center", gap: 12, marginTop: 14 }}>
+          <button onClick={timer.resetSession} title="Reset" style={ghostBtn}>
             <RotateCcw size={14} />
           </button>
           <button
             onClick={handlePlayPause}
             title={timer.status === "running" ? "Pause" : "Start"}
             style={{
-              width: 52, height: 52, borderRadius: 999,
-              background: "var(--color-primary)",
+              width: 48, height: 48, borderRadius: 999, border: "none", cursor: "pointer",
+              background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
               color: "var(--color-on-primary)",
-              border: "1px solid rgba(255,255,255,0.1)",
-              boxShadow: "0 6px 24px color-mix(in srgb, var(--color-primary) 30%, transparent)",
+              boxShadow: "0 6px 20px -6px color-mix(in srgb, var(--color-primary) 60%, transparent)",
               display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
             }}
           >
-            {timer.status === "running" ? <Pause size={20} /> : <Play size={20} style={{ marginLeft: 2 }} />}
+            {timer.status === "running" ? <Pause size={19} /> : <Play size={19} style={{ marginLeft: 2 }} />}
           </button>
-          <button
-            onClick={timer.skipSession}
-            title="Skip"
-            style={{
-              width: 36, height: 36, borderRadius: 999,
-              background: "rgba(255,255,255,0.06)",
-              color: "var(--color-on-surface-variant)",
-              border: "1px solid rgba(255,255,255,0.06)",
-              display: "flex", alignItems: "center", justifyContent: "center",
-              cursor: "pointer",
-            }}
-          >
+          <button onClick={timer.skipSession} title="Skip" style={ghostBtn}>
             <SkipFwd size={14} />
           </button>
         </div>
       </div>
 
-      {/* Spotify block */}
+      {/* Spotify — sized to its content, not stretched */}
       {isConnected && (
-        <div
-          style={{
-            flex: 1,
-            padding: 14,
-            borderRadius: 18,
-            background: "color-mix(in srgb, var(--color-surface-container) 60%, transparent)",
-            border: "1px solid rgba(255,255,255,0.06)",
-            display: "flex",
-            flexDirection: "column",
-            gap: 12,
-            minHeight: 0,
-          }}
-        >
+        <div style={{ ...card, padding: 12, display: "flex", flexDirection: "column", gap: 11 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
             {albumArt ? (
               // eslint-disable-next-line @next/next/no-img-element
-              <img src={albumArt} alt={trackName} style={{ width: 44, height: 44, borderRadius: 10, objectFit: "cover" }} />
+              <img src={albumArt} alt={trackName} style={{ width: 40, height: 40, borderRadius: 9, objectFit: "cover", flexShrink: 0 }} />
             ) : (
               <div style={{
-                width: 44, height: 44, borderRadius: 10,
+                width: 40, height: 40, borderRadius: 9, flexShrink: 0,
                 background: "rgba(255,255,255,0.06)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
-                <Music size={18} style={{ opacity: 0.6 }} />
+                <Music size={17} style={{ opacity: 0.6 }} />
               </div>
             )}
             <div style={{ flex: 1, minWidth: 0 }}>
-              <p style={{
-                fontSize: 12, fontWeight: 600,
-                whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-              }}>
+              <p style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {trackName ?? "Nothing playing"}
               </p>
               {trackArtists && (
-                <p style={{
-                  fontSize: 10, opacity: 0.6, marginTop: 2,
-                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis",
-                }}>
+                <p style={{ fontSize: 10.5, opacity: 0.6, marginTop: 2, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                   {trackArtists}
                 </p>
               )}
             </div>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 16 }}>
             <button
-              onClick={() => setShuffle(!shuffle)}
-              title="Shuffle"
+              onClick={previous}
+              disabled={!controlsEnabled}
+              style={{ ...ghostBtn, width: 30, height: 30, background: "transparent", opacity: controlsEnabled ? 1 : 0.3 }}
+            >
+              <SkipBack size={15} />
+            </button>
+            <button
+              onClick={playPause}
+              disabled={!controlsEnabled}
               style={{
-                width: 28, height: 28, borderRadius: 999, border: "none",
-                background: shuffle ? "rgba(29,185,84,0.18)" : "transparent",
-                color: shuffle ? "#1DB954" : "var(--color-on-surface-variant)",
-                cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
+                width: 38, height: 38, borderRadius: 999, border: "none", cursor: "pointer",
+                background: "#1DB954", color: "#000",
+                display: "flex", alignItems: "center", justifyContent: "center",
+                opacity: controlsEnabled ? 1 : 0.3,
               }}
             >
-              <Shuffle size={12} />
+              {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" style={{ marginLeft: 1 }} />}
             </button>
-            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <button
-                onClick={previous}
-                disabled={!controlsEnabled}
-                style={{
-                  width: 30, height: 30, borderRadius: 999, border: "none",
-                  background: "transparent",
-                  color: "var(--color-on-surface-variant)",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: controlsEnabled ? 1 : 0.3,
-                }}
-              >
-                <SkipBack size={15} />
-              </button>
-              <button
-                onClick={playPause}
-                disabled={!controlsEnabled}
-                style={{
-                  width: 38, height: 38, borderRadius: 999, border: "none",
-                  background: "#1DB954",
-                  color: "#000",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: controlsEnabled ? 1 : 0.3,
-                }}
-              >
-                {isPlaying ? <Pause size={15} fill="currentColor" /> : <Play size={15} fill="currentColor" style={{ marginLeft: 1 }} />}
-              </button>
-              <button
-                onClick={next}
-                disabled={!controlsEnabled}
-                style={{
-                  width: 30, height: 30, borderRadius: 999, border: "none",
-                  background: "transparent",
-                  color: "var(--color-on-surface-variant)",
-                  cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-                  opacity: controlsEnabled ? 1 : 0.3,
-                }}
-              >
-                <SkipFwd size={15} />
-              </button>
-            </div>
-            <span style={{ width: 28 }} />
+            <button
+              onClick={next}
+              disabled={!controlsEnabled}
+              style={{ ...ghostBtn, width: 30, height: 30, background: "transparent", opacity: controlsEnabled ? 1 : 0.3 }}
+            >
+              <SkipFwd size={15} />
+            </button>
           </div>
         </div>
       )}

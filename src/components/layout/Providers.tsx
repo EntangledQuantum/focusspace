@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { Toaster } from "sonner";
 import { TopNav } from "@/components/layout/TopNav";
 import { WallpaperRenderer, isBuiltinWallpaperId } from "@/components/layout/WallpaperRenderer";
+import { EffectLayer } from "@/components/layout/EffectLayer";
+import type { EffectSettings } from "@/lib/effects";
 import { SpotifyProvider } from "@/lib/context/SpotifyContext";
 import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
 import { MiniPlayer } from "@/components/MiniPlayer";
@@ -203,6 +205,10 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
           supabaseUrl={supabaseUrl}
           blur={settings?.wallpaper_blur ?? 60}
           opacity={settings?.wallpaper_opacity ?? 40}
+        />
+        <EffectLayer
+          effectId={settings?.active_effect ?? null}
+          settings={(settings?.effect_settings as Record<string, Partial<EffectSettings>> | null) ?? null}
         />
         <TopNav />
         <main className="relative z-10 h-dvh overflow-y-auto flex flex-col">

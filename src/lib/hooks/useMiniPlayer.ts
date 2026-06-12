@@ -56,7 +56,7 @@ export function useMiniPlayer() {
     const dpi = (window as any).documentPictureInPicture;
     if (!dpi) return false;
     try {
-      const pip: Window = await dpi.requestWindow({ width: 340, height: 560 });
+      const pip: Window = await dpi.requestWindow({ width: 300, height: 400 });
       cloneStyles(pip);
       pip.addEventListener("pagehide", () => setPipWindow(null));
       setPipWindow(pip);

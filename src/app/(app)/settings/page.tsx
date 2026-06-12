@@ -4,15 +4,16 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
-import { MESH_WALLPAPERS, ANIMATED_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
+import { MESH_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
 import { AnimatedBackdrop } from "@/components/effects/AnimatedBackdrop";
 import { SliderRow } from "@/components/layout/TopNav";
+import { EFFECTS, effectSettingsFor, type EffectSettings } from "@/lib/effects";
 import { TONE_OPTIONS } from "@/lib/audio/tones";
 import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut, Sparkles, Ban } from "lucide-react";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -181,6 +182,26 @@ export default function SettingsPage() {
   const storageMbUsed = Math.round((userWallpapers.length * 2.5)); // rough estimate ~2.5MB per cropped jpeg
   const storagePercent = Math.min(100, (storageMbUsed / MAX_STORAGE_MB) * 100);
 
+  // Photo blur/brightness controls only apply to an uploaded photo background
+  const activeIsPhoto = userWallpapers.some((w) => w.id === local.active_wallpaper_id);
+
+  const activeEffect = local.active_effect ?? null;
+  const storedEffectSettings = (local.effect_settings as Record<string, Partial<EffectSettings>> | null) ?? {};
+
+  // Live + debounced write for the active effect's settings
+  function updateEffect(partial: Partial<EffectSettings>) {
+    if (!activeEffect) return;
+    const current = effectSettingsFor(activeEffect, storedEffectSettings);
+    const next = { ...current, ...partial };
+    const merged = { ...storedEffectSettings, [activeEffect]: next };
+    field("effect_settings", merged as UserSettings["effect_settings"]);
+    save.mutate({ effect_settings: merged as UserSettings["effect_settings"] });
+  }
+
+  function selectEffect(id: string | null) {
+    saveField("active_effect", id);
+  }
+
   return (
     <>
       {pendingFile && (
@@ -225,12 +246,12 @@ export default function SettingsPage() {
             </div>
           </Field>
 
-          {/* Atmosphere */}
-          <div className="space-y-3">
+          {/* Background */}
+          <div className="space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 4 }}>
             <div>
-              <p className="text-sm font-medium" style={{ color: "var(--color-on-surface)" }}>Atmosphere</p>
+              <p className="text-sm font-medium" style={{ color: "var(--color-on-surface)" }}>Background</p>
               <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-                Choose a background for your focus environment.
+                A preset or your own photo. Add a live effect on top below.
               </p>
             </div>
 
@@ -264,44 +285,6 @@ export default function SettingsPage() {
                   </button>
                 );
               })}
-            </div>
-
-            {/* Animated (code-generated) wallpapers */}
-            <div>
-              <p className="text-xs font-medium mb-1.5" style={{ color: "var(--color-on-surface-variant)" }}>
-                Animated — generated live, no images
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {ANIMATED_WALLPAPERS.map((s) => {
-                  const isActive = local.active_wallpaper_id === s.id;
-                  return (
-                    <button
-                      key={s.id}
-                      onClick={() => saveField("active_wallpaper_id", s.id)}
-                      className={`relative rounded-xl overflow-hidden transition-all ${s.base}`}
-                      style={{
-                        aspectRatio: "16/9",
-                        outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
-                        outlineOffset: "2px",
-                      }}
-                    >
-                      <AnimatedBackdrop variant={s.variant} className="absolute inset-0" />
-                      <div className="absolute inset-0 flex items-end p-1.5">
-                        <span className="text-[9px] font-semibold leading-none px-1.5 py-1 rounded"
-                          style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
-                          {s.name}
-                        </span>
-                      </div>
-                      {isActive && (
-                        <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
-                          style={{ background: "var(--color-primary)" }}>
-                          <span className="text-[7px] leading-none">✓</span>
-                        </div>
-                      )}
-                    </button>
-                  );
-                })}
-              </div>
             </div>
 
             {/* User-uploaded wallpapers */}
@@ -384,15 +367,139 @@ export default function SettingsPage() {
                 Max 15 MB per file · 50 MB total
               </p>
             </div>
+
+            {/* Photo adjustments — only when an uploaded photo is the background */}
+            {activeIsPhoto && (
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12, marginTop: 4 }}>
+                <p className="text-xs font-medium mb-3" style={{ color: "var(--color-on-surface)" }}>
+                  Photo adjustments
+                </p>
+                <div className="space-y-4">
+                  <SliderRow
+                    label="Blur"
+                    display={`${local.wallpaper_blur ?? 60}%`}
+                    value={local.wallpaper_blur ?? 60}
+                    min={0} max={100} step={5}
+                    onChange={(v) => { field("wallpaper_blur", v); save.mutate({ wallpaper_blur: v }); }}
+                  />
+                  <SliderRow
+                    label="Brightness" accent
+                    display={`${local.wallpaper_opacity ?? 40}%`}
+                    value={local.wallpaper_opacity ?? 40}
+                    min={0} max={100} step={5}
+                    onChange={(v) => { field("wallpaper_opacity", v); save.mutate({ wallpaper_opacity: v }); }}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </Section>
 
+        {/* Live Effect — overlays on top of whatever background is set */}
+        <Section icon={<Sparkles size={18} />} title="Live Effect" desc="Weather & ambience layered over your wallpaper.">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            {/* None */}
+            <button
+              onClick={() => selectEffect(null)}
+              className="relative rounded-xl overflow-hidden transition-all flex items-center justify-center"
+              style={{
+                aspectRatio: "16/9",
+                background: "var(--color-surface-container-high)",
+                outline: !activeEffect ? "2px solid var(--color-primary)" : "2px solid transparent",
+                outlineOffset: "2px",
+                color: "var(--color-on-surface-variant)",
+              }}
+            >
+              <div className="flex flex-col items-center gap-1">
+                <Ban size={15} />
+                <span className="text-[9px] font-semibold">No effect</span>
+              </div>
+              {!activeEffect && (
+                <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                  style={{ background: "var(--color-primary)" }}>
+                  <span className="text-[7px] leading-none">✓</span>
+                </div>
+              )}
+            </button>
+
+            {EFFECTS.map((e) => {
+              const isActive = activeEffect === e.id;
+              return (
+                <button
+                  key={e.id}
+                  onClick={() => selectEffect(e.id)}
+                  className="relative rounded-xl overflow-hidden transition-all wp-noir"
+                  style={{
+                    aspectRatio: "16/9",
+                    outline: isActive ? "2px solid var(--color-primary)" : "2px solid transparent",
+                    outlineOffset: "2px",
+                  }}
+                >
+                  <AnimatedBackdrop
+                    variant={e.variant}
+                    intensity={Math.min(1, e.defaults.intensity * 1.6)}
+                    speed={e.defaults.speed}
+                    density={e.defaults.density}
+                    className="absolute inset-0"
+                  />
+                  <div className="absolute inset-0 flex items-end p-1.5">
+                    <span className="text-[9px] font-semibold leading-none px-1.5 py-1 rounded"
+                      style={{ background: "rgba(0,0,0,0.55)", color: "#fff" }}>
+                      {e.name}
+                    </span>
+                  </div>
+                  {isActive && (
+                    <div className="absolute top-1 right-1 w-3.5 h-3.5 rounded-full flex items-center justify-center"
+                      style={{ background: "var(--color-primary)" }}>
+                      <span className="text-[7px] leading-none">✓</span>
+                    </div>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Per-effect settings — only when an effect is selected */}
+          {activeEffect && (() => {
+            const def = EFFECTS.find((e) => e.id === activeEffect);
+            if (!def) return null;
+            const s = effectSettingsFor(activeEffect, storedEffectSettings);
+            return (
+              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 14 }} className="space-y-4">
+                <p className="text-xs font-medium" style={{ color: "var(--color-on-surface)" }}>
+                  {def.name} settings
+                </p>
+                <SliderRow
+                  label="Intensity"
+                  display={`${Math.round(s.intensity * 100)}%`}
+                  value={s.intensity}
+                  min={0} max={1} step={0.02}
+                  onChange={(v) => updateEffect({ intensity: v })}
+                />
+                <SliderRow
+                  label="Speed" accent
+                  display={`${s.speed.toFixed(2)}×`}
+                  value={s.speed}
+                  min={0.25} max={2} step={0.05}
+                  onChange={(v) => updateEffect({ speed: v })}
+                />
+                {def.hasDensity && (
+                  <SliderRow
+                    label="Density"
+                    display={`${Math.round(s.density * 100)}%`}
+                    value={s.density}
+                    min={0.3} max={1.5} step={0.05}
+                    onChange={(v) => updateEffect({ density: v })}
+                  />
+                )}
+              </div>
+            );
+          })()}
+        </Section>
+
         {/* Glass tint + blur — drives every .glass card live */}
-        <Section icon={<Sliders size={18} />} title="Glass">
+        <Section icon={<Sliders size={18} />} title="Glass" desc="How opaque and frosted the cards over your wallpaper feel.">
           <div className="space-y-4">
-            <p className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>
-              How opaque and frosted the cards over your wallpaper feel. Changes apply live.
-            </p>
             <SliderRow
               label="Tint"
               display={`${Math.round((local.glass_tint ?? 0.5) * 100)}%`}
@@ -408,33 +515,6 @@ export default function SettingsPage() {
               onChange={(v) => updateGlass({ blur: v })}
             />
           </div>
-        </Section>
-
-        {/* Photo wallpaper visual controls */}
-        <Section icon={<Sliders size={18} />} title="Photo Wallpaper Effects">
-          <Field label="Blur" description={`${local.wallpaper_blur ?? 60}%`}>
-            <input
-              type="range" min={0} max={100} step={5}
-              value={local.wallpaper_blur ?? 60}
-              onChange={(e) => field("wallpaper_blur", parseInt(e.target.value))}
-              onMouseUp={() => save.mutate({ wallpaper_blur: local.wallpaper_blur })}
-              onTouchEnd={() => save.mutate({ wallpaper_blur: local.wallpaper_blur })}
-              className="w-40"
-              style={{ accentColor: "var(--color-primary)" }}
-            />
-          </Field>
-
-          <Field label="Brightness" description={`${local.wallpaper_opacity ?? 40}%`}>
-            <input
-              type="range" min={0} max={100} step={5}
-              value={local.wallpaper_opacity ?? 40}
-              onChange={(e) => field("wallpaper_opacity", parseInt(e.target.value))}
-              onMouseUp={() => save.mutate({ wallpaper_opacity: local.wallpaper_opacity })}
-              onTouchEnd={() => save.mutate({ wallpaper_opacity: local.wallpaper_opacity })}
-              className="w-40"
-              style={{ accentColor: "var(--color-secondary)" }}
-            />
-          </Field>
         </Section>
 
         {/* Music */}
