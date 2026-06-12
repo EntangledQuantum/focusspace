@@ -165,7 +165,8 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
           if (d.device?.volume_percent != null) setVolumeState(d.device.volume_percent);
           if (typeof d.shuffle_state === "boolean") setShuffleState(d.shuffle_state);
         } else if (isOurDevice) {
-          if (d.device?.volume_percent != null) setVolumeState(d.device.volume_percent);
+          // Don't sync volume here — the SDK's local volume is the source of
+          // truth for our own device, and Connect's report would fight the slider.
           setExternalState(null);
         } else if (sdkActiveRef.current) {
           setExternalState(null);
@@ -294,11 +295,15 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     async (percent: number) => {
       const p = Math.max(0, Math.min(100, Math.round(percent)));
       setVolumeState(p);
+      // Our in-browser SDK device: set volume locally only — the Web API
+      // volume endpoint doesn't reliably control browser devices, and its
+      // reported value would just fight the slider.
       if (sdkHasContext && player) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         try { await (player as any).setVolume(p / 100); } catch { /* ignore */ }
+        return;
       }
-      const targetId = sdkHasContext ? deviceIdRef.current : externalState?.device?.id ?? deviceIdRef.current;
+      const targetId = externalState?.device?.id;
       if (!targetId) return;
       try {
         await spotifyFetch("/me/player/volume", {

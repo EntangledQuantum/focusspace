@@ -1,19 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { useSpotifyContext, type PlayableContext } from "@/lib/context/SpotifyContext";
-import { spotifyFetch, spotifyJson } from "@/lib/spotify/api";
+import { useSpotifyContext } from "@/lib/context/SpotifyContext";
+import { MusicPicker } from "@/components/spotify/MusicPicker";
 import {
-  Music, Play, Pause, SkipBack, SkipForward, ChevronDown, Search, ListMusic,
+  Music, Play, Pause, SkipBack, SkipForward, ChevronDown, ListMusic,
   Shuffle, Volume2, VolumeX, ExternalLink,
 } from "lucide-react";
-
-type SearchType = "playlist" | "track" | "album" | "artist";
-
-interface SearchHit extends PlayableContext {
-  subtitle?: string;
-}
 
 function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: string }) {
   return (
@@ -23,208 +16,10 @@ function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: 
   );
 }
 
-function SearchPicker({
-  onSelect,
-  onClose,
-}: {
-  onSelect: (ctx: PlayableContext) => void;
-  onClose: () => void;
-}) {
-  const [search, setSearch] = useState("");
-  const [searchResults, setSearchResults] = useState<SearchHit[]>([]);
-  // Default to track since playlist search is restricted for unverified apps (Spotify Nov 2024)
-  const [searchType, setSearchType] = useState<SearchType>("track");
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // User's own playlists — used as the "Playlists" tab list (search-for-playlist is restricted)
-  const { data: playlists = [] } = useQuery<SearchHit[]>({
-    queryKey: ["spotify-playlists"],
-    queryFn: async () => {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const data = await spotifyJson<{ items: any[] }>("/me/playlists", { params: { limit: "50" } });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      return ((data?.items ?? []) as any[]).filter(Boolean).map((p: any) => ({
-        uri: p.uri,
-        name: p.name,
-        images: p.images,
-        type: "playlist" as const,
-        subtitle: `${p.tracks?.total ?? 0} tracks`,
-      }));
-    },
-    staleTime: 60 * 1000,
-  });
-
-  useEffect(() => {
-    if (debounceRef.current) clearTimeout(debounceRef.current);
-    const q = search.trim();
-    if (!q) { setSearchResults([]); setSearchError(null); return; }
-    // Playlist tab uses client-side filter on user's own playlists (Spotify restricts playlist search)
-    if (searchType === "playlist") { setSearchResults([]); return; }
-    debounceRef.current = setTimeout(async () => {
-      setIsSearching(true);
-      setSearchError(null);
-      try {
-        const res = await spotifyFetch("/search", {
-          params: { q, type: searchType, limit: "20" },
-        });
-        if (!res.ok) {
-          setSearchResults([]);
-          setSearchError(res.status === 403
-            ? "Spotify rejected the search — check your account permissions."
-            : `Search failed (${res.status}) — try again.`);
-          return;
-        }
-        const data = await res.json();
-         
-        const key = (searchType + "s") as keyof typeof data;
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const items = ((data[key]?.items ?? []) as any[]).filter(Boolean);
-        const hits: SearchHit[] = items.map((it) => {
-          if (searchType === "track") {
-            return {
-              uri: it.uri,
-              name: it.name,
-              images: it.album?.images,
-              type: "track" as const,
-              subtitle: it.artists?.map((a: { name: string }) => a.name).join(", "),
-            };
-          }
-          if (searchType === "album") {
-            return {
-              uri: it.uri,
-              name: it.name,
-              images: it.images,
-              type: "album" as const,
-              subtitle: it.artists?.map((a: { name: string }) => a.name).join(", "),
-            };
-          }
-          return {
-            uri: it.uri,
-            name: it.name,
-            images: it.images,
-            type: "artist" as const,
-            subtitle: it.genres?.[0] ?? "Artist",
-          };
-        });
-        setSearchResults(hits);
-      } catch {
-        setSearchResults([]);
-        setSearchError("Spotify isn't reachable — reconnect in Settings.");
-      } finally {
-        setIsSearching(false);
-      }
-    }, 400);
-  }, [search, searchType]);
-
-  // For playlist tab: client-side filter user's own playlists by query
-  const filteredOwnPlaylists = search.trim()
-    ? playlists.filter((p) => p.name.toLowerCase().includes(search.trim().toLowerCase()))
-    : playlists;
-  const displayList = searchType === "playlist" ? filteredOwnPlaylists : searchResults;
-
-  return (
-    <div
-      className="absolute bottom-full mb-2 left-0 right-0 rounded-2xl overflow-hidden z-50"
-      style={{
-        background: "var(--color-surface-container-high)",
-        border: "1px solid rgba(255,255,255,0.08)",
-        maxHeight: 380,
-        boxShadow: "0 -8px 32px rgba(0,0,0,0.35)",
-      }}
-    >
-      <div className="p-3 space-y-2" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div
-          className="flex items-center gap-2 px-3 py-2 rounded-xl"
-          style={{ background: "var(--color-surface-container-highest)" }}
-        >
-          <Search size={13} style={{ color: "var(--color-on-surface-variant)" }} />
-          <input
-            autoFocus
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={searchType === "playlist" ? "Filter your playlists…" : `Search ${searchType}s…`}
-            className="flex-1 bg-transparent text-sm outline-none"
-            style={{ color: "var(--color-on-surface)" }}
-          />
-        </div>
-        <div className="flex items-center gap-1">
-          {(["track", "album", "artist", "playlist"] as SearchType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setSearchType(t)}
-              className="px-2.5 py-1 rounded-full text-[10px] font-semibold uppercase tracking-wider transition-all"
-              style={{
-                background: searchType === t ? "rgba(29,185,84,0.18)" : "transparent",
-                color: searchType === t ? "#1DB954" : "var(--color-on-surface-variant)",
-                border: searchType === t ? "1px solid rgba(29,185,84,0.35)" : "1px solid transparent",
-              }}
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      </div>
-      <div className="overflow-y-auto" style={{ maxHeight: 260 }}>
-        {isSearching ? (
-          <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-            Searching…
-          </div>
-        ) : searchError && searchType !== "playlist" ? (
-          <div className="p-4 text-center text-sm" style={{ color: "var(--color-error)" }}>
-            {searchError}
-          </div>
-        ) : displayList.length === 0 ? (
-          <div className="p-4 text-center text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
-            {searchType === "playlist"
-              ? (search ? "No matching playlists" : "No playlists yet")
-              : (search ? "No results" : "Type to search")}
-          </div>
-        ) : (
-          displayList.map((hit) => (
-            <button
-              key={hit.uri}
-              onClick={() => { onSelect(hit); onClose(); }}
-              className="w-full flex items-center gap-3 px-4 py-3 text-left transition-colors hover:bg-white/5"
-            >
-              {hit.images?.[0] ? (
-                // eslint-disable-next-line @next/next/no-img-element
-                <img
-                  src={hit.images[0].url}
-                  alt={hit.name}
-                  className="w-9 h-9 rounded-lg object-cover shrink-0"
-                  style={{ borderRadius: hit.type === "artist" ? "50%" : undefined }}
-                />
-              ) : (
-                <div
-                  className="w-9 h-9 rounded-lg shrink-0 flex items-center justify-center"
-                  style={{ background: "var(--color-surface-container-highest)" }}
-                >
-                  <ListMusic size={14} style={{ color: "var(--color-on-surface-variant)" }} />
-                </div>
-              )}
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium truncate" style={{ color: "var(--color-on-surface)" }}>
-                  {hit.name}
-                </p>
-                {hit.subtitle && (
-                  <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
-                    {hit.subtitle}
-                  </p>
-                )}
-              </div>
-            </button>
-          ))
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * Compact music column for the FocusDock. Hidden entirely until Spotify is
- * connected (connect lives in Settings → Music).
+ * connected (connect lives in Settings → Music). "Choose music" opens the
+ * big MusicPicker modal (browse + unified search).
  */
 export function SpotifyPanel() {
   const {
@@ -233,22 +28,19 @@ export function SpotifyPanel() {
     volume, setVolume, shuffle, setShuffle,
     playPause, next, previous, transferToSdk, playContext,
   } = useSpotifyContext();
-  const qc = useQueryClient();
 
   const [pickerOpen, setPickerOpen] = useState(false);
   const [volumeOpen, setVolumeOpen] = useState(false);
   const [lastVolume, setLastVolume] = useState(60);
-  const pickerRef = useRef<HTMLDivElement>(null);
   const volumeRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     function handler(e: MouseEvent) {
-      if (pickerRef.current && !pickerRef.current.contains(e.target as Node)) setPickerOpen(false);
       if (volumeRef.current && !volumeRef.current.contains(e.target as Node)) setVolumeOpen(false);
     }
-    if (pickerOpen || volumeOpen) document.addEventListener("mousedown", handler);
+    if (volumeOpen) document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
-  }, [pickerOpen, volumeOpen]);
+  }, [volumeOpen]);
 
   if (tokenLoading || !isConnected) return null;
 
@@ -300,34 +92,30 @@ export function SpotifyPanel() {
         </span>
       </div>
 
-      {/* Playlist / search selector */}
-      <div ref={pickerRef} className="relative">
-        <button
-          onClick={() => setPickerOpen(!pickerOpen)}
-          className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors btn-hover-surface"
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
-            color: "var(--color-on-surface-variant)",
-          }}
-        >
-          <ListMusic size={12} />
-          <span className="flex-1 text-[11px] truncate">
-            {selectedPlaylist ? selectedPlaylist.name : "Choose music…"}
-          </span>
-          <ChevronDown size={12} className={`transition-transform ${pickerOpen ? "rotate-180" : ""}`} />
-        </button>
-        {pickerOpen && (
-          <SearchPicker
-            onSelect={(ctx) => {
-              setSelectedPlaylist(ctx);
-              playContext(ctx);
-              qc.invalidateQueries({ queryKey: ["spotify-playlists"] });
-            }}
-            onClose={() => setPickerOpen(false)}
-          />
-        )}
-      </div>
+      {/* Music chooser — opens the big browse/search modal */}
+      <button
+        onClick={() => setPickerOpen(true)}
+        className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors btn-hover-surface"
+        style={{
+          background: "rgba(255,255,255,0.04)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          color: "var(--color-on-surface-variant)",
+        }}
+      >
+        <ListMusic size={12} />
+        <span className="flex-1 text-[11px] truncate">
+          {selectedPlaylist ? selectedPlaylist.name : "Choose music…"}
+        </span>
+        <ChevronDown size={12} />
+      </button>
+      <MusicPicker
+        open={pickerOpen}
+        onClose={() => setPickerOpen(false)}
+        onSelect={(ctx) => {
+          setSelectedPlaylist(ctx);
+          playContext(ctx);
+        }}
+      />
 
       {/* Now playing row */}
       <div className="flex items-center gap-2.5">

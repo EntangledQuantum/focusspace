@@ -57,9 +57,7 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
   if (!wallpaper || preset || isLegacy || legacyAnimBase) {
     const cls = preset?.id ?? legacyAnimBase ?? "wp-aurora";
     return (
-      <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-700 ${cls}`}>
-        <div className="wallpaper-scrim" />
-      </div>
+      <div className={`fixed inset-0 z-0 pointer-events-none transition-colors duration-700 ${cls}`} />
     );
   }
 
@@ -86,8 +84,6 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
         }}
         onLoad={() => setLoaded(true)}
       />
-      {/* single gentle bottom scrim — no radial vignette, no tall top gradient */}
-      <div className="wallpaper-scrim" />
     </div>
   );
 }

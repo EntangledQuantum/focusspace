@@ -114,7 +114,7 @@ export function AuthModal({ open, onClose, urlError }: Props) {
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "spotify",
       options: {
-        scopes: "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private user-library-read",
+        scopes: "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private user-library-read user-top-read user-read-recently-played",
         redirectTo: `${window.location.origin}/auth/callback`,
       },
     });

@@ -10,6 +10,9 @@ const SCOPES = [
   "user-modify-playback-state",
   "playlist-read-private",
   "user-library-read",
+  // Browse content in the music picker (top items + recently played)
+  "user-top-read",
+  "user-read-recently-played",
 ].join(" ");
 
 export async function GET(request: NextRequest) {

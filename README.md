@@ -34,6 +34,15 @@ A **background** is what you focus over — a CSS-mesh preset (Aurora / Dusk / M
 
 ## Latest Updates
 
+### Spotify browser + fixes round
+
+- **Big music picker** — "Choose music" now opens a TaskPicker-style modal: browse your recently played, top artists/songs, playlists and library when idle, or search the whole catalog with **All / Songs / Albums / Artists / Playlists / Library** filter tabs.
+- **Search fixed** — Spotify's `/search` rejects `limit` > 10 with a 400 (per their OpenAPI spec); track/album/artist search works again. Browse uses `user-top-read` / `user-read-recently-played` scopes — **reconnect Spotify once** (Settings → Music) to grant them; sections hide gracefully until then.
+- **Volume slider fixed** — the in-browser player's volume is now set locally via the SDK only; the Connect-reported volume no longer fights and resets the slider every 5 s.
+- **Glass blur actually works** — Chromium ignores `backdrop-filter` under transformed ancestors; the dock/mini-bar were centered with `translateX(-50%)`. They're now flex-centered with the slide animation on the card itself, so the Blur slider visibly frosts cards.
+- **Bottom gradient removed** — the dark/light scrim at the bottom of every wallpaper is gone.
+- **Dock subtasks** — always expanded (scrolls in place); the collapse toggle that warped the music column is removed.
+
 ### Design-polish round
 
 - **Whole app on the new design** — Projects, Analytics, Settings and the task picker now use the prototype layout: centered 880px pages, stacked glass project cards with icon tiles, session dots, expandable subtasks and the Run pill; Analytics got stat cards, gradient day bars and a by-project breakdown; Settings got the icon-tile sections, hairline rows and gradient switches.

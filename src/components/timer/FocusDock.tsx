@@ -1,8 +1,7 @@
 "use client";
 
-import { useState } from "react";
 import {
-  Check, ChevronDown, CheckCircle2, Circle, ListChecks,
+  Check, CheckCircle2, Circle, ListChecks,
   Shrink, Expand, Maximize2, Minimize2, Play, Pause, Music, PictureInPicture2,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -46,15 +45,16 @@ function DockEmpty({ text }: { text: string }) {
 }
 
 function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "activeTask" | "subtasks" | "onToggleSubtask">) {
-  const [open, setOpen] = useState(true);
   const done = subtasks.filter((s) => s.done).length;
 
   if (!activeTask) return <DockEmpty text="No task selected" />;
   if (subtasks.length === 0) return <DockEmpty text="No subtasks" />;
 
+  // Always expanded — the list scrolls within a fixed height, so the dock's
+  // height stays stable (collapsing it warped the music column).
   return (
     <div className="flex flex-col h-full">
-      <button onClick={() => setOpen((v) => !v)} className="flex items-center w-full" style={{ gap: 9, marginBottom: 11 }}>
+      <div className="flex items-center w-full" style={{ gap: 9, marginBottom: 11 }}>
         <span style={LABEL_STYLE}>Subtasks</span>
         <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: "var(--color-primary)" }}>
           {done}/{subtasks.length}
@@ -65,40 +65,31 @@ function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "act
             style={{ width: `${(done / subtasks.length) * 100}%`, transition: "width .3s" }}
           />
         </div>
-        <ChevronDown
-          size={14}
-          style={{
-            color: "var(--color-on-surface-variant)",
-            transform: open ? "none" : "rotate(-90deg)", transition: "transform .2s",
-          }}
-        />
-      </button>
-      {open && (
-        <div className="no-scrollbar flex flex-col overflow-y-auto" style={{ gap: 2, maxHeight: 104, paddingRight: 2 }}>
-          {subtasks.map((st) => (
-            <button
-              key={st.id}
-              onClick={() => onToggleSubtask(st)}
-              className="flex items-center text-left rounded-lg transition-colors hover:bg-white/5"
-              style={{ gap: 10, padding: "7px 8px" }}
+      </div>
+      <div className="no-scrollbar flex flex-col overflow-y-auto" style={{ gap: 2, maxHeight: 104, paddingRight: 2 }}>
+        {subtasks.map((st) => (
+          <button
+            key={st.id}
+            onClick={() => onToggleSubtask(st)}
+            className="flex items-center text-left rounded-lg transition-colors hover:bg-white/5"
+            style={{ gap: 10, padding: "7px 8px" }}
+          >
+            {st.done
+              ? <CheckCircle2 size={16} className="shrink-0" style={{ color: "var(--color-primary)" }} />
+              : <Circle size={16} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />}
+            <span
+              className="truncate"
+              style={{
+                fontSize: 13,
+                color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
+                textDecoration: st.done ? "line-through" : "none",
+              }}
             >
-              {st.done
-                ? <CheckCircle2 size={16} className="shrink-0" style={{ color: "var(--color-primary)" }} />
-                : <Circle size={16} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />}
-              <span
-                className="truncate"
-                style={{
-                  fontSize: 13,
-                  color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
-                  textDecoration: st.done ? "line-through" : "none",
-                }}
-              >
-                {st.title}
-              </span>
-            </button>
-          ))}
-        </div>
-      )}
+              {st.title}
+            </span>
+          </button>
+        ))}
+      </div>
     </div>
   );
 }
@@ -236,19 +227,24 @@ export function FocusDock(props: Props) {
 
   return (
     <>
-      {/* Full dock */}
+      {/* Full dock — wrapper centers via flex (no transform!) so the glass
+          card's backdrop-filter can actually sample the page behind it.
+          A transformed ancestor silently kills backdrop blur in Chromium. */}
       <div
-        className="fixed left-1/2"
-        style={{
-          bottom: 22, zIndex: 50,
-          transform: `translateX(-50%) translateY(${focusMode ? "160%" : "0"})`,
-          opacity: focusMode ? 0 : 1,
-          transition: "transform .5s var(--ease), opacity .4s",
-          width: "min(880px, calc(100vw - 36px))",
-          pointerEvents: focusMode ? "none" : "auto",
-        }}
+        className="fixed left-0 right-0 flex justify-center"
+        style={{ bottom: 22, zIndex: 50, pointerEvents: "none" }}
       >
-        <div className="glass relative" style={{ borderRadius: 22, padding: "16px 18px" }}>
+        <div
+          className="glass relative"
+          style={{
+            borderRadius: 22, padding: "16px 18px",
+            width: "min(880px, calc(100vw - 36px))",
+            transform: focusMode ? "translateY(160%)" : "none",
+            opacity: focusMode ? 0 : 1,
+            transition: "transform .5s var(--ease), opacity .4s",
+            pointerEvents: focusMode ? "none" : "auto",
+          }}
+        >
           {/* Corner controls: fullscreen · pop-out · focus mode */}
           <div className="absolute flex items-center" style={{ top: 12, right: 12, gap: 6, zIndex: 2 }}>
             <button
@@ -307,16 +303,19 @@ export function FocusDock(props: Props) {
 
       {/* Focus-mode mini bar — music persists, plus exit affordance */}
       <div
-        className="fixed left-1/2"
-        style={{
-          bottom: 22, zIndex: 50,
-          transform: `translateX(-50%) translateY(${focusMode ? "0" : "160%"})`,
-          opacity: focusMode ? 1 : 0,
-          transition: "transform .5s var(--ease), opacity .4s",
-          pointerEvents: focusMode ? "auto" : "none",
-        }}
+        className="fixed left-0 right-0 flex justify-center"
+        style={{ bottom: 22, zIndex: 50, pointerEvents: "none" }}
       >
-        <div className="glass flex items-center" style={{ borderRadius: 999, padding: "8px 10px 8px 14px", gap: 14 }}>
+        <div
+          className="glass flex items-center"
+          style={{
+            borderRadius: 999, padding: "8px 10px 8px 14px", gap: 14,
+            transform: focusMode ? "none" : "translateY(160%)",
+            opacity: focusMode ? 1 : 0,
+            transition: "transform .5s var(--ease), opacity .4s",
+            pointerEvents: focusMode ? "auto" : "none",
+          }}
+        >
           {isConnected && (
             <>
               <MiniMusicBar />

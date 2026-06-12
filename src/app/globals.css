@@ -63,10 +63,6 @@
   --color-error-container:    #93000a;
   --color-on-error-container: #ffdad6;
 
-  /* Glass controls (overridden live by the Tint/Blur sliders) */
-  --glass-tint: 0.5;   /* 0 = clear → 1 = solid */
-  --glass-blur: 22px;
-
   /* Border radius */
   --radius-sm:   0.25rem;
   --radius:      0.5rem;
@@ -82,6 +78,13 @@
 
   /* Motion */
   --ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Glass controls — plain :root vars (NOT @theme) so they always exist at
+   runtime; the Tint/Blur sliders override them live via JS. */
+:root {
+  --glass-tint: 0.5;   /* 0 = clear → 1 = solid */
+  --glass-blur: 22px;
 }
 
 /* ─── Light theme (applied via .light class on <html>) ─────────── */
@@ -198,13 +201,6 @@ body {
   repeating-linear-gradient(135deg, rgba(0,0,0,.035) 0 2px, transparent 2px 22px),
   radial-gradient(at 30% 30%, rgba(255,95,162,.22), transparent 52%),
   radial-gradient(at 75% 70%, rgba(176,107,246,.22), transparent 55%); }
-
-/* The ONLY wallpaper scrim — gentle, bottom-only (for dock legibility). */
-.wallpaper-scrim {
-  position: absolute; inset: 0; pointer-events: none;
-  background: linear-gradient(to top, rgba(8,5,10,0.42) 0%, transparent 38%);
-}
-.light .wallpaper-scrim { background: linear-gradient(to top, rgba(255,250,253,0.30) 0%, transparent 38%); }
 
 /* ─── Reusable bits ─────────────────────────────────────────────── */
 .pill {
