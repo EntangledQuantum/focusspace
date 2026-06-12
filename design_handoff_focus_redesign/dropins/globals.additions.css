@@ -1,0 +1,104 @@
+/* ════════════════════════════════════════════════════════════════════════
+   DROP-IN ➊ — design tokens, glass, and wallpapers
+   Merge this INTO src/app/globals.css
+
+   • Replaces the terracotta/sage/dusk palette with PINK primary + PURPLE accent
+   • Adds --glass-tint / --glass-blur (the two live sliders)
+   • Rewrites .glass to read those vars
+   • Adds the new CSS-mesh wallpaper classes (dark + .light variants)
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* ── 1. Replace the @theme inline { … } primary/secondary/tertiary block ───
+   Keep all your surface / on-surface tokens; just swap these color groups
+   and add the glass + radius vars. Tailwind v4 @theme keeps utilities working. */
+@theme inline {
+  /* Primary — Pink  (was terracotta #ffb4a5) */
+  --color-primary:              #ff5fa2;
+  --color-on-primary:           #2b0014;
+  --color-primary-container:    #ff8fbe;
+  --color-on-primary-container: #3e0020;
+  --color-surface-tint:         #ff5fa2;
+
+  /* Secondary / accent — Purple  (was sage #b5ccc1) */
+  --color-secondary:            #b06bf6;
+  --color-on-secondary:         #1c0533;
+  --color-secondary-container:  #c89bff;
+  --color-on-secondary-container:#24073f;
+
+  /* Tertiary — soft blue stays fine for breaks, nudged cooler */
+  --color-tertiary:             #8fb6ff;
+  --color-on-tertiary:          #0b1f44;
+
+  /* Glass controls (overridden at runtime by the tint/blur sliders) */
+  --glass-tint: 0.5;   /* 0 = clear → 1 = solid */
+  --glass-blur: 22px;
+}
+
+/* ── 2. Light-theme overrides — add to your existing .light { … } block ──── */
+.light {
+  --color-primary:              #e11d74;
+  --color-on-primary:           #ffffff;
+  --color-secondary:            #7c3aed;
+  --color-on-secondary:         #ffffff;
+}
+
+/* ── 3. Rewrite .glass so the sliders drive it ───────────────────────────── */
+.glass {
+  background: color-mix(in srgb, var(--color-surface-container) calc(var(--glass-tint) * 100%), transparent);
+  backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(1.4);
+  border: 1px solid rgba(255,255,255,0.08);
+  box-shadow:
+    inset 0 1px 0 0 rgba(255,255,255,0.07),
+    0 24px 60px -18px rgba(0,0,0,0.55);
+}
+.light .glass { border-color: rgba(40,20,35,0.10);
+  box-shadow: inset 0 1px 0 0 rgba(255,255,255,0.6), 0 24px 60px -22px rgba(60,20,50,0.26); }
+
+/* ── 4. New wallpaper presets (replace SOLID_WALLPAPERS look) ─────────────── */
+.wp-aurora { background-color:#160a18; background-image:
+  radial-gradient(at 18% 18%, rgba(255,95,162,.55), transparent 42%),
+  radial-gradient(at 82% 6%,  rgba(176,107,246,.55), transparent 46%),
+  radial-gradient(at 72% 82%, rgba(99,102,241,.45), transparent 52%),
+  radial-gradient(at 4% 96%,  rgba(236,72,153,.40), transparent 46%); }
+.wp-dusk { background-color:#1a0c12; background-image:
+  radial-gradient(at 12% 12%, rgba(255,138,160,.55), transparent 44%),
+  radial-gradient(at 88% 18%, rgba(255,166,120,.42), transparent 46%),
+  radial-gradient(at 60% 96%, rgba(176,107,246,.45), transparent 50%); }
+.wp-mist { background-color:#0e1016; background-image:
+  radial-gradient(at 22% 28%, rgba(132,196,236,.40), transparent 46%),
+  radial-gradient(at 80% 14%, rgba(186,152,255,.42), transparent 48%),
+  radial-gradient(at 70% 92%, rgba(120,210,200,.34), transparent 52%); }
+.wp-noir { background-color:#0b0a0d;
+  background-image: radial-gradient(at 30% 20%, rgba(60,50,70,.6), transparent 60%); }
+.wp-photo { background-color:#1a1320; background-image:
+  repeating-linear-gradient(135deg, rgba(255,255,255,.045) 0 2px, transparent 2px 22px),
+  radial-gradient(at 30% 30%, rgba(255,95,162,.30), transparent 50%),
+  radial-gradient(at 75% 70%, rgba(176,107,246,.30), transparent 55%); }
+
+.light .wp-aurora { background-color:#ffeef6; background-image:
+  radial-gradient(at 18% 18%, rgba(255,95,162,.40), transparent 44%),
+  radial-gradient(at 82% 6%,  rgba(176,107,246,.40), transparent 48%),
+  radial-gradient(at 72% 86%, rgba(120,150,255,.32), transparent 54%); }
+.light .wp-dusk { background-color:#fff0ea; background-image:
+  radial-gradient(at 12% 12%, rgba(255,150,170,.45), transparent 46%),
+  radial-gradient(at 88% 20%, rgba(255,190,150,.40), transparent 48%),
+  radial-gradient(at 60% 96%, rgba(186,140,255,.36), transparent 52%); }
+.light .wp-mist { background-color:#eef4fb; background-image:
+  radial-gradient(at 22% 28%, rgba(120,180,236,.40), transparent 48%),
+  radial-gradient(at 80% 14%, rgba(186,152,255,.40), transparent 50%); }
+.light .wp-noir { background-color:#e9e6ee; background-image: radial-gradient(at 30% 20%, rgba(180,170,200,.5), transparent 60%); }
+.light .wp-photo { background-color:#f6ecf7; background-image:
+  repeating-linear-gradient(135deg, rgba(0,0,0,.035) 0 2px, transparent 2px 22px),
+  radial-gradient(at 30% 30%, rgba(255,95,162,.22), transparent 52%),
+  radial-gradient(at 75% 70%, rgba(176,107,246,.22), transparent 55%); }
+
+/* ── 5. The ONLY wallpaper scrim — gentle, bottom-only.
+   ❌ DELETE the two old overlay <div>s in WallpaperRenderer (the radial
+   vignette + the tall `linear-gradient(to top, var(--color-background) …)`).
+   That tall bottom-to-top gradient is the "unnecessary gradient" to remove. */
+.wallpaper-scrim {
+  position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(to top, rgba(8,5,10,0.42) 0%, transparent 38%);
+}
+.light .wallpaper-scrim { background: linear-gradient(to top, rgba(255,250,253,0.30) 0%, transparent 38%); }
