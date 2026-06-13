@@ -274,10 +274,14 @@ input[type="range"].rng.accent::-moz-range-thumb { background: var(--color-secon
 /* ─── Animations ────────────────────────────────────────────────── */
 /* Entrance keyframes must NOT gate opacity to 0 — capture/print/reduced-motion
    environments freeze the timeline at frame 0, which would hide content. */
-@keyframes fadeUp { from { transform: translateY(16px); } to { transform: none; } }
+/* fade-up is opacity-only on purpose: a transform animation here promotes the
+   wrapper to a composited layer in Blink, which becomes a "backdrop root" and
+   silently kills backdrop-filter (frosted glass) on every descendant card.
+   WebKit tolerates it, Blink doesn't — hence "works on iPad, not desktop". */
+@keyframes fadeUp { from { opacity: 0; } to { opacity: 1; } }
 @keyframes popIn  { from { transform: scale(0.97); } to { transform: none; } }
 @keyframes pulseDot { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
-.fade-up { animation: fadeUp 0.5s var(--ease); }
+.fade-up { animation: fadeUp 0.4s var(--ease); }
 .pop     { animation: popIn 0.28s var(--ease); }
 .pulse-dot { animation: pulseDot 1.6s ease-in-out infinite; }
 
