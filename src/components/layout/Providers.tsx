@@ -8,6 +8,7 @@ import { Toaster } from "sonner";
 import { TopNav } from "@/components/layout/TopNav";
 import { WallpaperRenderer, isBuiltinWallpaperId } from "@/components/layout/WallpaperRenderer";
 import { EffectLayer } from "@/components/layout/EffectLayer";
+import { GlassDebug } from "@/components/layout/GlassDebug";
 import type { EffectSettings } from "@/lib/effects";
 import { SpotifyProvider } from "@/lib/context/SpotifyContext";
 import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
@@ -200,6 +201,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
       <>
         <TimerTitle />
         <PrefetchAppData />
+        <GlassDebug />
         <WallpaperRenderer
           wallpaper={wallpaper ?? null}
           supabaseUrl={supabaseUrl}
