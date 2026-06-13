@@ -175,8 +175,8 @@ export function TopNav() {
           width: "100%", maxWidth: 880,
           // More opaque than .glass so the bar stays readable over any wallpaper
           background: "color-mix(in srgb, var(--color-surface-container) 88%, transparent)",
-          backdropFilter: "blur(24px) saturate(1.4)",
-          WebkitBackdropFilter: "blur(24px) saturate(1.4)",
+          backdropFilter: "blur(24px) saturate(140%)",
+          WebkitBackdropFilter: "blur(24px) saturate(140%)",
           border: "1px solid rgba(255,255,255,0.10)",
           boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07), 0 18px 48px -16px rgba(0,0,0,0.6)",
         }}

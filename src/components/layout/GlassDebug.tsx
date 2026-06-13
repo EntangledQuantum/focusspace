@@ -11,61 +11,38 @@ import { useEffect } from "react";
  */
 export function GlassDebug() {
   useEffect(() => {
-    const BACKDROP_ROOT_TRIGGERS = (cs: CSSStyleDeclaration) => {
-      const reasons: string[] = [];
-      if (cs.transform && cs.transform !== "none") reasons.push(`transform:${cs.transform}`);
-      if (cs.filter && cs.filter !== "none") reasons.push(`filter:${cs.filter}`);
-      if (cs.backdropFilter && cs.backdropFilter !== "none") reasons.push(`backdrop-filter:${cs.backdropFilter}`);
-      if (cs.perspective && cs.perspective !== "none") reasons.push(`perspective:${cs.perspective}`);
-      if (cs.opacity && cs.opacity !== "1") reasons.push(`opacity:${cs.opacity}`);
-      if (cs.mixBlendMode && cs.mixBlendMode !== "normal") reasons.push(`mix-blend-mode:${cs.mixBlendMode}`);
-      if (cs.isolation === "isolate") reasons.push("isolation:isolate");
-      if (cs.contain && !["none", "normal"].includes(cs.contain)) reasons.push(`contain:${cs.contain}`);
-      if (cs.willChange && cs.willChange !== "auto") reasons.push(`will-change:${cs.willChange}`);
-      if (cs.maskImage && cs.maskImage !== "none") reasons.push(`mask:${cs.maskImage}`);
-      return reasons;
-    };
-
     function run() {
       console.group("%c[glass-debug]", "color:#ff5fa2;font-weight:bold");
       console.log("CSS.supports backdrop-filter blur:", CSS.supports("backdrop-filter", "blur(10px)"));
-      console.log("CSS.supports -webkit-backdrop-filter blur:", CSS.supports("-webkit-backdrop-filter", "blur(10px)"));
 
       const rootCS = getComputedStyle(document.documentElement);
-      console.log("--glass-tint:", JSON.stringify(rootCS.getPropertyValue("--glass-tint")));
       console.log("--glass-blur:", JSON.stringify(rootCS.getPropertyValue("--glass-blur")));
 
+      // Variant probe: which exact backdrop-filter values does THIS browser accept?
+      const probe = document.createElement("div");
+      document.body.appendChild(probe);
+      const variants = [
+        "blur(22px)",
+        "blur(22px) saturate(1.4)",
+        "blur(22px) saturate(140%)",
+        "blur(var(--glass-blur))",
+        "blur(var(--glass-blur)) saturate(1.4)",
+        "blur(var(--glass-blur)) saturate(140%)",
+      ];
+      console.log("— backdrop-filter variant test (computed → '' means REJECTED) —");
+      for (const v of variants) {
+        probe.style.backdropFilter = "";
+        probe.style.backdropFilter = v;
+        const computed = getComputedStyle(probe).backdropFilter;
+        const ok = computed && computed !== "none";
+        console.log(`  ${ok ? "✅" : "❌"} "${v}" → "${computed}"`);
+      }
+      probe.remove();
+
       const glasses = Array.from(document.querySelectorAll<HTMLElement>(".glass"));
-      console.log(`found ${glasses.length} .glass element(s)`);
-
-      glasses.slice(0, 3).forEach((el, idx) => {
+      glasses.slice(0, 2).forEach((el, idx) => {
         const cs = getComputedStyle(el);
-        console.group(`.glass[${idx}] <${el.tagName.toLowerCase()}>`);
-        console.log("computed backdrop-filter:", cs.backdropFilter || "(empty)");
-        console.log("computed -webkit-backdrop-filter:", (cs as unknown as Record<string, string>).webkitBackdropFilter || "(empty)");
-        console.log("computed background:", cs.background.slice(0, 80));
-        console.log("rect:", el.getBoundingClientRect());
-
-        // Walk ancestors looking for backdrop-root triggers
-        let node: HTMLElement | null = el.parentElement;
-        let depth = 0;
-        const culprits: string[] = [];
-        while (node && node !== document.documentElement && depth < 40) {
-          const acs = getComputedStyle(node);
-          const reasons = BACKDROP_ROOT_TRIGGERS(acs);
-          if (reasons.length) {
-            culprits.push(`<${node.tagName.toLowerCase()}${node.className ? "." + String(node.className).split(" ").join(".") : ""}> → ${reasons.join(", ")}`);
-          }
-          node = node.parentElement;
-          depth++;
-        }
-        if (culprits.length) {
-          console.warn("ancestors creating a backdrop-root (these kill the blur):");
-          culprits.forEach((c) => console.warn("  •", c));
-        } else {
-          console.log("no backdrop-root ancestors found — backdrop-filter SHOULD render");
-        }
-        console.groupEnd();
+        console.log(`.glass[${idx}] computed backdrop-filter:`, cs.backdropFilter || "(empty)");
       });
       console.groupEnd();
     }

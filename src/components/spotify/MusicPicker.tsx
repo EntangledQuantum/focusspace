@@ -219,8 +219,8 @@ export function MusicPicker({
               top: "9vh", maxWidth: 620, maxHeight: "78vh",
               borderRadius: 24,
               background: "color-mix(in srgb, var(--color-surface-container) 94%, transparent)",
-              backdropFilter: "blur(28px) saturate(1.4)",
-              WebkitBackdropFilter: "blur(28px) saturate(1.4)",
+              backdropFilter: "blur(28px) saturate(140%)",
+              WebkitBackdropFilter: "blur(28px) saturate(140%)",
               border: "1px solid rgba(255,255,255,0.10)",
               boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
             }}
