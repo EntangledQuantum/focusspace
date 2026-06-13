@@ -2,6 +2,14 @@
   "name": "focusspace",
   "version": "0.1.0",
   "private": true,
+  "browserslist": [
+    "last 3 Chrome versions",
+    "last 3 Firefox versions",
+    "last 3 Edge versions",
+    "Safari >= 13",
+    "iOS >= 13",
+    "not dead"
+  ],
   "scripts": {
     "dev": "next dev",
     "build": "next build",

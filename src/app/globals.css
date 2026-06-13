@@ -142,13 +142,13 @@ body {
 }
 
 /* ─── Glass surfaces — driven by the live Tint/Blur sliders ─────── */
-/* NOTE: saturate() uses % form (saturate(140%)), not the unitless 1.4 —
-   some Chromium builds reject the unitless number inside backdrop-filter,
-   which invalidates the whole declaration so it computes to `none` (no blur). */
+/* IMPORTANT: the backdrop-filter itself is injected as a raw <style> in the
+   root layout, NOT here. Lightning CSS (the build's CSS minifier) collapses
+   `backdrop-filter` + `-webkit-backdrop-filter` down to only the -webkit-
+   version, which the newest Chromium ignores → no blur. The runtime <style>
+   bypasses that pipeline so both prefixes ship verbatim. */
 .glass {
   background: color-mix(in srgb, var(--color-surface-container) calc(var(--glass-tint) * 100%), transparent);
-  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
   border: 1px solid rgba(255,255,255,0.08);
   box-shadow:
     inset 0 1px 0 0 rgba(255,255,255,0.07),
@@ -161,8 +161,6 @@ body {
 
 .glass-soft {
   background: color-mix(in srgb, var(--color-surface-container) calc(var(--glass-tint) * 60%), transparent);
-  backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(130%);
-  -webkit-backdrop-filter: blur(calc(var(--glass-blur) * 0.7)) saturate(130%);
   border: 1px solid rgba(255,255,255,0.06);
 }
 .light .glass-soft { border-color: rgba(40,20,35,0.07); }
