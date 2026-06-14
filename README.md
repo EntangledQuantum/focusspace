@@ -23,10 +23,32 @@ New migrations must be applied once (in order) in **Supabase Dashboard → SQL E
 ```
 supabase/migrations/0006_subtasks_and_spotify_takeover.sql   (if not applied yet)
 supabase/migrations/0007_glass_controls.sql                  (if not applied yet)
-supabase/migrations/0008_effects.sql
+supabase/migrations/0008_effects.sql                         (if not applied yet)
+supabase/migrations/0009_ai_and_project_view.sql
 ```
 
-`0008` adds `active_effect` / `effect_settings` for the live-effects system. The app runs without it, but choosing/customising an effect won't persist until it's applied.
+`0009` adds the AI assistant tables (credentials, usage, conversations, messages), AI preferences + the synced Projects "show all / pick projects" view preference. The app runs without it, but the AI feature and project-view toggle won't persist until it's applied.
+
+## AI assistant (Projects tab)
+
+When enabled, an **Ask AI** button on the Projects tab opens a chat where users dictate task/project changes ("add a Reading project with 3 chapters as subtasks", "mark the launch task done", "move X to Personal"). The agent calls server-side tools (create/update/delete/move projects, tasks, subtasks, tags; read current state) that run under the user's RLS-scoped Supabase session — so it can only ever touch that user's own data. Tool calls render as live action cards and the board updates as they complete; assistant replies render as markdown.
+
+**LLM gateway (LiteLLM / OpenAI-compatible).** The app speaks the OpenAI-compatible protocol to an env-configured base URL — point it at a [LiteLLM proxy](https://docs.litellm.ai/docs/) (recommended; supports many models) or any OpenAI-compatible endpoint. Each user may instead add **their own** key + base URL + model in Settings (validated with a Test call, stored AES-256-GCM-encrypted, never sent back to the browser). Global-key users are capped at a monthly token budget; own-key users are unmetered. Deletes run immediately by default, or require an in-chat Confirm if the user turns on "Confirm before deleting".
+
+### AI environment variables
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_AI_ENABLED` | `true` to enable the AI feature globally (client-visible flag) |
+| `AI_BASE_URL` | OpenAI-compatible base URL (e.g. your LiteLLM proxy `/v1`) |
+| `AI_API_KEY` | Global gateway API key |
+| `AI_DEFAULT_MODEL` | Default model id (e.g. `gpt-4o-mini`) |
+| `AI_ALLOWED_MODELS` | Comma-separated model allow-list for the picker |
+| `AI_FREE_MONTHLY_TOKENS` | Monthly token cap for global-key users (default `150000`) |
+| `AI_MAX_STEPS` | Max tool-calling steps per turn (default `8`) |
+| `AI_ENCRYPTION_KEY` | Secret used to encrypt users' own API keys at rest |
+
+The feature stays hidden and the build succeeds even with all of these unset.
+
 
 ## Backgrounds vs. effects
 
@@ -155,6 +177,7 @@ node scripts/setup-env.mjs
 #    supabase/migrations/0006_subtasks_and_spotify_takeover.sql
 #    supabase/migrations/0007_glass_controls.sql
 #    supabase/migrations/0008_effects.sql
+#    supabase/migrations/0009_ai_and_project_view.sql
 
 # 4. Start dev server
 npm run dev
@@ -222,6 +245,7 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 | `0006_subtasks_and_spotify_takeover.sql` | Subtasks table + Spotify takeover setting |
 | `0007_glass_controls.sql` | Glass tint/blur slider settings |
 | `0008_effects.sql` | Live-effect selection + per-effect settings |
+| `0009_ai_and_project_view.sql` | AI assistant (credentials/usage/chat) + synced Projects view preference |
 
 ## Keyboard Shortcuts (Focus screen)
 

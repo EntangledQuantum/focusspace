@@ -56,6 +56,13 @@ export type Database = {
           glass_blur: number;
           active_effect: string | null;
           effect_settings: Json;
+          ai_enabled: boolean;
+          ai_model: string | null;
+          ai_use_own_key: boolean;
+          ai_has_own_key: boolean;
+          ai_destructive: "allow" | "confirm";
+          projects_show_all: boolean;
+          projects_visible_ids: string[];
         };
         Insert: {
           user_id: string;
@@ -81,6 +88,13 @@ export type Database = {
           glass_blur?: number;
           active_effect?: string | null;
           effect_settings?: Json;
+          ai_enabled?: boolean;
+          ai_model?: string | null;
+          ai_use_own_key?: boolean;
+          ai_has_own_key?: boolean;
+          ai_destructive?: "allow" | "confirm";
+          projects_show_all?: boolean;
+          projects_visible_ids?: string[];
         };
         Update: {
           theme?: "dark" | "light" | "system";
@@ -105,7 +119,38 @@ export type Database = {
           glass_blur?: number;
           active_effect?: string | null;
           effect_settings?: Json;
+          ai_enabled?: boolean;
+          ai_model?: string | null;
+          ai_use_own_key?: boolean;
+          ai_has_own_key?: boolean;
+          ai_destructive?: "allow" | "confirm";
+          projects_show_all?: boolean;
+          projects_visible_ids?: string[];
         };
+        Relationships: [];
+      };
+      ai_credentials: {
+        Row: { user_id: string; base_url: string | null; model: string | null; api_key_cipher: string | null; created_at: string };
+        Insert: { user_id: string; base_url?: string | null; model?: string | null; api_key_cipher?: string | null; created_at?: string };
+        Update: { base_url?: string | null; model?: string | null; api_key_cipher?: string | null };
+        Relationships: [];
+      };
+      ai_usage: {
+        Row: { user_id: string; period: string; tokens_in: number; tokens_out: number; request_count: number; updated_at: string };
+        Insert: { user_id: string; period: string; tokens_in?: number; tokens_out?: number; request_count?: number; updated_at?: string };
+        Update: { tokens_in?: number; tokens_out?: number; request_count?: number; updated_at?: string };
+        Relationships: [];
+      };
+      ai_conversations: {
+        Row: { id: string; user_id: string; title: string; created_at: string; updated_at: string };
+        Insert: { id?: string; user_id: string; title?: string; created_at?: string; updated_at?: string };
+        Update: { title?: string; updated_at?: string };
+        Relationships: [];
+      };
+      ai_messages: {
+        Row: { id: string; conversation_id: string; user_id: string; role: string; parts: Json; created_at: string };
+        Insert: { id?: string; conversation_id: string; user_id: string; role: string; parts?: Json; created_at?: string };
+        Update: { parts?: Json };
         Relationships: [];
       };
       projects: {

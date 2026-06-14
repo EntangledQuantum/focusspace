@@ -8,10 +8,11 @@ import { useTimer } from "@/lib/hooks/useTimer";
 import { useTimerStore } from "@/lib/stores/timer";
 import {
   Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag,
-  ChevronDown, Play, Target,
+  ChevronDown, Play, Target, Sparkles, Eye, EyeOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
+import { AIChatPanel } from "@/components/ai/AIChatPanel";
 import type { Project, Subtask, Task, Tag as TagType, TaskWithTags, UserSettings } from "@/types/database";
 import { PomodoroRating } from "@/components/timer/PomodoroRating";
 
@@ -923,6 +924,7 @@ export default function ProjectsPage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
   const [deleteTagConfirm, setDeleteTagConfirm] = useState<TagType | null>(null);
+  const [aiOpen, setAiOpen] = useState(false);
 
   const { data: settings } = useQuery<UserSettings | null>({
     queryKey: ["settings"],
@@ -1017,6 +1019,22 @@ export default function ProjectsPage() {
     router.push("/focus");
   }
 
+  // ── View preference (synced): show all projects, or only selected ones ──
+  const showAll = settings?.projects_show_all ?? true;
+  const visibleIds = settings?.projects_visible_ids ?? [];
+  const visibleProjects = showAll ? projects : projects.filter((p) => visibleIds.includes(p.id));
+  const aiAvailable = process.env.NEXT_PUBLIC_AI_ENABLED === "true" && (settings?.ai_enabled ?? false);
+
+  async function saveView(patch: Partial<Pick<UserSettings, "projects_show_all" | "projects_visible_ids">>) {
+    if (!settings) return;
+    qc.setQueryData<UserSettings | null>(["settings"], (s) => (s ? ({ ...s, ...patch } as UserSettings) : s));
+    await supabase.from("user_settings").update(patch).eq("user_id", settings.user_id);
+  }
+  function toggleVisible(id: string) {
+    const next = visibleIds.includes(id) ? visibleIds.filter((x) => x !== id) : [...visibleIds, id];
+    saveView({ projects_visible_ids: next });
+  }
+
   const totalOpenHint = projects.length > 0
     ? `Open tasks across ${projects.length} ${projects.length === 1 ? "project" : "projects"} · hit `
     : "Create a project to get started · hit ";
@@ -1035,14 +1053,63 @@ export default function ProjectsPage() {
               <strong style={{ color: "var(--color-primary)" }}>Run</strong> to jump straight into focus.
             </p>
           </div>
-          <button
-            onClick={() => setAddingProject(true)}
-            className="pill glass-soft hover-lift"
-            style={{ padding: "10px 16px", fontSize: 13.5, color: "var(--color-on-surface)" }}
-          >
-            <Plus size={16} /> New project
-          </button>
+          <div className="flex items-center" style={{ gap: 8 }}>
+            {aiAvailable && (
+              <button
+                onClick={() => setAiOpen(true)}
+                className="pill grad-primary hover-lift"
+                style={{ padding: "10px 16px", fontSize: 13.5, color: "var(--color-on-primary)", boxShadow: "0 8px 24px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)" }}
+              >
+                <Sparkles size={15} /> Ask AI
+              </button>
+            )}
+            <button
+              onClick={() => setAddingProject(true)}
+              className="pill glass-soft hover-lift"
+              style={{ padding: "10px 16px", fontSize: 13.5, color: "var(--color-on-surface)" }}
+            >
+              <Plus size={16} /> New project
+            </button>
+          </div>
         </div>
+
+        {/* View toolbar: show all, or pick which projects to show */}
+        {projects.length > 1 && (
+          <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: 18 }}>
+            <button
+              onClick={() => saveView({ projects_show_all: !showAll })}
+              className="pill"
+              style={{
+                padding: "6px 13px", fontSize: 12.5,
+                color: showAll ? "var(--color-primary)" : "var(--color-on-surface-variant)",
+                background: showAll ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(255,255,255,0.04)",
+                border: showAll ? "1px solid color-mix(in srgb, var(--color-primary) 26%, transparent)" : "1px solid rgba(255,255,255,0.08)",
+              }}
+            >
+              {showAll ? <Eye size={13} /> : <EyeOff size={13} />} Show all
+            </button>
+            {!showAll && projects.map((p) => {
+              const on = visibleIds.includes(p.id);
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => toggleVisible(p.id)}
+                  className="pill"
+                  style={{
+                    padding: "6px 12px", fontSize: 12,
+                    color: on ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
+                    background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
+                    border: `1px solid ${on ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)"}`,
+                    opacity: on ? 1 : 0.7,
+                  }}
+                >
+                  <span style={{ width: 7, height: 7, borderRadius: 99, background: p.color }} />
+                  {p.name}
+                </button>
+              );
+            })}
+          </div>
+        )}
 
         {/* Tag strip */}
         {(tags.length > 0 || deleteTagConfirm) && (
@@ -1173,9 +1240,16 @@ export default function ProjectsPage() {
               Create a project to get started.
             </p>
           </div>
+        ) : visibleProjects.length === 0 ? (
+          <div className="flex flex-col items-center justify-center gap-3" style={{ padding: "60px 0" }}>
+            <EyeOff size={32} style={{ color: "var(--color-outline)" }} />
+            <p className="text-sm" style={{ color: "var(--color-on-surface-variant)" }}>
+              No projects selected — pick some above or turn on “Show all”.
+            </p>
+          </div>
         ) : (
           <div className="flex flex-col" style={{ gap: 18 }}>
-            {projects.map((p) => (
+            {visibleProjects.map((p) => (
               <ProjectCard
                 key={p.id}
                 project={p}
@@ -1188,6 +1262,14 @@ export default function ProjectsPage() {
           </div>
         )}
       </div>
+
+      {aiAvailable && (
+        <AIChatPanel
+          open={aiOpen}
+          onClose={() => setAiOpen(false)}
+          focusProjectId={visibleProjects[0]?.id ?? projects[0]?.id ?? null}
+        />
+      )}
     </div>
   );
 }
