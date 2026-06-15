@@ -1,0 +1,41 @@
+# LiteLLM proxy for FocusSpace
+#
+# One OpenAI-compatible gateway in front of many providers. The app's
+# AI_BASE_URL points at this proxy's /v1, AI_API_KEY = LITELLM_MASTER_KEY,
+# and AI_ALLOWED_MODELS lists the `model_name`s below.
+#
+# Add only the providers you have keys for; comment out the rest.
+
+model_list:
+  # ── Google Gemini ──
+  - model_name: gemini-2.5-flash
+    litellm_params:
+      model: gemini/gemini-2.5-flash
+      api_key: os.environ/GEMINI_API_KEY
+  - model_name: gemini-2.5-pro
+    litellm_params:
+      model: gemini/gemini-2.5-pro
+      api_key: os.environ/GEMINI_API_KEY
+
+  # ── Anthropic (Claude) — needs ANTHROPIC_API_KEY ──
+  - model_name: claude-sonnet
+    litellm_params:
+      model: anthropic/claude-3-5-sonnet-20241022
+      api_key: os.environ/ANTHROPIC_API_KEY
+
+  # ── OpenAI (ChatGPT) — needs OPENAI_API_KEY ──
+  - model_name: gpt-4o
+    litellm_params:
+      model: openai/gpt-4o
+      api_key: os.environ/OPENAI_API_KEY
+  - model_name: gpt-4o-mini
+    litellm_params:
+      model: openai/gpt-4o-mini
+      api_key: os.environ/OPENAI_API_KEY
+
+litellm_settings:
+  drop_params: true            # tolerate provider-specific param gaps
+  num_retries: 2
+
+general_settings:
+  master_key: os.environ/LITELLM_MASTER_KEY   # this becomes the app's AI_API_KEY
