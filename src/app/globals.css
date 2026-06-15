@@ -301,9 +301,14 @@ input[type="range"].rng.accent::-moz-range-thumb { background: var(--color-secon
 .blob-shift { animation: blobShift 7s ease-in-out infinite; }
 @keyframes floatTick { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-3px); } }
 .float-tick { animation: floatTick 3s ease-in-out infinite; }
+@keyframes twinkle {
+  0%, 100% { opacity: 0.15; transform: scale(0.7); }
+  50% { opacity: 1; transform: scale(1); }
+}
+.twinkle { animation: twinkle 2.4s ease-in-out infinite; }
 
 @media (prefers-reduced-motion: reduce) {
-  .fade-up, .pop, .pulse-dot, .eq-bar, .rise-bar, .ring-loop, .blob-shift, .float-tick { animation: none !important; }
+  .fade-up, .pop, .pulse-dot, .eq-bar, .rise-bar, .ring-loop, .blob-shift, .float-tick, .twinkle { animation: none !important; }
 }
 
 /* ─── Focus ring (buttons/links only — inputs handle their own focus) */
@@ -319,7 +324,8 @@ textarea:focus, textarea:focus-visible {
 }
 
 /* ─── AI chat markdown ──────────────────────────────────────────── */
-.ai-md { font-size: 13.5px; line-height: 1.55; color: var(--color-on-surface); }
+/* Body sized to match the Projects task-row text (Inter ~14.5px). */
+.ai-md { font-size: 14.5px; line-height: 1.6; color: var(--color-on-surface); }
 .ai-md > :first-child { margin-top: 0; }
 .ai-md > :last-child { margin-bottom: 0; }
 .ai-md p { margin: 0 0 8px; }

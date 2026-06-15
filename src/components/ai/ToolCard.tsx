@@ -51,7 +51,7 @@ export function ToolCard({
   const confirmReq = isConfirm(output) ? output : null;
   const resultText = typeof output === "string" ? output : confirmReq ? confirmReq.summary : "";
 
-  const accent = meta.destructive ? "var(--color-error)" : "var(--color-primary)";
+  const isErr = state === "error";
 
   // The summary shown collapsed; full detail revealed on expand. Multi-line or
   // long outputs are worth collapsing; short single lines aren't.
@@ -64,12 +64,20 @@ export function ToolCard({
   const canExpand = !confirmReq && !!detail && (detail.includes("\n") || detail.length > 60) && detail.trim() !== summary.trim();
 
   return (
+    // Tool cards are deliberately NOT driven by the user's glass tint/blur — they
+    // stay a fixed frosted pink (our brand) at full blur so they always read as
+    // "the assistant did something". Inline backdrop-filter bypasses Lightning CSS.
     <div
       className="flex flex-col"
       style={{
-        gap: 6, borderRadius: 14, padding: "8px 11px", margin: "3px 0",
-        background: "rgba(255,255,255,0.04)",
-        border: `1px solid ${state === "error" ? "color-mix(in srgb, var(--color-error) 30%, transparent)" : "rgba(255,255,255,0.07)"}`,
+        gap: 6, borderRadius: 14, padding: "9px 12px", margin: "4px 0",
+        background: isErr
+          ? "color-mix(in srgb, var(--color-error) 40%, transparent)"
+          : "color-mix(in srgb, var(--color-primary) 50%, transparent)",
+        backdropFilter: "blur(30px) saturate(150%)",
+        WebkitBackdropFilter: "blur(30px) saturate(150%)",
+        border: `1px solid ${isErr ? "color-mix(in srgb, var(--color-error) 50%, transparent)" : "color-mix(in srgb, var(--color-primary) 65%, transparent)"}`,
+        boxShadow: "0 10px 28px -14px rgba(0,0,0,0.55)",
       }}
     >
       <button
@@ -80,27 +88,27 @@ export function ToolCard({
       >
         <div
           className="flex items-center justify-center shrink-0"
-          style={{ width: 24, height: 24, borderRadius: 8, background: `color-mix(in srgb, ${accent} 15%, transparent)`, color: accent }}
+          style={{ width: 25, height: 25, borderRadius: 8, background: "rgba(255,255,255,0.22)", color: "var(--color-on-surface)" }}
         >
-          {state === "running" ? <Loader2 size={13} className="animate-spin" /> : state === "error" ? <AlertTriangle size={13} /> : <Icon size={13} />}
+          {state === "running" ? <Loader2 size={13} className="animate-spin" /> : isErr ? <AlertTriangle size={13} /> : <Icon size={13} />}
         </div>
         <span
           className="min-w-0 flex-1"
           style={{
-            fontSize: 12, fontWeight: 600,
-            color: state === "error" ? "var(--color-error)" : "var(--color-on-surface)",
+            fontSize: 13, fontWeight: 700,
+            color: "var(--color-on-surface)",
             overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
           }}
         >
           {state === "running" ? meta.verb + "…" : summary}
         </span>
         {state === "done" && !confirmReq && !canExpand && (
-          <CheckCircle2 size={13} style={{ color: "var(--color-secondary)" }} />
+          <CheckCircle2 size={14} style={{ color: "var(--color-on-surface)" }} />
         )}
         {canExpand && (
           <ChevronRight
-            size={14}
-            style={{ color: "var(--color-on-surface-variant)", transition: "transform .2s", transform: expanded ? "rotate(90deg)" : "none" }}
+            size={15}
+            style={{ color: "var(--color-on-surface)", opacity: 0.8, transition: "transform .2s", transform: expanded ? "rotate(90deg)" : "none" }}
           />
         )}
       </button>
@@ -108,9 +116,9 @@ export function ToolCard({
       {canExpand && expanded && (
         <p
           style={{
-            fontSize: 11.5, lineHeight: 1.5, whiteSpace: "pre-wrap",
-            color: state === "error" ? "var(--color-error)" : "var(--color-on-surface-variant)",
-            paddingLeft: 33, borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 6,
+            fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap",
+            color: "var(--color-on-surface)", opacity: 0.92,
+            paddingLeft: 34, borderTop: "1px solid rgba(255,255,255,0.18)", paddingTop: 6,
           }}
         >
           {detail}

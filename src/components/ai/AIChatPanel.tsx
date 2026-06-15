@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useQueryClient } from "@tanstack/react-query";
-import { X, Plus, ArrowUp, Sparkles, Loader2, History, MessageSquare, Trash2 } from "lucide-react";
+import { X, Plus, ArrowUp, Loader2, History, MessageSquare, Trash2 } from "lucide-react";
 import { toast } from "sonner";
 import { ChatMessage } from "./ChatMessage";
 
@@ -178,26 +178,32 @@ export function AIChatPanel({
 
   return (
     <div
-      className="fixed top-0 right-0 h-dvh flex flex-col z-[70]"
+      className="glass fixed top-0 right-0 h-dvh flex flex-col z-[70] overflow-hidden"
       style={{
-        width: "min(420px, 100vw)",
+        width: "min(440px, 100vw)",
         transform: open ? "translateX(0)" : "translateX(105%)",
         transition: "transform .35s var(--ease)",
-        background: "color-mix(in srgb, var(--color-surface-container) 94%, transparent)",
-        backdropFilter: "blur(28px) saturate(140%)",
-        WebkitBackdropFilter: "blur(28px) saturate(140%)",
-        borderLeft: "1px solid rgba(255,255,255,0.10)",
-        borderRadius: "20px 0 0 20px",
+        borderRadius: "24px 0 0 24px",
         boxShadow: "-24px 0 60px -24px rgba(0,0,0,0.6)",
       }}
     >
-      <div className="relative flex items-center" style={{ gap: 10, padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
-        <div className="grad-primary flex items-center justify-center shrink-0" style={{ width: 28, height: 28, borderRadius: 9 }}>
-          <Sparkles size={15} style={{ color: "var(--color-on-primary)" }} />
+      {/* Focus AI logo — sits above the glass surface but below the chat content.
+          Clear & prominent before the first message, a faint watermark while chatting. */}
+      {messages.length > 0 && (
+        <div
+          className="pointer-events-none absolute inset-0 flex items-center justify-center"
+          style={{ zIndex: 0 }}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/focus-ai.png" alt="" style={{ width: 230, height: 230, opacity: 0.28, objectFit: "contain" }} />
         </div>
+      )}
+      <div className="relative flex items-center" style={{ gap: 10, padding: "14px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", zIndex: 2 }}>
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/focus-ai.png" alt="Focus AI" className="shrink-0" style={{ width: 30, height: 30, objectFit: "contain" }} />
         <div className="flex-1 min-w-0">
-          <p style={{ fontFamily: "var(--font-display)", fontSize: 14.5, fontWeight: 800, color: "var(--color-on-surface)" }}>Assistant</p>
-          <p style={{ fontSize: 11, color: "var(--color-on-surface-variant)", opacity: 0.8 }}>Dictate changes to your projects</p>
+          <p style={{ fontFamily: "var(--font-display)", fontSize: 15.5, fontWeight: 800, color: "var(--color-on-surface)" }}>Focus AI</p>
+          <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.8 }}>Dictate changes to your projects</p>
         </div>
         <button
           onClick={() => { if (!historyOpen) refreshConversations(); setHistoryOpen((v) => !v); }}
@@ -262,34 +268,41 @@ export function AIChatPanel({
         )}
       </div>
 
-      <div className="no-scrollbar flex-1 overflow-y-auto flex flex-col" style={{ gap: 12, padding: 16 }}>
+      <div className="no-scrollbar relative flex-1 overflow-y-auto flex flex-col" style={{ gap: 12, padding: 16, zIndex: 1 }}>
         {messages.length === 0 ? (
-          <div className="flex flex-col" style={{ gap: 10, marginTop: 8 }}>
-            <p style={{ fontSize: 13, color: "var(--color-on-surface-variant)", lineHeight: 1.5 }}>
+          <div className="flex flex-col items-center text-center" style={{ gap: 10, marginTop: "auto", marginBottom: "auto", padding: "8px 4px" }}>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src="/focus-ai.png" alt="Focus AI" style={{ width: 124, height: 124, objectFit: "contain" }} />
+            <p style={{ fontFamily: "var(--font-display)", fontSize: 21, fontWeight: 800, color: "var(--color-on-surface)", letterSpacing: "-.01em" }}>
+              Focus AI
+            </p>
+            <p style={{ fontSize: 14, color: "var(--color-on-surface-variant)", lineHeight: 1.5, maxWidth: 320, marginBottom: 4 }}>
               Tell me what to do and I&apos;ll update your board — add tasks, break them into subtasks, set estimates, move or finish things.
             </p>
-            {SUGGESTIONS.map((s) => (
-              <button
-                key={s}
-                onClick={() => send(s)}
-                className="text-left btn-hover-surface"
-                style={{ padding: "8px 11px", borderRadius: 11, fontSize: 12.5, color: "var(--color-on-surface)", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}
-              >
-                {s}
-              </button>
-            ))}
+            <div className="w-full flex flex-col" style={{ gap: 8 }}>
+              {SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  onClick={() => send(s)}
+                  className="text-left btn-hover-surface"
+                  style={{ padding: "10px 13px", borderRadius: 12, fontSize: 13.5, color: "var(--color-on-surface)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
           </div>
         ) : (
           messages.map((m) => <ChatMessage key={m.id} message={m} onConfirm={handleConfirm} />)
         )}
         {status === "submitted" && (
-          <div className="flex items-center" style={{ gap: 8, color: "var(--color-on-surface-variant)", fontSize: 12.5 }}>
+          <div className="flex items-center" style={{ gap: 8, color: "var(--color-on-surface-variant)", fontSize: 13.5 }}>
             <Loader2 size={14} className="animate-spin" /> Thinking…
           </div>
         )}
       </div>
 
-      <div style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="relative" style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,0.06)", zIndex: 1 }}>
         <div className="flex items-end" style={{ gap: 8, padding: 8, borderRadius: 22, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
           <textarea
             ref={taRef}
@@ -297,9 +310,9 @@ export function AIChatPanel({
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); setInput(""); } }}
             rows={1}
-            placeholder="Ask the assistant…"
+            placeholder="Ask Focus AI…"
             className="flex-1 bg-transparent outline-none resize-none"
-            style={{ fontSize: 13.5, lineHeight: 1.5, color: "var(--color-on-surface)", maxHeight: INPUT_MAX_HEIGHT, paddingTop: 4, paddingLeft: 4, overflowY: "auto" }}
+            style={{ fontSize: 14.5, lineHeight: 1.5, color: "var(--color-on-surface)", maxHeight: INPUT_MAX_HEIGHT, paddingTop: 4, paddingLeft: 4, overflowY: "auto" }}
           />
           <button
             onClick={() => { if (busy) { stop(); } else { send(input); setInput(""); } }}

@@ -362,6 +362,19 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Brand logo — sits in the existing gap between the hero and the features */}
+        <div className="flex justify-center w-full">
+          <Image
+            src={appIcon}
+            alt="FocusSpace"
+            width={156}
+            height={156}
+            priority
+            className="rounded-[36px]"
+            style={{ filter: "drop-shadow(0 22px 55px color-mix(in srgb, var(--color-primary) 38%, transparent))" }}
+          />
+        </div>
+
         {/* Features */}
         <section className="w-full" style={{ maxWidth: 980, paddingBottom: 24 }}>
           <h2
@@ -410,6 +423,80 @@ export default function LandingPage() {
               </motion.div>
             ))}
           </div>
+
+          {/* Focus AI — wide feature banner */}
+          <motion.div
+            initial={{ opacity: 0, y: 18 }}
+            whileInView={{ opacity: 1, y: 0 }}
+            viewport={{ once: true, margin: "-40px" }}
+            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+            className="glass hover-lift relative overflow-hidden"
+            style={{ borderRadius: 20, padding: 20, marginTop: 14 }}
+          >
+            {/* dynamic sparkles */}
+            {[
+              { top: 16, left: 96, size: 14, color: "var(--color-primary)", delay: "0s" },
+              { top: 54, left: 138, size: 9, color: "var(--color-secondary)", delay: "0.7s" },
+              { bottom: 20, left: 70, size: 12, color: "var(--color-secondary)", delay: "1.2s" },
+              { top: 20, right: 34, size: 12, color: "var(--color-primary)", delay: "0.4s" },
+              { bottom: 24, right: 96, size: 10, color: "var(--color-secondary)", delay: "1.5s" },
+              { top: 60, right: 150, size: 8, color: "var(--color-primary)", delay: "0.95s" },
+            ].map((s, i) => (
+              <Sparkles
+                key={i}
+                size={s.size}
+                className="twinkle absolute pointer-events-none"
+                style={{ top: s.top, left: s.left, right: s.right, bottom: s.bottom, color: s.color, animationDelay: s.delay }}
+              />
+            ))}
+
+            <div className="relative flex flex-col sm:flex-row items-center" style={{ gap: 20 }}>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src="/focus-ai.png"
+                alt="Focus AI"
+                className="shrink-0"
+                style={{ width: 104, height: 104, objectFit: "contain", filter: "drop-shadow(0 12px 30px rgba(90,160,255,0.4))" }}
+              />
+
+              <div className="flex-1 min-w-0 text-center sm:text-left">
+                <div className="flex items-center justify-center sm:justify-start" style={{ gap: 8 }}>
+                  <p style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 800, letterSpacing: "-.01em", color: "var(--color-on-surface)" }}>
+                    Meet Focus AI
+                  </p>
+                  <span className="pill chip-primary" style={{ padding: "2px 9px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em" }}>
+                    NEW
+                  </span>
+                </div>
+                <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--color-on-surface-variant)", marginTop: 5, maxWidth: 560 }}>
+                  Your built-in productivity co-pilot. Just describe what you need and Focus AI shapes your
+                  board for you — adding personalized tasks, breaking big goals into subtasks, and reading your
+                  habits — so you spend your energy doing the work, not organizing it.
+                </p>
+
+                <div className="flex items-center justify-center sm:justify-start flex-wrap" style={{ gap: 8, marginTop: 12 }}>
+                  {["Add new tasks", "Edit & modify your tasks", "Understand your focus routine"].map((chip) => (
+                    <span
+                      key={chip}
+                      className="pill"
+                      style={{
+                        padding: "5px 12px", fontSize: 12, fontWeight: 600,
+                        color: "var(--color-on-surface)",
+                        background: "rgba(255,255,255,0.06)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      {chip}
+                    </span>
+                  ))}
+                </div>
+
+                <p style={{ fontSize: 11, color: "var(--color-on-surface-variant)", opacity: 0.65, marginTop: 12 }}>
+                  Optional — Focus AI can be turned off anytime in Settings.
+                </p>
+              </div>
+            </div>
+          </motion.div>
 
           {/* Bottom CTA */}
           <div className="flex flex-col items-center" style={{ marginTop: 48, marginBottom: 56 }}>
