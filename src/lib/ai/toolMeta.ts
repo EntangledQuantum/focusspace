@@ -1,11 +1,15 @@
 // Client-safe map: tool name → a verb + lucide icon name for the ToolCard.
-// Icon names match lucide-react exports.
-export interface ToolMeta { verb: string; icon: string; destructive?: boolean }
+// Icon names match lucide-react exports. `noun` (when set) lets the card show a
+// count summary like "Read 3 tasks" by counting list lines in the output.
+export interface ToolMeta { verb: string; icon: string; destructive?: boolean; noun?: string }
 
 export const TOOL_META: Record<string, ToolMeta> = {
-  list_projects:          { verb: "Read projects", icon: "FolderKanban" },
-  list_tasks:             { verb: "Read tasks", icon: "ListChecks" },
-  recent_completed_tasks: { verb: "Read recent", icon: "CheckCheck" },
+  list_projects:          { verb: "Read projects", icon: "FolderKanban", noun: "project" },
+  list_tasks:             { verb: "Read tasks", icon: "ListChecks", noun: "task" },
+  search_tasks:           { verb: "Search tasks", icon: "Search", noun: "task" },
+  get_task:               { verb: "Read task", icon: "FileText" },
+  recent_completed_tasks: { verb: "Read recent", icon: "CheckCheck", noun: "task" },
+  focus_stats:            { verb: "Read focus stats", icon: "BarChart3" },
   create_project:         { verb: "Create project", icon: "FolderPlus" },
   rename_project:         { verb: "Rename project", icon: "Pencil" },
   recolor_project:        { verb: "Recolor project", icon: "Palette" },

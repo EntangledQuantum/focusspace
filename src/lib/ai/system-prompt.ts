@@ -21,7 +21,11 @@ export async function buildSystemPrompt(
   ]);
 
   const tz = profile?.timezone || "UTC";
-  const today = new Date().toLocaleDateString("en-CA", { timeZone: tz });
+  const now = new Date();
+  const today = now.toLocaleDateString("en-CA", { timeZone: tz }); // ISO YYYY-MM-DD
+  const todayNatural = now.toLocaleDateString("en-US", {
+    timeZone: tz, weekday: "long", year: "numeric", month: "long", day: "numeric",
+  });
 
   const projectLines = (projects ?? []).map((p) => {
     const t = (tasks ?? []).filter((x) => x.project_id === p.id);
@@ -34,16 +38,20 @@ export async function buildSystemPrompt(
 
   return [
     `You are the task assistant inside FocusSpace, a focus/pomodoro app. You help the user manage projects, tasks, subtasks and tags by calling tools. Be concise and friendly.`,
-    `Today is ${today} (timezone ${tz})${profile?.display_name ? `. The user's name is ${profile.display_name}.` : "."}`,
+    `Today is ${todayNatural} (${today}, timezone ${tz})${profile?.display_name ? `. The user's name is ${profile.display_name}.` : "."}`,
     ``,
     `Current projects:`,
     projectLines.length ? projectLines.join("\n") : "(no projects yet)",
     `Existing tags: ${tagList}`,
     ``,
     `Guidelines:`,
-    `- Prefer the project/task ids shown above or returned by the list_* / find tools. NEVER invent ids; if unsure which item the user means, call a list tool first or ask.`,
+    `- When the user names a specific task, use search_tasks (regex/keywords) to find its id instead of dumping everything with list_tasks. Then call get_task with the id to read its notes and existing subtasks before editing.`,
+    `- Only use list_tasks for broad "show me everything in project X" style requests.`,
+    `- Prefer the project/task ids shown above or returned by the search/list tools. NEVER invent ids; if unsure which item the user means, search first or ask.`,
     `- You may refer to projects/tasks by name in tool args — the tools resolve names fuzzily.`,
     `- Keep task titles short and action-oriented. Put longer detail in notes.`,
+    `- For questions about focus time / productivity (e.g. "how long did I focus today?", "this week?", "last 30 days?"), call focus_stats — never guess these numbers.`,
+    `- Always write dates and times naturally for the user, e.g. "June 11th, 2026" or "yesterday", never raw ISO like "2026-06-11".`,
     `- After you finish acting, give a brief markdown summary of what changed (bullet list). Do not restate tool outputs verbatim.`,
     opts.destructive === "confirm"
       ? `- Destructive actions (deletes) require user confirmation: the UI will show a Confirm button after you call a delete tool, so just call it once and tell the user to confirm.`

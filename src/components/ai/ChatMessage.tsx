@@ -30,8 +30,8 @@ export function ChatMessage({
               <div
                 key={i}
                 style={{
-                  maxWidth: "85%", padding: "8px 12px", borderRadius: 14, borderBottomRightRadius: 4,
-                  fontSize: 13.5, lineHeight: 1.45, color: "var(--color-on-primary)",
+                  maxWidth: "85%", padding: "9px 13px", borderRadius: 16, borderBottomRightRadius: 5,
+                  fontSize: 14.5, lineHeight: 1.5, color: "var(--color-on-primary)",
                   background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
                 }}
               >

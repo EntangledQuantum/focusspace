@@ -8,7 +8,7 @@ import { useTimer } from "@/lib/hooks/useTimer";
 import { useTimerStore } from "@/lib/stores/timer";
 import {
   Plus, CheckCircle2, Circle, Trash2, FolderPlus, Pencil, Check, X, Tag,
-  ChevronDown, Play, Target, Sparkles, Eye, EyeOff,
+  ChevronDown, Play, Target, Eye, EyeOff,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
@@ -1057,10 +1057,11 @@ export default function ProjectsPage() {
             {aiAvailable && (
               <button
                 onClick={() => setAiOpen(true)}
-                className="pill grad-primary hover-lift"
-                style={{ padding: "10px 16px", fontSize: 13.5, color: "var(--color-on-primary)", boxShadow: "0 8px 24px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)" }}
+                className="pill glass-soft hover-lift"
+                style={{ padding: "8px 16px 8px 11px", fontSize: 13.5, color: "var(--color-on-surface)" }}
               >
-                <Sparkles size={15} /> Ask AI
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src="/focus-ai.png" alt="" style={{ width: 21, height: 21, objectFit: "contain" }} /> Ask AI
               </button>
             )}
             <button

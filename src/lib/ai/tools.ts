@@ -111,6 +111,63 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       },
     }),
 
+    search_tasks: tool({
+      description:
+        "Search tasks by a title pattern across ALL projects and return only matching titles + ids (lightweight). " +
+        "The pattern is treated as a case-insensitive regex (Postgres regex), falling back to a substring match. " +
+        "Prefer this over list_tasks when the user names a specific task — then call get_task with the id for full detail.",
+      inputSchema: z.object({
+        query: z.string().min(1).describe("Case-insensitive regex or keywords to match against task titles"),
+        status: z.enum(["todo", "done", "all"]).optional().default("all"),
+        limit: z.number().int().min(1).max(50).optional().default(20),
+      }),
+      execute: async ({ query, status, limit }) => {
+        const base = () => {
+          let q = supabase.from("tasks").select("id, title, status, project_id");
+          if (status !== "all") q = q.eq("status", status);
+          return q.order("created_at", { ascending: false }).limit(limit);
+        };
+        // Try Postgres case-insensitive regex; fall back to substring if the
+        // pattern is invalid (PostgREST rejects bad regex with an error).
+        const regexResult = await base().filter("title", "imatch", query);
+        let data = regexResult.data;
+        if (regexResult.error) data = (await base().ilike("title", `%${query}%`)).data;
+        if (!data?.length) return `No tasks matching /${query}/.`;
+        return data.map((t) => `- ${t.title} (id: ${t.id}) [${t.status}]`).join("\n");
+      },
+    }),
+
+    get_task: tool({
+      description:
+        "Get full detail for a single task by id or name: notes, priority, pomodoro progress, tags, and ALL its subtasks (with done state). " +
+        "Use after search_tasks/list_tasks to inspect a task before editing its subtasks or notes.",
+      inputSchema: z.object({ taskRef: z.string() }),
+      execute: async ({ taskRef }) => {
+        const t = await resolveTask(taskRef);
+        if (!t) return `No task matching "${taskRef}".`;
+        const [{ data: subs }, { data: tt }] = await Promise.all([
+          supabase.from("subtasks").select("title, done").eq("task_id", t.id).order("sort_order"),
+          supabase.from("task_tags").select("tag_id").eq("task_id", t.id),
+        ]);
+        const tagIds = (tt ?? []).map((r) => r.tag_id);
+        let tagNames: string[] = [];
+        if (tagIds.length) {
+          const { data: tg } = await supabase.from("tags").select("name").in("id", tagIds);
+          tagNames = (tg ?? []).map((r) => r.name);
+        }
+        const lines = [
+          `${t.title} (id: ${t.id})`,
+          `Status: ${t.status} · Priority: ${t.priority} · ${t.completed_pomodoros}/${t.estimated_pomodoros} pomos`,
+          tagNames.length ? `Tags: ${tagNames.map((n) => `#${n}`).join(", ")}` : null,
+          t.notes ? `Notes: ${t.notes}` : null,
+          subs?.length
+            ? `Subtasks:\n${subs.map((s) => `  - [${s.done ? "x" : " "}] ${s.title}`).join("\n")}`
+            : "Subtasks: (none)",
+        ].filter(Boolean);
+        return lines.join("\n");
+      },
+    }),
+
     recent_completed_tasks: tool({
       description: "List the most recently completed tasks (what the user has finished lately).",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional().default(8) }),
@@ -118,6 +175,54 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
         const { data } = await supabase.from("tasks").select("title, completed_at, project_id").eq("status", "done").not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(limit);
         if (!data?.length) return "No completed tasks yet.";
         return data.map((t) => `- ${t.title} (done ${t.completed_at?.slice(0, 10)})`).join("\n");
+      },
+    }),
+
+    focus_stats: tool({
+      description:
+        "Read the user's actual focus/productivity time (real pomodoro + custom sessions). Returns focus time and session counts for today, yesterday, the last 7 days, the last 30 days, and all-time. Use this for ANY 'how long/much did I focus' question — never estimate.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await supabase
+          .from("v_daily_focus")
+          .select("day, total_seconds, sessions")
+          .order("day", { ascending: false })
+          .limit(400);
+        const rows = data ?? [];
+        if (!rows.length) return "No focus sessions recorded yet.";
+
+        const dayOf = (delta: number) => {
+          const d = new Date();
+          d.setUTCDate(d.getUTCDate() + delta);
+          return d.toISOString().slice(0, 10);
+        };
+        const fmt = (sec: number) => {
+          const m = Math.round(sec / 60);
+          const h = Math.floor(m / 60);
+          return h ? `${h}h ${m % 60}m` : `${m}m`;
+        };
+        const rowFor = (iso: string) => rows.find((r) => r.day.slice(0, 10) === iso);
+        const sumSince = (iso: string) =>
+          rows.filter((r) => r.day.slice(0, 10) >= iso).reduce(
+            (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
+            { sec: 0, sess: 0 },
+          );
+        const all = rows.reduce(
+          (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
+          { sec: 0, sess: 0 },
+        );
+        const today = rowFor(dayOf(0));
+        const yest = rowFor(dayOf(-1));
+        const last7 = sumSince(dayOf(-6));
+        const last30 = sumSince(dayOf(-29));
+
+        return [
+          `Today: ${fmt(today?.total_seconds ?? 0)} (${today?.sessions ?? 0} sessions)`,
+          `Yesterday: ${fmt(yest?.total_seconds ?? 0)} (${yest?.sessions ?? 0} sessions)`,
+          `Last 7 days: ${fmt(last7.sec)} (${last7.sess} sessions)`,
+          `Last 30 days: ${fmt(last30.sec)} (${last30.sess} sessions)`,
+          `All time: ${fmt(all.sec)} (${all.sess} sessions)`,
+        ].join("\n");
       },
     }),
 
