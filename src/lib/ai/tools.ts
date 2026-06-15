@@ -111,6 +111,63 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       },
     }),
 
+    search_tasks: tool({
+      description:
+        "Search tasks by a title pattern across ALL projects and return only matching titles + ids (lightweight). " +
+        "The pattern is treated as a case-insensitive regex (Postgres regex), falling back to a substring match. " +
+        "Prefer this over list_tasks when the user names a specific task — then call get_task with the id for full detail.",
+      inputSchema: z.object({
+        query: z.string().min(1).describe("Case-insensitive regex or keywords to match against task titles"),
+        status: z.enum(["todo", "done", "all"]).optional().default("all"),
+        limit: z.number().int().min(1).max(50).optional().default(20),
+      }),
+      execute: async ({ query, status, limit }) => {
+        const base = () => {
+          let q = supabase.from("tasks").select("id, title, status, project_id");
+          if (status !== "all") q = q.eq("status", status);
+          return q.order("created_at", { ascending: false }).limit(limit);
+        };
+        // Try Postgres case-insensitive regex; fall back to substring if the
+        // pattern is invalid (PostgREST rejects bad regex with an error).
+        const regexResult = await base().filter("title", "imatch", query);
+        let data = regexResult.data;
+        if (regexResult.error) data = (await base().ilike("title", `%${query}%`)).data;
+        if (!data?.length) return `No tasks matching /${query}/.`;
+        return data.map((t) => `- ${t.title} (id: ${t.id}) [${t.status}]`).join("\n");
+      },
+    }),
+
+    get_task: tool({
+      description:
+        "Get full detail for a single task by id or name: notes, priority, pomodoro progress, tags, and ALL its subtasks (with done state). " +
+        "Use after search_tasks/list_tasks to inspect a task before editing its subtasks or notes.",
+      inputSchema: z.object({ taskRef: z.string() }),
+      execute: async ({ taskRef }) => {
+        const t = await resolveTask(taskRef);
+        if (!t) return `No task matching "${taskRef}".`;
+        const [{ data: subs }, { data: tt }] = await Promise.all([
+          supabase.from("subtasks").select("title, done").eq("task_id", t.id).order("sort_order"),
+          supabase.from("task_tags").select("tag_id").eq("task_id", t.id),
+        ]);
+        const tagIds = (tt ?? []).map((r) => r.tag_id);
+        let tagNames: string[] = [];
+        if (tagIds.length) {
+          const { data: tg } = await supabase.from("tags").select("name").in("id", tagIds);
+          tagNames = (tg ?? []).map((r) => r.name);
+        }
+        const lines = [
+          `${t.title} (id: ${t.id})`,
+          `Status: ${t.status} · Priority: ${t.priority} · ${t.completed_pomodoros}/${t.estimated_pomodoros} pomos`,
+          tagNames.length ? `Tags: ${tagNames.map((n) => `#${n}`).join(", ")}` : null,
+          t.notes ? `Notes: ${t.notes}` : null,
+          subs?.length
+            ? `Subtasks:\n${subs.map((s) => `  - [${s.done ? "x" : " "}] ${s.title}`).join("\n")}`
+            : "Subtasks: (none)",
+        ].filter(Boolean);
+        return lines.join("\n");
+      },
+    }),
+
     recent_completed_tasks: tool({
       description: "List the most recently completed tasks (what the user has finished lately).",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional().default(8) }),

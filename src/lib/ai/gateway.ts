@@ -34,6 +34,7 @@ export async function resolveModel(
         name: "user-gateway",
         baseURL: cred.base_url,
         apiKey: decryptSecret(cred.api_key_cipher),
+        includeUsage: true,
       });
       const modelId = cred.model || settings.ai_model || cfg.defaultModel;
       return { model: provider.chatModel(modelId), modelId, isOwnKey: true };
@@ -41,7 +42,7 @@ export async function resolveModel(
   }
 
   if (!cfg.baseURL || !cfg.apiKey) return null;
-  const provider = createOpenAICompatible({ name: "global-gateway", baseURL: cfg.baseURL, apiKey: cfg.apiKey });
+  const provider = createOpenAICompatible({ name: "global-gateway", baseURL: cfg.baseURL, apiKey: cfg.apiKey, includeUsage: true });
   let modelId = settings.ai_model || cfg.defaultModel;
   if (cfg.allowedModels.length && !cfg.allowedModels.includes(modelId)) modelId = cfg.defaultModel;
   return { model: provider.chatModel(modelId), modelId, isOwnKey: false };
@@ -49,6 +50,6 @@ export async function resolveModel(
 
 /** Lightweight model build for the validate route (explicit creds, no DB). */
 export function modelFromCreds(baseURL: string, apiKey: string, modelId: string): LanguageModel {
-  const provider = createOpenAICompatible({ name: "validate", baseURL, apiKey });
+  const provider = createOpenAICompatible({ name: "validate", baseURL, apiKey, includeUsage: true });
   return provider.chatModel(modelId);
 }

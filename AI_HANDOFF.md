@@ -15,7 +15,15 @@
 - Supabase via `@supabase/ssr`. **RLS** scopes every table to `(select auth.uid()) = user_id`. Server routes build a cookie-bound client via `createClient()` from `src/lib/supabase/server.ts` (it `await`s `cookies()`), then `supabase.auth.getUser()`.
 - **AI SDK v6** (`ai@^6`, `@ai-sdk/react@^3`, `@ai-sdk/openai-compatible@^2`). v6 specifics already used: `tool({ inputSchema })`, `streamText`, `await convertToModelMessages(messages)` (it's async in v6!), `result.toUIMessageStreamResponse()`, `stopWhen: stepCountIs(n)`, `onFinish({ totalUsage })` → `totalUsage.inputTokens/outputTokens`. Client: `useChat` + `DefaultChatTransport` from `ai`; `sendMessage({text}, {body:{...}})` passes per-call body; messages are UIMessages with `.parts` (`type:"text"` or `type:"tool-<name>"`/`"dynamic-tool"` with `state` ∈ input-streaming|input-available|output-available|output-error).
 
-## ⚠️ CURRENT STATUS: AI feature does NOT work yet (needs debugging)
+## Update 2026-06-15 — AI works; UX/efficiency pass landed (branch `claude/loving-lovelace-kl5bq2`)
+AI is functional in production. Fixed a batch of suboptimal behaviours:
+- **Usage meter stuck at 0** → root cause: the openai-compatible provider only emits token usage on streamed responses when `includeUsage: true` is passed to `createOpenAICompatible`. Added it to all three builders in `gateway.ts`, so `streamText`'s `onFinish.totalUsage` now populates and `recordUsage` writes real numbers.
+- **Agent dumped ALL tasks** to find one → added `search_tasks` (Postgres case-insensitive regex via PostgREST `imatch`, falls back to substring; returns title+id only) and `get_task` (full detail incl. subtasks/tags by id). System prompt now steers: search → get_task → edit, reserving `list_tasks` for "show everything" requests.
+- **Ugly tool cards** → `ToolCard.tsx` now shows a one-line summary ("Read 3 tasks" / the write result) collapsed by default, with a chevron to expand the full output. Errors collapse too.
+- **No chat history** → `AIChatPanel.tsx` header gained a History dropdown (list/load/delete conversations); list refreshes after each turn.
+- **Input box fixed-height w/ inner scrollbar** → textarea auto-grows to ~8 lines (`INPUT_MAX_HEIGHT`) then scrolls; rounder corners on input + panel.
+
+## ⚠️ EARLIER STATUS (superseded by the update above): AI feature does NOT work yet (needs debugging)
 User confirmed: migration `0009` applied, env vars added on Vercel, but **AI is not working** — details TBD. Nothing was diagnosed yet. First thing to do next session: get the failing request details.
 
 **Debug checklist (ask user / inspect on the `claude/ai-task-agent` Vercel preview):**
