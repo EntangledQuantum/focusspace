@@ -36,8 +36,10 @@ export async function updateSession(request: NextRequest) {
   const isCallbackRoute = pathname.startsWith("/auth/callback");
   // "/" is the public landing page (sign-in lives in its auth modal)
   const isLanding = pathname === "/";
+  // Legal pages are public — viewable without an account
+  const isLegal = pathname.startsWith("/privacy") || pathname.startsWith("/terms");
 
-  if (!user && !isAuthRoute && !isCallbackRoute && !isLanding) {
+  if (!user && !isAuthRoute && !isCallbackRoute && !isLanding && !isLegal) {
     const url = request.nextUrl.clone();
     url.pathname = "/";
     return NextResponse.redirect(url);

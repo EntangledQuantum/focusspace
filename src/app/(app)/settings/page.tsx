@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { REPO_URL } from "@/components/layout/SiteFooter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { MESH_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
@@ -640,6 +642,21 @@ export default function SettingsPage() {
 
         {/* Sign out */}
         <SignOutButton />
+
+        {/* Legal */}
+        <div className="flex items-center justify-center flex-wrap" style={{ gap: 12, paddingTop: 4 }}>
+          <Link href="/privacy" className="hover:underline" style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)" }}>
+            Privacy Policy
+          </Link>
+          <span style={{ color: "var(--color-on-surface-variant)", opacity: 0.4 }}>·</span>
+          <Link href="/terms" className="hover:underline" style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)" }}>
+            Terms of Service
+          </Link>
+          <span style={{ color: "var(--color-on-surface-variant)", opacity: 0.4 }}>·</span>
+          <a href={REPO_URL} target="_blank" rel="noreferrer" className="hover:underline" style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)" }}>
+            GitHub
+          </a>
+        </div>
       </div>
     </>
   );

@@ -344,9 +344,20 @@ textarea:focus, textarea:focus-visible {
 .ai-md th, .ai-md td { border: 1px solid rgba(255,255,255,0.10); padding: 4px 8px; text-align: left; }
 .ai-md hr { border: none; border-top: 1px solid rgba(255,255,255,0.08); margin: 10px 0; }
 
-/* ─── Hover utilities ────────────────────────────────────────────── */
+/* ─── Legal pages (privacy / terms) prose ───────────────────────── */
+.legal-prose { color: var(--color-on-surface-variant); font-size: 14.5px; line-height: 1.7; }
+.legal-prose h2 {
+  font-family: var(--font-display); font-weight: 700; font-size: 18px;
+  color: var(--color-on-surface); margin: 28px 0 10px; letter-spacing: -.01em;
+}
+.legal-prose h2:first-child { margin-top: 0; }
+.legal-prose p { margin: 0 0 12px; }
+.legal-prose ul { margin: 0 0 12px; padding-left: 20px; }
+.legal-prose li { margin: 4px 0; list-style: disc; }
+.legal-prose strong { color: var(--color-on-surface); font-weight: 700; }
+.legal-prose a { color: var(--color-primary); text-decoration: underline; }
 
-/* Primary button – brightness lift + glow */
+/* ─── Hover utilities ────────────────────────────────────────────── */
 .btn-hover-primary:hover {
   filter: brightness(1.1) !important;
   box-shadow: 0 6px 28px color-mix(in srgb, var(--color-primary) 40%, transparent) !important;
