@@ -1,161 +1,102 @@
-![Focus Space](./src/app/icon.png)
+<p align="center">
+  <img src="./src/app/icon.png" width="96" style="border-radius:22px;" alt="FocusSpace" />
+</p>
 
-# FocusSpace
+<h1 align="center">FocusSpace</h1>
 
-### Now Deployed to Vercel !
+<p align="center">
+  <strong>One task. One timer. Your music, your data, and a space that disappears around your work.</strong>
+</p>
 
-<a href="https://focusspace-three.vercel.app/focus" target="_blank" style="text-decoration:none;">
-  <div align="center">
+<p align="center">
+  🌐 <a href="https://focusspace.live/"><strong>focusspace.live</strong></a>
+</p>
 
-|  |  |
-|:---:|---|
-| <img src="./src/app/icon.png" width="70" style="border-radius:16px;" /> | <div align="left"> <h3>Focus Space</h3> <p>A modern productivity and focus app built to help you get things done with clarity and flow.</p> <p><code>https://focusspace-three.vercel.app/focus</code></p> </div> |
+---
 
-  </div>
-</a>
+## What is FocusSpace?
 
-A modern Pomodoro + productivity tracker. Pick one task, run the timer, review the data. Built to keep you accountable — not entertained.
+**FocusSpace** is a modern Pomodoro + productivity tracker built around a single idea: do one thing at a
+time. You pick a task, run the timer, and review the data — without the clutter, gamification, or feeds
+that most "productivity" apps bury you in.
 
-## ⚠️ Required after pulling this update
+It pairs a distraction-free focus screen with full project/task management, Spotify playback, rich
+analytics, living wallpapers, and an optional **Focus AI** assistant that edits your board for you in plain
+language. It's also **fully open source** — self-host it, audit it, or make it yours.
 
-New migrations must be applied once (in order) in **Supabase Dashboard → SQL Editor**:
+---
 
-```
-supabase/migrations/0006_subtasks_and_spotify_takeover.sql   (if not applied yet)
-supabase/migrations/0007_glass_controls.sql                  (if not applied yet)
-supabase/migrations/0008_effects.sql                         (if not applied yet)
-supabase/migrations/0009_ai_and_project_view.sql
-```
+## 📸 Screenshots
 
-`0009` adds the AI assistant tables (credentials, usage, conversations, messages), AI preferences + the synced Projects "show all / pick projects" view preference. The app runs without it, but the AI feature and project-view toggle won't persist until it's applied.
+### 🏠 Home
+> _Screenshot placeholder — add `docs/screenshots/home.png`_
 
-## AI assistant (Projects tab)
+The public landing page: an animated aurora that drifts with your cursor and bursts on click, a live demo
+timer ring, a rotating headline, the feature grid, and the Focus AI banner.
 
-When enabled, an **Ask AI** button on the Projects tab opens a chat where users dictate task/project changes ("add a Reading project with 3 chapters as subtasks", "mark the launch task done", "move X to Personal"). The agent calls server-side tools (create/update/delete/move projects, tasks, subtasks, tags; read current state) that run under the user's RLS-scoped Supabase session — so it can only ever touch that user's own data. Tool calls render as live action cards and the board updates as they complete; assistant replies render as markdown.
+### 🗂️ Projects
+> _Screenshot placeholder — add `docs/screenshots/projects.png`_
 
-**LLM gateway (LiteLLM / OpenAI-compatible).** The app speaks the OpenAI-compatible protocol to an env-configured base URL — point it at a [LiteLLM proxy](https://docs.litellm.ai/docs/) (recommended; supports many models) or any OpenAI-compatible endpoint. Each user may instead add **their own** key + base URL + model in Settings (validated with a Test call, stored AES-256-GCM-encrypted, never sent back to the browser). Global-key users are capped at a monthly token budget; own-key users are unmetered. Deletes run immediately by default, or require an in-chat Confirm if the user turns on "Confirm before deleting".
+Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro estimates — plus a one-tap
+**Run** pill that switches the active task and jumps straight into a focus session.
 
-### AI environment variables
-| Variable | Purpose |
-|---|---|
-| `NEXT_PUBLIC_AI_ENABLED` | `true` to enable the AI feature globally (client-visible flag) |
-| `AI_BASE_URL` | OpenAI-compatible base URL (e.g. your LiteLLM proxy `/v1`) |
-| `AI_API_KEY` | Global gateway API key |
-| `AI_DEFAULT_MODEL` | Default model id (e.g. `gpt-4o-mini`) |
-| `AI_ALLOWED_MODELS` | Comma-separated model allow-list for the picker |
-| `AI_FREE_MONTHLY_TOKENS` | Monthly token cap for global-key users (default `150000`) |
-| `AI_MAX_STEPS` | Max tool-calling steps per turn (default `8`) |
-| `AI_ENCRYPTION_KEY` | Secret used to encrypt users' own API keys at rest |
+---
 
-The feature stays hidden and the build succeeds even with all of these unset.
+## ✨ Features
 
+- **🎯 Distraction-free focus screen** — a solo gradient timer ring, the active task, and transport
+  controls. Nothing else competes for your attention.
+- **⏱️ Dual-mode timer** — classic Pomodoro blocks or a Custom Target duration, with smart breaks,
+  auto-start, and a per-task session timeline.
+- **🗂️ Projects, tasks, subtasks & tags** — full CRUD with notes, priorities, pomodoro estimates, and
+  collapsible subtask checklists. Pick which projects to show, or show them all.
+- **🤖 Focus AI assistant** *(optional)* — open **Ask AI** on the Projects tab and dictate changes in
+  plain language:
+  - **Add** projects, tasks, and subtasks from a sentence
+  - **Edit & modify** existing tasks — rename, retag, re-estimate, move, complete
+  - **Search** your tasks and **read your focus stats** ("how long did I focus this week?")
+  - Every action runs under your own row-level-secured session, renders as a live action card, and
+    updates the board instantly. Conversations are saved to your own history.
+- **🎵 Spotify built in** — Web Playback SDK player with search, playlists, your library, volume/shuffle,
+  external-device takeover, and a pop-out mini player.
+- **📊 Analytics & streaks** — focus-time KPIs, a last-7-days bar chart, per-tag and per-project
+  breakdowns, a GitHub-style heatmap, and streak tracking.
+- **🌌 Living wallpapers & effects** — CSS-mesh presets (Aurora / Dusk / Mist / Noir) or your own photo,
+  with optional animated effects (Aurora glow, Rainfall, Snowfall, Starfield, Fireflies).
+- **🪟 Live glass controls** — Tint + Blur sliders frost every card over your wallpaper, in real time.
+- **🔔 Notifications & tones** — browser notifications and Web Audio completion tones, with Do-Not-Disturb
+  during focus sessions.
+- **🔐 Your data, yours** — everything is scoped to your account with row-level security; AI chats live in
+  your own database and are never read or reused.
+- **🎨 Dark / Light / System themes** and email + Google OAuth sign-in.
 
-## Backgrounds vs. effects
+---
 
-A **background** is what you focus over — a CSS-mesh preset (Aurora / Dusk / Mist / Noir) or your own uploaded photo. A **live effect** (Aurora glow, Rainfall, Snowfall, Starfield, Fireflies) is layered *on top* of any background and is optional (default: none). Each effect has its own Intensity / Speed / (Density) sliders. Both live under **Settings → Appearance / Live Effect**; photo blur/brightness controls only appear when an uploaded photo is the active background.
+## 📸 More screenshots
 
-## Latest Updates
+### 📊 Analytics
+> _Screenshot placeholder — add `docs/screenshots/analytics.png`_
 
-### Spotify browser + fixes round
+Focus-time stat cards, a last-7-days gradient bar chart, by-project and by-tag breakdowns, and a
+contribution-style heatmap of your deep-work history.
 
-- **Big music picker** — "Choose music" now opens a TaskPicker-style modal: browse your recently played, top artists/songs, playlists and library when idle, or search the whole catalog with **All / Songs / Albums / Artists / Playlists / Library** filter tabs.
-- **Search fixed** — Spotify's `/search` rejects `limit` > 10 with a 400 (per their OpenAPI spec); track/album/artist search works again. Browse uses `user-top-read` / `user-read-recently-played` scopes — **reconnect Spotify once** (Settings → Music) to grant them; sections hide gracefully until then.
-- **Volume slider fixed** — the in-browser player's volume is now set locally via the SDK only; the Connect-reported volume no longer fights and resets the slider every 5 s.
-- **Glass blur actually works** — Chromium ignores `backdrop-filter` under transformed ancestors; the dock/mini-bar were centered with `translateX(-50%)`. They're now flex-centered with the slide animation on the card itself, so the Blur slider visibly frosts cards.
-- **Bottom gradient removed** — the dark/light scrim at the bottom of every wallpaper is gone.
-- **Dock subtasks** — always expanded (scrolls in place); the collapse toggle that warped the music column is removed.
+### 🤖 Focus AI chat
+> _Screenshot placeholder — add `docs/screenshots/ai_chat.png`_
 
-### Design-polish round
+The Focus AI panel — branded glass that matches your tint/blur, with action cards for every task it
+creates or edits, saved conversation history, and the Focus AI watermark behind the chat.
 
-- **Whole app on the new design** — Projects, Analytics, Settings and the task picker now use the prototype layout: centered 880px pages, stacked glass project cards with icon tiles, session dots, expandable subtasks and the Run pill; Analytics got stat cards, gradient day bars and a by-project breakdown; Settings got the icon-tile sections, hairline rows and gradient switches.
-- **One-door auth** — login/signup pages are gone. The landing CTA opens a single modal: Google/Spotify sign in *or* create the account automatically, and email+password does both too (new email → account is created on the spot).
-- **Landing polish** — dimmer aurora, badge removed, single CTA, real app logo and a more opaque nav bar; feature cards now have live micro-animations (equalizer waves on the music card, looping ring, rising chart bars, drifting wallpaper blob).
-- **Fixes** — dock corner buttons (fullscreen · pop-out · focus mode) no longer overlap the music column; wallpaper preset swatches are 16:9.
+---
 
-### Landing page + living wallpapers
+## 🛠️ Development
 
-- **New homepage** — `/` is now a public landing page: animated aurora background that follows your cursor and bursts on click, a live demo timer ring, rotating headline, and a compact feature grid. Signed-in users skip straight to `/focus`.
-- **Login & signup redesigned** — no more boxed card: full-bleed forms over the living background with frosted inputs, a brand panel on desktop, gradient CTAs. All auth logic (email, Google, Spotify OAuth) unchanged.
-- **Animated wallpapers** — five new code-generated presets in Settings → Appearance: **Aurora Flow, Rainfall, Snowfall, Starfield, Fireflies**. Pure canvas, no images, theme-aware, paused in hidden tabs, respects reduced-motion. They sit alongside the mesh presets and your uploaded photos.
+### Tech stack
 
-### Pink/Purple glass redesign (June 2026)
+Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · Framer Motion · Zustand · TanStack Query ·
+Supabase (Postgres + Auth + Storage) · Vercel AI SDK (OpenAI-compatible) · Spotify Web Playback SDK ·
+lucide-react · Sonner · date-fns
 
-- **New theme** — pink primary + purple accent across the whole app, dark *and* light. The old terracotta/sage palette is gone.
-- **Solo focus timer** — the center of the Focus screen now holds only the gradient ring, the task name, and the transport controls.
-- **Bottom dock** — subtasks, the session timeline + Mark done, and the Spotify player live in a wide three-column glass dock. A **Focus mode** button slides it away (a slim music mini-bar stays if Spotify is connected); `Esc` brings it back.
-- **Horizontal top nav** — the old sidebar is now a floating glass pill with theme toggle and quick glass controls.
-- **Mesh wallpapers** — the solid presets were replaced with CSS-mesh wallpapers (Aurora, Dusk, Mist, Noir) that adapt to the theme; the heavy bottom-to-top gradient overlay is gone.
-- **Live glass sliders** — Tint + Blur sliders (TopNav popover and Settings → Glass) let you dial the frosted feel of every card; persisted per user.
-- **Run from Projects** — every task row has a **Run** pill: switches the active task, starts a pomodoro (cleanly closing any running session), and jumps to Focus.
-- **Instant tabs** — all tab data (projects, tasks, analytics, task picker) is prefetched into the query cache at app start, so switching tabs renders instantly and revalidates in the background.
-
-### Previous round
-
-- **Subtasks + descriptions** — tasks now support a description and a subtask checklist. Add/edit them on the Projects page; check subtasks off from the task row or right on the Focus card, with live progress bars.
-- **Spotify rewritten** — all Web API calls go through one client that auto-refreshes the access token (playback, search, next/prev no longer silently die after an hour). Next/Previous now route to the correct device, so they work in the pop-out mini player too.
-- **"Take over playback" setting** — choose whether starting a focus session pulls playback from an already-playing device (phone/desktop) into the app, or leaves it alone (Settings → Music).
-- **Working music search** — track/album/artist search uses fresh tokens and shows real error messages instead of failing silently.
-- **Timer fixes** — starting a new task now resets the pomodoro cycle, so the timeline and break scheduling are correct per task. Break cadence is task-relative. Completion is recorded even when the pop-out timer finishes the session.
-- **Big performance fix** — the running timer re-rendered the whole page at 60 fps; it now ticks once per second-change. Spotify polling was also cut down. The app no longer crawls during sessions.
-- **Full-resolution wallpapers** — uploads keep their native resolution (up to 4K) instead of being downscaled to 1080p, and render at high quality.
-- **Mini player (pop-out)** — content now adapts when you resize the Document-PiP window; controls actually work.
-
-## Features
-
-- **Dual-mode timer** — Pomodoro (fixed blocks) or Custom Target (set your own duration)
-- **Single-task focus** — you can only track one thing at a time, by design
-- **Projects + Tasks + Tags** — full CRUD, priority levels, pomodoro-pip indicators
-- **Subtasks & descriptions** — break tasks down, track progress from Projects or the Focus card
-- **Spotify** — Web Playback SDK player with search, playlists, volume/shuffle, external-device takeover, and a pop-out mini player (Chrome 116+)
-- **Analytics** — KPIs, weekly bar chart, tag donut, GitHub-style heatmap, per-project filters
-- **Atmospheres** — built-in wallpapers + user-uploaded wallpapers via Supabase Storage (full resolution)
-- **Notifications** — browser notifications + Web Audio tones, with DND mode during focus sessions
-- **Auth** — Email/password + Google OAuth via Supabase Auth
-- **Theme** — Dark / Light / System
-
-## Architecture
-
-```
-Next.js 16 (App Router)
-  ├── (auth)/         — login, signup, OAuth callback
-  ├── (app)/          — protected: focus, projects, analytics, settings
-  └── api/            — upload-wallpaper helper
-
-Supabase
-  ├── Auth            — email + Google OAuth, signup trigger seeds profile/settings
-  ├── Postgres        — profiles, projects, tasks, tags, focus_sessions, wallpapers
-  └── Storage         — wallpapers bucket (public read, owner-write)
-
-Client state: Zustand (timer store + UI store)
-Server state: TanStack Query
-Animations:   Framer Motion
-Charts:       Recharts
-```
-## Screenshots 
-### Main Page
-<img width="2560" height="1348" alt="image" src="https://github.com/user-attachments/assets/9f245541-ee85-425d-a214-8d6e325bb7bc" />
-
-### Project Tab
-<img width="2558" height="1349" alt="image" src="https://github.com/user-attachments/assets/6f30cd59-a572-4cb2-8605-68ddbf46d111" />
-
-### Analytics
-<img width="2560" height="1348" alt="image" src="https://github.com/user-attachments/assets/74654b31-0adf-4f2e-ab16-7de768687ac1" />
-
-### Project Selection in Main Menu
-<img width="1221" height="717" alt="image" src="https://github.com/user-attachments/assets/f19fdb74-0e71-4821-89e3-f41feb704264" />
-
-### Settings 
-<img width="2560" height="1349" alt="image" src="https://github.com/user-attachments/assets/23f16e8f-e563-4e56-9127-1ec78b9c9b79" />
-
-### Wallpaper Upload
-<img width="1070" height="792" alt="image" src="https://github.com/user-attachments/assets/41fe0a9a-0dc3-421e-b1ed-88b1fa154c24" />
-
-### Login
-<img width="1048" height="795" alt="image" src="https://github.com/user-attachments/assets/cfd4ca12-4e88-413d-b0ee-225bf6a4869d" />
-
-
-
-## Quick Start (Local Dev)
+### Quick start (local)
 
 **Requirements:** Node 20+, npm
 
@@ -168,86 +109,85 @@ npm install
 node scripts/setup-env.mjs
 # Enter Supabase URL, anon key, service role key, site URL (http://localhost:3000)
 
-# 3. Apply database migrations in order via Supabase Dashboard SQL Editor:
-#    supabase/migrations/0001_init.sql
-#    supabase/migrations/0002_views_and_trigger.sql
-#    supabase/migrations/0003_storage.sql
-#    supabase/migrations/0004_security_and_performance_fixes.sql
-#    supabase/migrations/0005_wallpaper_settings.sql
-#    supabase/migrations/0006_subtasks_and_spotify_takeover.sql
-#    supabase/migrations/0007_glass_controls.sql
-#    supabase/migrations/0008_effects.sql
-#    supabase/migrations/0009_ai_and_project_view.sql
+# 3. Apply database migrations (in order) via Supabase Dashboard → SQL Editor
+#    supabase/migrations/0001_init.sql … 0009_ai_and_project_view.sql
 
-# 4. Start dev server
+# 4. Start the dev server
 npm run dev
 # Open http://localhost:3000
 ```
 
-## Environment Variables
+### Core environment variables
 
 | Variable | Where to find it |
 |---|---|
-| `NEXT_PUBLIC_SUPABASE_URL` | Supabase Dashboard → Settings → API → Project URL |
-| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase Dashboard → Settings → API → anon/public key |
-| `SUPABASE_SERVICE_ROLE_KEY` | Supabase Dashboard → Settings → API → service_role key |
+| `NEXT_PUBLIC_SUPABASE_URL` | Supabase → Settings → API → Project URL |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon/public key |
+| `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key |
 | `NEXT_PUBLIC_SITE_URL` | Your deployed URL (or `http://localhost:3000` for dev) |
 
-Copy `.env.local.example` to `.env.local` and fill in values.
+### Focus AI environment variables (optional)
 
-## Deploy — Vercel
+The assistant speaks the OpenAI-compatible protocol — point it at a
+[LiteLLM proxy](https://docs.litellm.ai/docs/) or any compatible endpoint. The feature stays hidden and the
+build succeeds with all of these unset. Users may also add **their own** key + model in Settings (encrypted
+at rest, never returned to the browser).
 
-```bash
-npm i -g vercel
-vercel link
-node scripts/export-supabase-env.mjs   # → vercel-env.txt
-# Paste vercel-env.txt values into Vercel Dashboard → Project → Settings → Environment Variables
-vercel --prod
-```
+| Variable | Purpose |
+|---|---|
+| `NEXT_PUBLIC_AI_ENABLED` | `true` to enable Focus AI globally (client-visible flag) |
+| `AI_BASE_URL` | OpenAI-compatible base URL (e.g. your LiteLLM proxy `/v1`) |
+| `AI_API_KEY` | Global gateway API key |
+| `AI_DEFAULT_MODEL` | Default model id (e.g. `gemini-2.5-flash`, `gpt-4o-mini`) |
+| `AI_ALLOWED_MODELS` | Comma-separated model allow-list for the picker |
+| `AI_FREE_MONTHLY_TOKENS` | Monthly token cap for global-key users (default `150000`) |
+| `AI_MAX_STEPS` | Max tool-calling steps per turn (default `8`) |
+| `AI_ENCRYPTION_KEY` | Secret used to encrypt users' own API keys at rest |
 
-**OAuth redirect URLs to add in Supabase Auth → URL Configuration:**
-```
-https://<your-project>.vercel.app/auth/callback
-https://*.vercel.app/auth/callback
-```
+### Database migrations
 
-Also add to Google Cloud Console → OAuth → Authorized redirect URIs.
-
-## Deploy — Docker (Self-Host)
-
-```bash
-# Build (NEXT_PUBLIC_ vars baked in at build time)
-docker compose build \
-  --build-arg NEXT_PUBLIC_SUPABASE_URL=... \
-  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
-  --build-arg NEXT_PUBLIC_SITE_URL=https://your-domain.com
-
-# Run (runtime secrets from .env.local)
-docker compose up -d
-```
-
-**OAuth redirect URL:**
-```
-https://your-domain.com/auth/callback
-```
-
-## Database Migrations
-
-Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
+Run in order via Supabase Dashboard SQL Editor (or `supabase db push`):
 
 | File | Purpose |
 |---|---|
 | `0001_init.sql` | Tables + RLS + indexes |
 | `0002_views_and_trigger.sql` | Analytics views + new-user bootstrap trigger |
 | `0003_storage.sql` | Wallpapers storage bucket + Storage RLS |
-| `0004_security_and_performance_fixes.sql` | RLS/perf hardening |
+| `0004_security_and_performance_fixes.sql` | RLS / performance hardening |
 | `0005_wallpaper_settings.sql` | Wallpaper blur/brightness settings |
 | `0006_subtasks_and_spotify_takeover.sql` | Subtasks table + Spotify takeover setting |
 | `0007_glass_controls.sql` | Glass tint/blur slider settings |
 | `0008_effects.sql` | Live-effect selection + per-effect settings |
-| `0009_ai_and_project_view.sql` | AI assistant (credentials/usage/chat) + synced Projects view preference |
+| `0009_ai_and_project_view.sql` | Focus AI (credentials/usage/chat) + synced Projects view preference |
 
-## Keyboard Shortcuts (Focus screen)
+### Deploy — Vercel
+
+```bash
+npm i -g vercel
+vercel link
+node scripts/export-supabase-env.mjs   # → vercel-env.txt
+# Paste values into Vercel → Project → Settings → Environment Variables
+vercel --prod
+```
+
+Add these OAuth redirect URLs in Supabase Auth → URL Configuration (and Google Cloud Console):
+
+```
+https://focusspace.live/auth/callback
+https://<your-project>.vercel.app/auth/callback
+```
+
+### Deploy — Docker (self-host)
+
+```bash
+docker compose build \
+  --build-arg NEXT_PUBLIC_SUPABASE_URL=... \
+  --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
+  --build-arg NEXT_PUBLIC_SITE_URL=https://your-domain.com
+docker compose up -d
+```
+
+### Keyboard shortcuts (Focus screen)
 
 | Key | Action |
 |---|---|
@@ -255,6 +195,17 @@ Run these in order via Supabase Dashboard SQL Editor or `supabase db push`:
 | `R` | Reset timer |
 | `S` | Skip session |
 
-## Tech Stack
+### Contributing
 
-Next.js 16 (Turbopack, Cache Components) · TypeScript · Tailwind v4 · Framer Motion · Zustand · TanStack Query · Supabase · Spotify Web Playback SDK · Recharts · Sonner · date-fns · @dnd-kit
+Found a bug or have an idea? **Open an issue** on
+[GitHub](https://github.com/EntangledQuantum/focusspace/issues), or email
+**shahzadtechworld@gmail.com**.
+
+---
+
+## 📄 Legal
+
+FocusSpace is open source and your data stays yours — we never read or reuse it.
+
+- [Privacy Policy](https://focusspace.live/privacy)
+- [Terms of Service](https://focusspace.live/terms)

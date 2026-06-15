@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import { AnimatedBackdrop } from "@/components/effects/AnimatedBackdrop";
 import { AuthModal } from "@/components/auth/AuthModal";
+import { SiteFooter } from "@/components/layout/SiteFooter";
 
 const ROTATING = ["focus", "flow", "deep work", "momentum"];
 
@@ -521,6 +522,8 @@ export default function LandingPage() {
           </div>
         </section>
       </main>
+
+      <SiteFooter />
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} urlError={urlError} />
     </div>
