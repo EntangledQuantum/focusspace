@@ -433,20 +433,25 @@ export default function LandingPage() {
             className="glass hover-lift relative overflow-hidden"
             style={{ borderRadius: 20, padding: 20, marginTop: 14 }}
           >
-            {/* dynamic sparkles */}
+            {/* dynamic sparkles — soft glowing dots, not icons */}
             {[
-              { top: 16, left: 96, size: 14, color: "var(--color-primary)", delay: "0s" },
-              { top: 54, left: 138, size: 9, color: "var(--color-secondary)", delay: "0.7s" },
-              { bottom: 20, left: 70, size: 12, color: "var(--color-secondary)", delay: "1.2s" },
-              { top: 20, right: 34, size: 12, color: "var(--color-primary)", delay: "0.4s" },
-              { bottom: 24, right: 96, size: 10, color: "var(--color-secondary)", delay: "1.5s" },
-              { top: 60, right: 150, size: 8, color: "var(--color-primary)", delay: "0.95s" },
+              { top: 18, left: 92, size: 7, color: "var(--color-primary)", delay: "0s" },
+              { top: 58, left: 140, size: 4, color: "var(--color-secondary)", delay: "0.7s" },
+              { bottom: 22, left: 64, size: 5, color: "#7cbcff", delay: "1.2s" },
+              { top: 22, right: 40, size: 5, color: "var(--color-primary)", delay: "0.4s" },
+              { bottom: 26, right: 104, size: 4, color: "var(--color-secondary)", delay: "1.5s" },
+              { top: 62, right: 160, size: 3, color: "#7cbcff", delay: "0.95s" },
             ].map((s, i) => (
-              <Sparkles
+              <span
                 key={i}
-                size={s.size}
-                className="twinkle absolute pointer-events-none"
-                style={{ top: s.top, left: s.left, right: s.right, bottom: s.bottom, color: s.color, animationDelay: s.delay }}
+                className="twinkle absolute pointer-events-none rounded-full"
+                style={{
+                  top: s.top, left: s.left, right: s.right, bottom: s.bottom,
+                  width: s.size, height: s.size,
+                  background: s.color,
+                  boxShadow: `0 0 ${s.size * 2.5}px ${s.size}px ${s.color}`,
+                  animationDelay: s.delay,
+                }}
               />
             ))}
 

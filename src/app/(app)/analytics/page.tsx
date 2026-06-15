@@ -92,12 +92,23 @@ export default function AnalyticsPage() {
   const completedSessions = sessions.filter((s) => s.completed).length;
   const totalHours = totalSeconds / 3600;
 
-  // "Focus by day" — last 14 entries max, rendered as gradient bars
-  const dayBars = useMemo(() => {
-    return daily.slice(-14).map((d) => ({
-      label: new Date(d.day).toLocaleDateString(undefined, { weekday: "short" }),
-      hours: d.total_seconds / 3600,
-    }));
+  // "Focus by day" — always the last 7 calendar days (gaps shown as empty bars,
+  // not collapsed). Computed in an effect because Next 16 forbids render-time
+  // `new Date()` in a client component during prerender.
+  const [dayBars, setDayBars] = useState<{ label: string; hours: number }[]>([]);
+  useEffect(() => {
+    const byDay = new Map(daily.map((d) => [d.day.slice(0, 10), d.total_seconds]));
+    const out: { label: string; hours: number }[] = [];
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+      out.push({
+        label: d.toLocaleDateString(undefined, { weekday: "short" }),
+        hours: (byDay.get(iso) ?? 0) / 3600,
+      });
+    }
+    setDayBars(out);
   }, [daily]);
   const maxDayHours = Math.max(...dayBars.map((b) => b.hours), 0.1);
 

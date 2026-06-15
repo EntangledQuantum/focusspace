@@ -178,6 +178,54 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       },
     }),
 
+    focus_stats: tool({
+      description:
+        "Read the user's actual focus/productivity time (real pomodoro + custom sessions). Returns focus time and session counts for today, yesterday, the last 7 days, the last 30 days, and all-time. Use this for ANY 'how long/much did I focus' question — never estimate.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { data } = await supabase
+          .from("v_daily_focus")
+          .select("day, total_seconds, sessions")
+          .order("day", { ascending: false })
+          .limit(400);
+        const rows = data ?? [];
+        if (!rows.length) return "No focus sessions recorded yet.";
+
+        const dayOf = (delta: number) => {
+          const d = new Date();
+          d.setUTCDate(d.getUTCDate() + delta);
+          return d.toISOString().slice(0, 10);
+        };
+        const fmt = (sec: number) => {
+          const m = Math.round(sec / 60);
+          const h = Math.floor(m / 60);
+          return h ? `${h}h ${m % 60}m` : `${m}m`;
+        };
+        const rowFor = (iso: string) => rows.find((r) => r.day.slice(0, 10) === iso);
+        const sumSince = (iso: string) =>
+          rows.filter((r) => r.day.slice(0, 10) >= iso).reduce(
+            (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
+            { sec: 0, sess: 0 },
+          );
+        const all = rows.reduce(
+          (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
+          { sec: 0, sess: 0 },
+        );
+        const today = rowFor(dayOf(0));
+        const yest = rowFor(dayOf(-1));
+        const last7 = sumSince(dayOf(-6));
+        const last30 = sumSince(dayOf(-29));
+
+        return [
+          `Today: ${fmt(today?.total_seconds ?? 0)} (${today?.sessions ?? 0} sessions)`,
+          `Yesterday: ${fmt(yest?.total_seconds ?? 0)} (${yest?.sessions ?? 0} sessions)`,
+          `Last 7 days: ${fmt(last7.sec)} (${last7.sess} sessions)`,
+          `Last 30 days: ${fmt(last30.sec)} (${last30.sess} sessions)`,
+          `All time: ${fmt(all.sec)} (${all.sess} sessions)`,
+        ].join("\n");
+      },
+    }),
+
     // ─── PROJECTS ──────────────────────────────────────────────────────
     create_project: tool({
       description: "Create a new project.",

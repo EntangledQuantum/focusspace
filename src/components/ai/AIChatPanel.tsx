@@ -303,7 +303,7 @@ export function AIChatPanel({
       </div>
 
       <div className="relative" style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,0.06)", zIndex: 1 }}>
-        <div className="flex items-end" style={{ gap: 8, padding: 8, borderRadius: 22, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
+        <div className="flex items-center" style={{ gap: 8, padding: "6px 8px", borderRadius: 22, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
           <textarea
             ref={taRef}
             value={input}
@@ -311,8 +311,8 @@ export function AIChatPanel({
             onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(input); setInput(""); } }}
             rows={1}
             placeholder="Ask Focus AI…"
-            className="flex-1 bg-transparent outline-none resize-none"
-            style={{ fontSize: 14.5, lineHeight: 1.5, color: "var(--color-on-surface)", maxHeight: INPUT_MAX_HEIGHT, paddingTop: 4, paddingLeft: 4, overflowY: "auto" }}
+            className="flex-1 bg-transparent outline-none resize-none block"
+            style={{ fontSize: 14.5, lineHeight: 1.45, color: "var(--color-on-surface)", maxHeight: INPUT_MAX_HEIGHT, padding: "5px 6px", overflowY: "auto" }}
           />
           <button
             onClick={() => { if (busy) { stop(); } else { send(input); setInput(""); } }}

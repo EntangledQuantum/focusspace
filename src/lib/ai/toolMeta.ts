@@ -9,6 +9,7 @@ export const TOOL_META: Record<string, ToolMeta> = {
   search_tasks:           { verb: "Search tasks", icon: "Search", noun: "task" },
   get_task:               { verb: "Read task", icon: "FileText" },
   recent_completed_tasks: { verb: "Read recent", icon: "CheckCheck", noun: "task" },
+  focus_stats:            { verb: "Read focus stats", icon: "BarChart3" },
   create_project:         { verb: "Create project", icon: "FolderPlus" },
   rename_project:         { verb: "Rename project", icon: "Pencil" },
   recolor_project:        { verb: "Recolor project", icon: "Palette" },
