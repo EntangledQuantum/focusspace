@@ -28,11 +28,21 @@ language. It's also **fully open source** — self-host it, audit it, or make it
 
 ## 📸 Screenshots
 
+
 ### 🏠 Home
-> _Screenshot placeholder — add `docs/screenshots/home.png`_
+
+<img width="2154" height="1357" alt="image" src="https://github.com/user-attachments/assets/92c10fe7-e96e-4fc3-a030-31dcea22c6d3" />
+
+<img width="2154" height="1357" alt="image" src="https://github.com/user-attachments/assets/33a46880-7623-4fac-99b4-2bbf0e48cb55" />
+
 
 The public landing page: an animated aurora that drifts with your cursor and bursts on click, a live demo
 timer ring, a rotating headline, the feature grid, and the Focus AI banner.
+
+### Focus Area
+<img width="2157" height="1358" alt="image" src="https://github.com/user-attachments/assets/3e106933-57fb-4869-9952-621dc07cb659" />
+
+After you login this timer will show up
 
 ### 🗂️ Projects
 > _Screenshot placeholder — add `docs/screenshots/projects.png`_
