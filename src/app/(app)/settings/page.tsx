@@ -13,7 +13,7 @@ import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut, Sparkles, Ban } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut, Sparkles, Ban, KeyRound, Check } from "lucide-react";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -517,6 +517,9 @@ export default function SettingsPage() {
           </div>
         </Section>
 
+        {/* AI assistant */}
+        <AISection settings={settings} onSave={(patch) => save.mutate(patch)} />
+
         {/* Music */}
         <MusicSection settings={settings} onSave={(patch) => save.mutate(patch)} />
 
@@ -665,6 +668,200 @@ function SignOutButton() {
     >
       <LogOut size={16} /> Sign out
     </button>
+  );
+}
+
+interface AiStatus {
+  globallyEnabled: boolean;
+  gatewayConfigured: boolean;
+  models: string[];
+  defaultModel: string;
+  freeMonthlyTokens: number;
+  enabled: boolean;
+  model: string;
+  useOwnKey: boolean;
+  hasOwnKey: boolean;
+  destructive: "allow" | "confirm";
+  ownKey: { baseUrl: string | null; model: string | null } | null;
+  usage: { period: string; used: number; requestCount: number };
+}
+
+function AISection({
+  settings,
+  onSave,
+}: {
+  settings: UserSettings | undefined;
+  onSave: (patch: Partial<UserSettings>) => void;
+}) {
+  const qc = useQueryClient();
+  const { data: status, refetch } = useQuery<AiStatus | null>({
+    queryKey: ["ai-status"],
+    queryFn: async () => {
+      const res = await fetch("/api/ai/status");
+      if (!res.ok) return null;
+      return res.json();
+    },
+  });
+
+  const [baseUrl, setBaseUrl] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [ownModel, setOwnModel] = useState("");
+  const [testing, setTesting] = useState(false);
+  const [testResult, setTestResult] = useState<null | { ok: boolean; msg: string }>(null);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (status?.ownKey) {
+      setBaseUrl(status.ownKey.baseUrl ?? "");
+      setOwnModel(status.ownKey.model ?? "");
+    }
+  }, [status?.ownKey]);
+
+  if (status && !status.globallyEnabled) return null; // feature off for this deployment
+  if (!status) {
+    return (
+      <Section icon={<Sparkles size={18} />} title="AI Assistant">
+        <div className="flex items-center gap-2 py-2" style={{ color: "var(--color-on-surface-variant)" }}>
+          <Loader2 size={14} className="animate-spin" /> <span className="text-xs">Loading…</span>
+        </div>
+      </Section>
+    );
+  }
+
+  const enabled = settings?.ai_enabled ?? false;
+  const useOwnKey = settings?.ai_use_own_key ?? false;
+  const usingGlobal = enabled && !useOwnKey;
+  const pct = status.freeMonthlyTokens ? Math.min(100, (status.usage.used / status.freeMonthlyTokens) * 100) : 0;
+
+  async function testKey() {
+    setTesting(true); setTestResult(null);
+    try {
+      const res = await fetch("/api/ai/validate", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, apiKey, model: ownModel }),
+      }).then((r) => r.json());
+      setTestResult(res.ok ? { ok: true, msg: `Works · ${res.model}` } : { ok: false, msg: res.error || "Failed" });
+    } catch { setTestResult({ ok: false, msg: "Request failed" }); }
+    finally { setTesting(false); }
+  }
+
+  async function saveKey() {
+    if (!baseUrl || !apiKey) { toast.error("Base URL and API key are required"); return; }
+    setSaving(true);
+    try {
+      const res = await fetch("/api/ai/credentials", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ baseUrl, apiKey, model: ownModel || null }),
+      });
+      if (!res.ok) throw new Error();
+      setApiKey("");
+      toast.success("API key saved");
+      qc.invalidateQueries({ queryKey: ["settings"] });
+      refetch();
+    } catch { toast.error("Failed to save key"); } finally { setSaving(false); }
+  }
+
+  async function removeKey() {
+    await fetch("/api/ai/credentials", { method: "DELETE" });
+    setApiKey(""); setTestResult(null);
+    toast.success("Own key removed");
+    qc.invalidateQueries({ queryKey: ["settings"] });
+    refetch();
+  }
+
+  return (
+    <Section icon={<Sparkles size={18} />} title="AI Assistant" desc="Dictate task & project changes in plain language on the Projects tab.">
+      <Field label="Enable AI" description="Adds an 'Ask AI' button to the Projects tab.">
+        <Toggle checked={enabled} onChange={(v) => onSave({ ai_enabled: v })} />
+      </Field>
+
+      {enabled && (
+        <>
+          {!useOwnKey && status.models.length > 0 && (
+            <Field label="Model" description="Used with the shared gateway.">
+              <select
+                value={settings?.ai_model ?? status.defaultModel}
+                onChange={(e) => onSave({ ai_model: e.target.value })}
+                className="px-3 py-2 rounded-xl text-sm outline-none"
+                style={{ background: "var(--color-surface-container-high)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)" }}
+              >
+                {status.models.map((m) => <option key={m} value={m}>{m}</option>)}
+              </select>
+            </Field>
+          )}
+
+          {usingGlobal && (
+            <Field label="Monthly free usage" description={`${status.usage.used.toLocaleString()} / ${status.freeMonthlyTokens.toLocaleString()} tokens`}>
+              <div className="rounded-full overflow-hidden" style={{ width: 140, height: 6, background: "var(--color-surface-container-high)" }}>
+                <div className="h-full rounded-full" style={{ width: `${pct}%`, background: pct > 85 ? "var(--color-error)" : "var(--color-primary)" }} />
+              </div>
+            </Field>
+          )}
+
+          <Field label="Confirm before deleting" description="Ask before the AI deletes a project, task, or tag.">
+            <Toggle
+              checked={(settings?.ai_destructive ?? "allow") === "confirm"}
+              onChange={(v) => onSave({ ai_destructive: v ? "confirm" : "allow" })}
+            />
+          </Field>
+
+          <Field label="Use my own API key" description="Unmetered. Any OpenAI-compatible endpoint (incl. a LiteLLM proxy).">
+            <Toggle checked={useOwnKey} onChange={(v) => onSave({ ai_use_own_key: v })} />
+          </Field>
+
+          {useOwnKey && (
+            <div className="space-y-2" style={{ paddingTop: 4 }}>
+              <input
+                value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)}
+                placeholder="Base URL (e.g. https://your-litellm/v1)"
+                className="w-full rounded-xl px-3 py-2 text-sm outline-none input-field"
+                style={{ background: "var(--color-surface-container-high)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)" }}
+              />
+              <input
+                value={apiKey} onChange={(e) => setApiKey(e.target.value)} type="password"
+                placeholder={status.hasOwnKey ? "API key saved — type to replace" : "API key"}
+                className="w-full rounded-xl px-3 py-2 text-sm outline-none input-field"
+                style={{ background: "var(--color-surface-container-high)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)" }}
+              />
+              <input
+                value={ownModel} onChange={(e) => setOwnModel(e.target.value)}
+                placeholder="Model id (e.g. gpt-4o-mini, claude-3-5-sonnet)"
+                className="w-full rounded-xl px-3 py-2 text-sm outline-none input-field"
+                style={{ background: "var(--color-surface-container-high)", color: "var(--color-on-surface)", border: "1px solid var(--color-outline-variant)" }}
+              />
+              <div className="flex items-center gap-2 flex-wrap">
+                <button onClick={testKey} disabled={testing || !apiKey || !baseUrl}
+                  className="pill text-xs px-3 py-1.5 btn-hover-surface"
+                  style={{ color: "var(--color-on-surface)", background: "var(--color-surface-container-high)", border: "1px solid var(--color-outline-variant)", opacity: testing ? 0.6 : 1 }}>
+                  {testing ? <Loader2 size={12} className="animate-spin" /> : <KeyRound size={12} />} Test
+                </button>
+                <button onClick={saveKey} disabled={saving}
+                  className="pill grad-primary text-xs px-3 py-1.5 font-semibold"
+                  style={{ color: "var(--color-on-primary)", opacity: saving ? 0.6 : 1 }}>
+                  {saving ? <Loader2 size={12} className="animate-spin" /> : <Check size={12} />} Save key
+                </button>
+                {status.hasOwnKey && (
+                  <button onClick={removeKey} className="pill text-xs px-3 py-1.5 btn-hover-error" style={{ color: "var(--color-error)" }}>
+                    <Trash2 size={12} /> Remove
+                  </button>
+                )}
+                {testResult && (
+                  <span className="text-xs" style={{ color: testResult.ok ? "var(--color-secondary)" : "var(--color-error)" }}>
+                    {testResult.msg}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+
+          {!status.gatewayConfigured && !useOwnKey && (
+            <p className="text-xs" style={{ color: "var(--color-error)" }}>
+              No shared AI gateway is configured on this deployment — add your own key above.
+            </p>
+          )}
+        </>
+      )}
+    </Section>
   );
 }
 
