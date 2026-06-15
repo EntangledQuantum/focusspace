@@ -25,7 +25,7 @@ export async function POST(req: NextRequest) {
     const { text } = await generateText({
       model: modelFromCreds(useBase, useKey, useModel),
       prompt: "Reply with the single word: ok",
-      maxOutputTokens: 5,
+      maxOutputTokens: 256, // headroom: reasoning models (e.g. gemini-2.5) spend tokens thinking
     });
     return NextResponse.json({ ok: true, model: useModel, sample: text.trim().slice(0, 40) });
   } catch (e) {
