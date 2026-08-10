@@ -85,13 +85,15 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
 ## 📸 More screenshots
 
 ### 📊 Analytics
-> _Screenshot placeholder — add `docs/screenshots/analytics.png`_
+<img width="2317" height="1358" alt="Screenshot from 2026-08-10 14-24-30" src="https://github.com/user-attachments/assets/7add6108-4a57-4d19-97d9-f29aa8abce35" />
+
 
 Focus-time stat cards, a last-7-days gradient bar chart, by-project and by-tag breakdowns, and a
 contribution-style heatmap of your deep-work history.
 
 ### 🤖 Focus AI chat
-> _Screenshot placeholder — add `docs/screenshots/ai_chat.png`_
+<img width="2317" height="1358" alt="Screenshot from 2026-08-10 14-24-15" src="https://github.com/user-attachments/assets/949be07b-36c0-42e5-a9f2-a1e3946b59f6" />
+
 
 The Focus AI panel — branded glass that matches your tint/blur, with action cards for every task it
 creates or edits, saved conversation history, and the Focus AI watermark behind the chat.
