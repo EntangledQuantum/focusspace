@@ -15,7 +15,8 @@ import { playTone } from "@/lib/audio/tones";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut, Sparkles, Ban, KeyRound, Check } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, Music, LogOut, Sparkles, Ban, KeyRound, Check, Bot } from "lucide-react";
+import { isLocalMode } from "@/lib/mode";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const MAX_FILE_BYTES = 15 * 1024 * 1024; // 15 MB
@@ -521,6 +522,7 @@ export default function SettingsPage() {
 
         {/* AI assistant */}
         <AISection settings={settings} onSave={(patch) => save.mutate(patch)} />
+        <McpSection />
 
         {/* Music */}
         <MusicSection settings={settings} onSave={(patch) => save.mutate(patch)} />
@@ -640,8 +642,13 @@ export default function SettingsPage() {
           </Field>
         </Section>
 
-        {/* Sign out */}
-        <SignOutButton />
+        {/* Sign out — cloud only. Local mode has no account. */}
+        {!isLocalMode() && <SignOutButton />}
+        {isLocalMode() && (
+          <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", textAlign: "center", opacity: 0.75 }}>
+            Local mode — no account. Per-user sign-in for individual installs is coming later.
+          </p>
+        )}
 
         {/* Legal */}
         <div className="flex items-center justify-center flex-wrap" style={{ gap: 12, paddingTop: 4 }}>
@@ -998,6 +1005,68 @@ function Field({ label, description, children }: { label: string; description?: 
       </div>
       <div className="flex items-center gap-2 shrink-0">{children}</div>
     </div>
+  );
+}
+
+function McpSection() {
+  const [tokens, setTokens] = useState<{ id: string; name: string; prefix: string; created_at: string }[]>([]);
+  const [fresh, setFresh] = useState<string | null>(null);
+  const [name, setName] = useState("Hermes");
+  const local = isLocalMode();
+
+  useEffect(() => {
+    if (local) return;
+    fetch("/api/mcp/tokens").then((r) => r.json()).then((d) => setTokens(d.tokens ?? [])).catch(() => {});
+  }, [local]);
+
+  async function createToken() {
+    const res = await fetch("/api/mcp/tokens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+    const data = await res.json();
+    if (data.token) {
+      setFresh(data.token);
+      setTokens((t) => [{ id: "new", name, prefix: data.prefix, created_at: new Date().toISOString() }, ...t]);
+    } else {
+      toast.error(data.error ?? "Could not create token");
+    }
+  }
+
+  async function revoke(id: string) {
+    await fetch(`/api/mcp/tokens?id=${id}`, { method: "DELETE" });
+    setTokens((t) => t.filter((x) => x.id !== id));
+  }
+
+  return (
+    <Section icon={<Bot size={18} />} title="Agents & MCP">
+      <p style={{ fontSize: 13, color: "var(--color-on-surface-variant)", lineHeight: 1.55, padding: "8px 0" }}>
+        Hermes and OpenClaw talk to FocusSpace through the same tools as Ask AI.
+        {local
+          ? " This install is local — point the agent at http://127.0.0.1:3000/api/mcp or run npx tsx scripts/mcp-stdio.ts. No token needed."
+          : " Create a personal token and send it as Authorization: Bearer … to /api/mcp."}
+      </p>
+      {!local && (
+        <>
+          <Field label="New token">
+            <input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="px-2 py-1 rounded-lg text-sm outline-none"
+              style={{ background: "rgba(255,255,255,0.06)", color: "var(--color-on-surface)", width: 120 }}
+            />
+            <button onClick={createToken} className="pill chip-primary" style={{ padding: "6px 12px", fontSize: 12 }}>Create</button>
+          </Field>
+          {fresh && (
+            <p className="text-xs break-all" style={{ color: "var(--color-primary)", padding: "6px 0" }}>
+              Copy now: {fresh}
+            </p>
+          )}
+          {tokens.map((t) => (
+            <Field key={t.id} label={t.name} description={`${t.prefix}…`}>
+              <button onClick={() => revoke(t.id)} className="text-xs" style={{ color: "var(--color-error)" }}>Revoke</button>
+            </Field>
+          ))}
+        </>
+      )}
+    </Section>
   );
 }
 

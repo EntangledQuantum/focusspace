@@ -10,6 +10,8 @@
 
 <p align="center">
   🌐 <a href="https://focusspace.live/"><strong>focusspace.live</strong></a>
+  ·
+  🤖 <a href="https://focusspace.live/for-agents">For agents</a>
 </p>
 
 ---
@@ -21,8 +23,9 @@ time. You pick a task, run the timer, and review the data — without the clutte
 that most "productivity" apps bury you in.
 
 It pairs a distraction-free focus screen with full project/task management, Spotify playback, rich
-analytics, living wallpapers, and an optional **Focus AI** assistant that edits your board for you in plain
-language. It's also **fully open source** — self-host it, audit it, or make it yours.
+analytics, living wallpapers, and an optional **Focus AI** assistant. Agents (Hermes, OpenClaw) can drive
+the same board, timer, settings, and analytics over **MCP**. It's **fully open source** — self-host it
+locally with SQLite, or deploy the hosted/Supabase stack.
 
 ---
 
@@ -42,7 +45,7 @@ timer ring, a rotating headline, the feature grid, and the Focus AI banner.
 ### Focus Area
 <img width="2157" height="1358" alt="image" src="https://github.com/user-attachments/assets/3e106933-57fb-4869-9952-621dc07cb659" />
 
-After you login this timer will show up
+The focus screen — one task, one timer.
 
 ### 🗂️ Projects
 > _Screenshot placeholder — add `docs/screenshots/projects.png`_
@@ -60,13 +63,11 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
   auto-start, and a per-task session timeline.
 - **🗂️ Projects, tasks, subtasks & tags** — full CRUD with notes, priorities, pomodoro estimates, and
   collapsible subtask checklists. Pick which projects to show, or show them all.
-- **🤖 Focus AI assistant** *(optional)* — open **Ask AI** on the Projects tab and dictate changes in
-  plain language:
-  - **Add** projects, tasks, and subtasks from a sentence
-  - **Edit & modify** existing tasks — rename, retag, re-estimate, move, complete
-  - **Search** your tasks and **read your focus stats** ("how long did I focus this week?")
-  - Every action runs under your own row-level-secured session, renders as a live action card, and
-    updates the board instantly. Conversations are saved to your own history.
+- **🤖 Ask AI** *(optional)* — open **Ask AI** on the Projects tab and dictate changes in plain language:
+  add or edit projects and tasks, search the board, and read your focus stats. Actions render as live
+  cards and update the board instantly.
+- **🔌 MCP / agents** — Hermes and OpenClaw can run the same surface over MCP (board, timer, settings,
+  analytics). Individual local setup, no login. See [For agents](https://focusspace.live/for-agents).
 - **🎵 Spotify built in** — Web Playback SDK player with search, playlists, your library, volume/shuffle,
   external-device takeover, and a pop-out mini player.
 - **📊 Analytics & streaks** — focus-time KPIs, a last-7-days bar chart, per-tag and per-project
@@ -76,9 +77,8 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
 - **🪟 Live glass controls** — Tint + Blur sliders frost every card over your wallpaper, in real time.
 - **🔔 Notifications & tones** — browser notifications and Web Audio completion tones, with Do-Not-Disturb
   during focus sessions.
-- **🔐 Your data, yours** — everything is scoped to your account with row-level security; AI chats live in
-  your own database and are never read or reused.
-- **🎨 Dark / Light / System themes** and email + Google OAuth sign-in.
+- **🔐 Your data, yours** — local SQLite for self-host, or row-level security on a hosted Supabase.
+- **🎨 Dark / Light / System themes**.
 
 ---
 
@@ -100,33 +100,73 @@ creates or edits, saved conversation history, and the Focus AI watermark behind 
 
 ---
 
-## 🛠️ Development
-
-### Tech stack
+## Tech stack
 
 Next.js 16 (App Router, Turbopack) · TypeScript · Tailwind v4 · Framer Motion · Zustand · TanStack Query ·
-Supabase (Postgres + Auth + Storage) · Vercel AI SDK (OpenAI-compatible) · Spotify Web Playback SDK ·
-lucide-react · Sonner · date-fns
+SQLite (`better-sqlite3`) for individual local mode · Supabase (Postgres + Auth + Storage) for hosted ·
+Vercel AI SDK · MCP SDK · Spotify Web Playback SDK · lucide-react · Sonner · date-fns
 
-### Quick start (local)
+---
+
+## Quick start — local (default for self-host)
+
+Individual self-host: **SQLite**, no login, one implicit user. Data lives in `~/.focusspace/focusspace.db`.
 
 **Requirements:** Node 20+, npm
 
 ```bash
-# 1. Install dependencies
+git clone https://github.com/EntangledQuantum/focusspace.git
 cd focusspace
 npm install
 
-# 2. Set up environment variables
+# .env.local — local mode only (no cloud keys)
+cat > .env.local <<'EOF'
+FOCUSSPACE_MODE=local
+NEXT_PUBLIC_FOCUSSPACE_MODE=local
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+EOF
+
+npm run dev
+# Open http://localhost:3000 and click Open FocusSpace
+```
+
+Or run the helper (creates `~/.focusspace` and writes `.env.local` if missing):
+
+```bash
+node skills/focusspace/scripts/setup-local.mjs
+npm install
+npm run dev
+```
+
+### Docker — same local mode
+
+```bash
+docker compose up --build
+# Open http://localhost:3000 and click Open FocusSpace
+```
+
+Compose sets `FOCUSSPACE_MODE=local`, `NEXT_PUBLIC_FOCUSSPACE_MODE=local`, and mounts a SQLite volume
+at `/data` (`FOCUSSPACE_DATA_DIR=/data`). No real Supabase keys required.
+
+---
+
+## Hosted / your own Supabase
+
+> For humans deploying a **focusspace.live-style** instance (shared Postgres + Auth + Storage).
+> Agents setting up FocusSpace for one person should use **local mode** above — not this section.
+
+**Requirements:** Node 20+, a [Supabase](https://supabase.com) project.
+
+```bash
+cd focusspace
+npm install
 node scripts/setup-env.mjs
 # Enter Supabase URL, anon key, service role key, site URL (http://localhost:3000)
 
-# 3. Apply database migrations (in order) via Supabase Dashboard → SQL Editor
-#    supabase/migrations/0001_init.sql … 0009_ai_and_project_view.sql
+# Apply migrations 0001–0010 in order via Supabase Dashboard → SQL Editor
+#    supabase/migrations/0001_init.sql … 0010_timer_mcp.sql
 
-# 4. Start the dev server
 npm run dev
-# Open http://localhost:3000
 ```
 
 ### Core environment variables
@@ -137,6 +177,8 @@ npm run dev
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Supabase → Settings → API → anon/public key |
 | `SUPABASE_SERVICE_ROLE_KEY` | Supabase → Settings → API → service_role key |
 | `NEXT_PUBLIC_SITE_URL` | Your deployed URL (or `http://localhost:3000` for dev) |
+
+Leave `FOCUSSPACE_MODE` unset (or `cloud`) for this path.
 
 ### Focus AI environment variables (optional)
 
@@ -171,6 +213,7 @@ Run in order via Supabase Dashboard SQL Editor (or `supabase db push`):
 | `0007_glass_controls.sql` | Glass tint/blur slider settings |
 | `0008_effects.sql` | Live-effect selection + per-effect settings |
 | `0009_ai_and_project_view.sql` | Focus AI (credentials/usage/chat) + synced Projects view preference |
+| `0010_timer_mcp.sql` | Live timer snapshot + hosted MCP tokens |
 
 ### Deploy — Vercel
 
@@ -189,17 +232,37 @@ https://focusspace.live/auth/callback
 https://<your-project>.vercel.app/auth/callback
 ```
 
-### Deploy — Docker (self-host)
+### Deploy — Docker (hosted)
+
+Pass real Supabase build args instead of the local placeholders:
 
 ```bash
 docker compose build \
+  --build-arg NEXT_PUBLIC_FOCUSSPACE_MODE=cloud \
   --build-arg NEXT_PUBLIC_SUPABASE_URL=... \
   --build-arg NEXT_PUBLIC_SUPABASE_ANON_KEY=... \
   --build-arg NEXT_PUBLIC_SITE_URL=https://your-domain.com
-docker compose up -d
 ```
 
-### Keyboard shortcuts (Focus screen)
+Set `FOCUSSPACE_MODE=cloud` (and the same `NEXT_PUBLIC_*` values) at runtime. Apply migrations 0001–0010
+on the Supabase project first.
+
+---
+
+## Agent one-liner
+
+Paste this to Hermes or OpenClaw (supported agents today):
+
+```
+read this and setup focusspace for me https://focusspace.live/for-agents
+```
+
+Machine-readable twin: https://focusspace.live/for-agents.md  
+Skill: [`skills/focusspace/`](./skills/focusspace/)
+
+---
+
+## Keyboard shortcuts (Focus screen)
 
 | Key | Action |
 |---|---|
@@ -207,7 +270,9 @@ docker compose up -d
 | `R` | Reset timer |
 | `S` | Skip session |
 
-### Contributing
+---
+
+## Contributing
 
 Found a bug or have an idea? **Open an issue** on
 [GitHub](https://github.com/EntangledQuantum/focusspace/issues), or email
@@ -221,3 +286,4 @@ FocusSpace is open source and your data stays yours — we never read or reuse i
 
 - [Privacy Policy](https://focusspace.live/privacy)
 - [Terms of Service](https://focusspace.live/terms)
+- [For agents](https://focusspace.live/for-agents)

@@ -2,8 +2,10 @@
 
 import { useState } from "react";
 
+import { MAX_ESTIMATED_POMOS } from "@/lib/mode";
+
 interface Props {
-  value: number; // 1, 1.5, 2 … 5
+  value: number; // 1, 1.5, 2 … MAX
   onChange: (v: number) => void;
   pomoDurationSec?: number;
   shortBreakSec?: number;
@@ -79,12 +81,19 @@ export function PomodoroRating({
 
   const totalSec = value * pomoDurationSec + Math.max(0, Math.ceil(value) - 1) * shortBreakSec;
 
+  const icons = [1, 2, 3, 4, 5, 6, 7, 8];
+
   if (readOnly) {
     return (
       <div className="flex items-center gap-0.5">
-        {[1, 2, 3, 4, 5].map((pos) => (
+        {icons.slice(0, Math.min(8, Math.ceil(value))).map((pos) => (
           <PomoIcon key={pos} state={getState(pos)} />
         ))}
+        {value > 8 && (
+          <span className="text-[11px] tabular-nums" style={{ color: "var(--color-on-surface-variant)", marginLeft: 4 }}>
+            {value}
+          </span>
+        )}
       </div>
     );
   }
@@ -92,7 +101,7 @@ export function PomodoroRating({
   return (
     <div className="flex items-center gap-3">
       <div className="flex gap-0.5" onMouseLeave={() => setHover(null)}>
-        {[1, 2, 3, 4, 5].map((pos) => (
+        {icons.map((pos) => (
           <div key={pos} className="relative" style={{ width: 16, height: 16 }}>
             {/* Left-half zone → pos-0.5, except pos=1 stays 1 */}
             <div
@@ -115,6 +124,29 @@ export function PomodoroRating({
       <span className="text-xs tabular-nums" style={{ color: "var(--color-on-surface-variant)" }}>
         {formatDuration(totalSec)}
       </span>
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          className="icon-btn"
+          style={{ width: 22, height: 22, fontSize: 14 }}
+          onClick={() => onChange(Math.max(1, value - 1))}
+          aria-label="Fewer pomodoros"
+        >
+          −
+        </button>
+        <span className="text-xs tabular-nums w-6 text-center" style={{ color: "var(--color-on-surface)" }}>
+          {value}
+        </span>
+        <button
+          type="button"
+          className="icon-btn"
+          style={{ width: 22, height: 22, fontSize: 14 }}
+          onClick={() => onChange(Math.min(MAX_ESTIMATED_POMOS, value + 1))}
+          aria-label="More pomodoros"
+        >
+          +
+        </button>
+      </div>
     </div>
   );
 }

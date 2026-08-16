@@ -35,6 +35,9 @@ export function SiteFooter() {
           <Link href="/terms" className="hover:underline" style={{ fontSize: 13, color: "var(--color-on-surface-variant)" }}>
             Terms
           </Link>
+          <Link href="/for-agents" className="hover:underline" style={{ fontSize: 13, color: "var(--color-on-surface-variant)" }}>
+            For agents
+          </Link>
           <a href={`mailto:${CONTACT_EMAIL}`} className="hover:underline" style={{ fontSize: 13, color: "var(--color-on-surface-variant)" }}>
             Contact
           </a>

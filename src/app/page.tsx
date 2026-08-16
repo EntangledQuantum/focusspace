@@ -1,244 +1,39 @@
 "use client";
 
 import Image from "next/image";
+import Link from "next/link";
 import appIcon from "@/app/icon.png";
 import { Suspense, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
-import {
-  Timer, FolderKanban, BarChart2, Sparkles, Headphones, Shrink, ArrowRight,
-  CheckCircle2, Circle,
-} from "lucide-react";
+import { AnimatePresence, motion } from "framer-motion";
+import { ArrowRight, Smartphone, UserRound } from "lucide-react";
+import { Toaster } from "sonner";
 import { AnimatedBackdrop } from "@/components/effects/AnimatedBackdrop";
 import { AuthModal } from "@/components/auth/AuthModal";
-import { SiteFooter } from "@/components/layout/SiteFooter";
+import { GithubMark, REPO_URL, SiteFooter } from "@/components/layout/SiteFooter";
+import { isLocalMode } from "@/lib/mode";
+import { CopyInstallBox } from "@/components/landing/CopyInstallBox";
+import { DemoRing } from "@/components/landing/DemoRing";
+import { HowItWorksDiagram } from "@/components/landing/HowItWorksDiagram";
+import { AskAIDiagram } from "@/components/landing/AskAIDiagram";
+import { McpDiagram } from "@/components/landing/McpDiagram";
+import { PomodoroVisual } from "@/components/landing/PomodoroVisual";
+import { ProjectsVisual } from "@/components/landing/ProjectsVisual";
+import { AnalyticsVisual } from "@/components/landing/AnalyticsVisual";
+import { AtmosphereVisual } from "@/components/landing/AtmosphereVisual";
+import { LandingSection, NAV_BG, SectionHead, StartCta } from "@/components/landing/primitives";
 
 const ROTATING = ["focus", "flow", "deep work", "momentum"];
+const LOCAL = isLocalMode();
 
-const NAV_BG: React.CSSProperties = {
-  background: "color-mix(in srgb, var(--color-surface-container) 88%, transparent)",
-  backdropFilter: "blur(24px) saturate(140%)",
-  WebkitBackdropFilter: "blur(24px) saturate(140%)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07), 0 18px 48px -16px rgba(0,0,0,0.6)",
-};
+const NAV_LINKS = [
+  { href: "#pomodoro", label: "Pomodoro" },
+  { href: "#ai", label: "AI" },
+  { href: "#agents", label: "Agents" },
+  { href: "#analytics", label: "Analytics" },
+  { href: "#open-source", label: "Open source" },
+] as const;
 
-/* ── animated accents for the feature cards ─────────────────────── */
-
-function TimerVisual() {
-  return (
-    <svg width="44" height="44" viewBox="0 0 44 44" style={{ transform: "rotate(-90deg)" }}>
-      <circle cx="22" cy="22" r="18" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="4" />
-      <circle
-        className="ring-loop"
-        cx="22" cy="22" r="18" fill="none"
-        stroke="url(#feat-ring)" strokeWidth="4" strokeLinecap="round"
-        strokeDasharray="113"
-      />
-      <defs>
-        <linearGradient id="feat-ring" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0%" stopColor="var(--color-primary)" />
-          <stop offset="100%" stopColor="var(--color-secondary)" />
-        </linearGradient>
-      </defs>
-    </svg>
-  );
-}
-
-function TasksVisual() {
-  return (
-    <div className="flex flex-col" style={{ gap: 5 }}>
-      {[0, 1, 2].map((i) => (
-        <div key={i} className="float-tick flex items-center" style={{ gap: 6, animationDelay: `${i * 0.45}s` }}>
-          {i === 0
-            ? <CheckCircle2 size={12} style={{ color: "var(--color-primary)" }} />
-            : <Circle size={12} style={{ color: "var(--color-on-surface-variant)", opacity: 0.6 }} />}
-          <div
-            className="rounded-full"
-            style={{
-              height: 4, width: 36 - i * 8,
-              background: i === 0
-                ? "linear-gradient(90deg, var(--color-primary), var(--color-secondary))"
-                : "rgba(255,255,255,0.14)",
-            }}
-          />
-        </div>
-      ))}
-    </div>
-  );
-}
-
-function MusicVisual() {
-  return (
-    <div className="flex items-end" style={{ gap: 4, height: 40 }}>
-      {[0.9, 0.55, 1, 0.4, 0.75, 0.6].map((h, i) => (
-        <div
-          key={i}
-          className="eq-bar rounded-full"
-          style={{
-            width: 5, height: 40 * h,
-            background: i % 2 === 0
-              ? "linear-gradient(to top, var(--color-primary), var(--color-secondary))"
-              : "rgba(29,185,84,0.85)",
-            animationDelay: `${i * 0.15}s`,
-            animationDuration: `${1 + (i % 3) * 0.25}s`,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ChartVisual() {
-  return (
-    <div className="flex items-end" style={{ gap: 5, height: 40 }}>
-      {[0.45, 0.7, 0.35, 1, 0.6].map((h, i) => (
-        <div
-          key={i}
-          className="rise-bar rounded-md"
-          style={{
-            width: 9, height: 40 * h,
-            background: "linear-gradient(to top, var(--color-primary), var(--color-secondary))",
-            animationDelay: `${i * 0.3}s`,
-            opacity: 0.9,
-          }}
-        />
-      ))}
-    </div>
-  );
-}
-
-function WallpaperVisual() {
-  return (
-    <div className="relative overflow-hidden rounded-xl" style={{ width: 56, height: 40, background: "#160a18" }}>
-      <div
-        className="blob-shift absolute rounded-full"
-        style={{ width: 36, height: 36, top: -8, left: -6, background: "rgba(255,95,162,0.6)", filter: "blur(10px)" }}
-      />
-      <div
-        className="blob-shift absolute rounded-full"
-        style={{ width: 32, height: 32, bottom: -10, right: -6, background: "rgba(176,107,246,0.6)", filter: "blur(10px)", animationDelay: "1.4s" }}
-      />
-    </div>
-  );
-}
-
-function FocusModeVisual() {
-  return (
-    <div className="relative" style={{ width: 48, height: 40 }}>
-      <div
-        className="absolute rounded-lg"
-        style={{ inset: 0, border: "1.5px solid rgba(255,255,255,0.16)" }}
-      />
-      <div
-        className="pulse-dot absolute rounded-full grad-primary"
-        style={{ width: 12, height: 12, top: "50%", left: "50%", transform: "translate(-50%,-50%)" }}
-      />
-    </div>
-  );
-}
-
-const FEATURES = [
-  {
-    icon: Timer,
-    visual: <TimerVisual />,
-    title: "Pomodoro, perfected",
-    desc: "Task-aware session timelines, smart breaks, auto-start — a timer that knows where you are.",
-  },
-  {
-    icon: FolderKanban,
-    visual: <TasksVisual />,
-    title: "Projects & subtasks",
-    desc: "Break work down with descriptions, subtasks, tags and one-tap Run straight into a session.",
-  },
-  {
-    icon: Headphones,
-    visual: <MusicVisual />,
-    title: "Spotify built in",
-    desc: "Search, playlists and playback in your dock — it can even take over from your phone.",
-  },
-  {
-    icon: BarChart2,
-    visual: <ChartVisual />,
-    title: "Analytics & streaks",
-    desc: "Heatmaps, daily charts and streaks that show your deep-work hours adding up.",
-  },
-  {
-    icon: Sparkles,
-    visual: <WallpaperVisual />,
-    title: "Living wallpapers",
-    desc: "Animated auroras, rain, snow, starfields — generated in code — or your own photos.",
-  },
-  {
-    icon: Shrink,
-    visual: <FocusModeVisual />,
-    title: "Focus mode",
-    desc: "One tap hides everything but the ring. A pop-out mini player follows you anywhere.",
-  },
-];
-
-/** Live demo ring — endlessly counts down with the gradient stroke. */
-function DemoRing() {
-  const R = 88;
-  const C = 2 * Math.PI * R;
-  const [secondsLeft, setSecondsLeft] = useState(25 * 60);
-
-  useEffect(() => {
-    const id = setInterval(() => {
-      setSecondsLeft((s) => (s <= 0 ? 25 * 60 : s - 7));
-    }, 120);
-    return () => clearInterval(id);
-  }, []);
-
-  const m = Math.floor(secondsLeft / 60);
-  const s = secondsLeft % 60;
-  const progress = 1 - secondsLeft / (25 * 60);
-
-  return (
-    <div className="relative" style={{ width: 220, height: 220, display: "grid", placeItems: "center" }}>
-      <div
-        className="absolute rounded-full"
-        style={{
-          width: 210, height: 210,
-          background: "radial-gradient(circle, color-mix(in srgb, var(--color-primary) 16%, transparent), transparent 68%)",
-          filter: "blur(8px)",
-        }}
-      />
-      <svg width="220" height="220" viewBox="0 0 220 220" style={{ transform: "rotate(-90deg)" }}>
-        <defs>
-          <linearGradient id="landing-ring" x1="0" y1="0" x2="1" y2="1">
-            <stop offset="0%" stopColor="var(--color-primary)" />
-            <stop offset="100%" stopColor="var(--color-secondary)" />
-          </linearGradient>
-        </defs>
-        <circle cx="110" cy="110" r={R} fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="6" />
-        <circle
-          cx="110" cy="110" r={R} fill="none"
-          stroke="url(#landing-ring)" strokeWidth="6" strokeLinecap="round"
-          strokeDasharray={C} strokeDashoffset={C * (1 - progress)}
-          style={{ filter: "drop-shadow(0 0 10px color-mix(in srgb, var(--color-primary) 45%, transparent))" }}
-        />
-      </svg>
-      <div className="absolute flex flex-col items-center">
-        <span
-          className="tabular-nums"
-          style={{
-            fontFamily: "var(--font-display)", fontSize: 44, fontWeight: 600,
-            letterSpacing: "-.03em", color: "var(--color-on-surface)",
-          }}
-        >
-          {String(m).padStart(2, "0")}:{String(s).padStart(2, "0")}
-        </span>
-        <span className="flex items-center gap-1.5" style={{ fontSize: 11, color: "var(--color-on-surface-variant)" }}>
-          <span className="pulse-dot" style={{ width: 6, height: 6, borderRadius: 99, background: "var(--color-primary)" }} />
-          deep work in progress
-        </span>
-      </div>
-    </div>
-  );
-}
-
-/** Opens the auth modal automatically when the auth callback bounced with ?error= */
 function AuthErrorWatcher({ onError }: { onError: (code: string) => void }) {
   const searchParams = useSearchParams();
   const err = searchParams.get("error");
@@ -258,274 +53,419 @@ export default function LandingPage() {
     return () => clearInterval(id);
   }, []);
 
-  return (
-    <div className="relative h-dvh overflow-y-auto overflow-x-hidden">
-      <Suspense fallback={null}>
-        <AuthErrorWatcher onError={(code) => { setUrlError(code); setAuthOpen(true); }} />
-      </Suspense>
+  function openStart() {
+    setAuthOpen(true);
+  }
 
-      {/* Living background — drifts with your cursor, bursts on click */}
+  return (
+    <div className="landing-scroll relative h-dvh overflow-y-auto overflow-x-hidden">
+      {!LOCAL && (
+        <Suspense fallback={null}>
+          <AuthErrorWatcher onError={(code) => { setUrlError(code); setAuthOpen(true); }} />
+        </Suspense>
+      )}
+
       <div className="wp-noir fixed inset-0 z-0">
         <AnimatedBackdrop variant="aurora" interactive intensity={0.26} className="absolute inset-0" />
       </div>
 
-      {/* Nav */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center" style={{ padding: "16px 18px" }}>
+      <header className="fixed top-0 left-0 right-0 z-50 flex justify-center" style={{ padding: "14px 16px" }}>
         <nav
-          className="flex items-center w-full"
-          style={{ ...NAV_BG, maxWidth: 880, gap: 10, borderRadius: 999, padding: "8px 10px 8px 12px" }}
+          className="flex flex-col w-full"
+          style={{ ...NAV_BG, maxWidth: 1040, borderRadius: 24, padding: "8px 10px" }}
         >
-          <Image src={appIcon} alt="FocusSpace" width={30} height={30} className="rounded-[9px] shrink-0" />
-          <span
-            style={{
-              fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15.5,
-              letterSpacing: "-.01em", color: "var(--color-on-surface)",
-            }}
-          >
-            FocusSpace
-          </span>
-          <div className="flex-1" />
-          <button
-            onClick={() => setAuthOpen(true)}
-            className="pill hover-lift grad-primary"
-            style={{
-              padding: "8px 16px", fontSize: 13.5, color: "var(--color-on-primary)",
-              boxShadow: "0 6px 20px -6px color-mix(in srgb, var(--color-primary) 60%, transparent)",
-            }}
-          >
-            Get started <ArrowRight size={14} />
-          </button>
+          <div className="flex items-center w-full" style={{ gap: 8 }}>
+            <Image src={appIcon} alt="FocusSpace" width={30} height={30} className="rounded-[9px] shrink-0" />
+            <span
+              style={{
+                fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 15.5,
+                letterSpacing: "-.01em", color: "var(--color-on-surface)",
+              }}
+            >
+              FocusSpace
+            </span>
+
+            <div className="hidden lg:flex items-center flex-1 justify-center" style={{ gap: 2 }}>
+              {NAV_LINKS.map((l) => (
+                <a
+                  key={l.href}
+                  href={l.href}
+                  className="pill nav-link-hover"
+                  style={{ padding: "6px 11px", fontSize: 13, color: "var(--color-on-surface-variant)" }}
+                >
+                  {l.label}
+                </a>
+              ))}
+              <Link
+                href="/for-agents"
+                className="pill nav-link-hover"
+                style={{ padding: "6px 11px", fontSize: 13, color: "var(--color-on-surface-variant)" }}
+              >
+                For agents
+              </Link>
+            </div>
+
+            <div className="flex-1 lg:hidden" />
+            <StartCta isLocal={LOCAL} onStart={openStart} size="sm">
+              {LOCAL ? "Open FocusSpace" : "Get started"}
+            </StartCta>
+          </div>
+          <div className="flex lg:hidden overflow-x-auto no-scrollbar" style={{ gap: 2, padding: "6px 2px 2px" }}>
+            {NAV_LINKS.map((l) => (
+              <a
+                key={l.href}
+                href={l.href}
+                className="pill nav-link-hover shrink-0"
+                style={{ padding: "5px 10px", fontSize: 12.5, color: "var(--color-on-surface-variant)" }}
+              >
+                {l.label}
+              </a>
+            ))}
+            <Link
+              href="/for-agents"
+              className="pill nav-link-hover shrink-0"
+              style={{ padding: "5px 10px", fontSize: 12.5, color: "var(--color-on-surface-variant)" }}
+            >
+              For agents
+            </Link>
+          </div>
         </nav>
       </header>
 
-      {/* Hero */}
       <main className="relative z-10 flex flex-col items-center" style={{ padding: "0 20px" }}>
-        <section
-          className="w-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-20"
-          style={{ maxWidth: 980, minHeight: "92dvh", paddingTop: 96 }}
-        >
-          <div className="fade-up flex flex-col items-center lg:items-start text-center lg:text-left" style={{ maxWidth: 520 }}>
-            <h1
-              style={{
-                fontFamily: "var(--font-display)", fontWeight: 800, letterSpacing: "-.03em",
-                fontSize: "clamp(40px, 6vw, 64px)", lineHeight: 1.05,
-                color: "var(--color-on-surface)",
-              }}
-            >
-              Find your{" "}
-              <span className="inline-grid text-left align-baseline" style={{ minWidth: "5.2em" }}>
-                <AnimatePresence mode="popLayout" initial={false}>
-                  <motion.span
-                    key={ROTATING[wordIdx]}
-                    initial={{ y: 18, opacity: 0 }}
-                    animate={{ y: 0, opacity: 1 }}
-                    exit={{ y: -18, opacity: 0 }}
-                    transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-                    style={{
-                      gridArea: "1 / 1",
-                      background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
-                      WebkitBackgroundClip: "text",
-                      backgroundClip: "text",
-                      color: "transparent",
-                    }}
-                  >
-                    {ROTATING[wordIdx]}.
-                  </motion.span>
-                </AnimatePresence>
+        <div className="w-full" style={{ maxWidth: 1040 }}>
+
+          {/* ── Hero ─────────────────────────────────────────────── */}
+          <section
+            className="w-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-16"
+            style={{ minHeight: "92dvh", paddingTop: 108 }}
+          >
+            <div className="fade-up flex flex-col items-center lg:items-start text-center lg:text-left" style={{ maxWidth: 560 }}>
+              <span className="pill chip-primary" style={{ padding: "4px 11px", fontSize: 11.5, marginBottom: 16 }}>
+                Fully open source
               </span>
-            </h1>
-
-            <p style={{ fontSize: 16, lineHeight: 1.6, color: "var(--color-on-surface-variant)", marginTop: 16, maxWidth: 440 }}>
-              One task, one timer, your music, and a wallpaper that breathes.
-              FocusSpace is the pomodoro tracker that keeps you accountable — not entertained.
-            </p>
-
-            <div style={{ marginTop: 26 }}>
-              <button
-                onClick={() => setAuthOpen(true)}
-                className="pill hover-lift grad-primary"
+              <h1
                 style={{
-                  padding: "13px 26px", fontSize: 15, fontWeight: 700, color: "var(--color-on-primary)",
-                  boxShadow: "0 14px 40px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)",
+                  fontFamily: "var(--font-display)", fontWeight: 800, letterSpacing: "-.03em",
+                  fontSize: "clamp(40px, 6vw, 64px)", lineHeight: 1.05,
+                  color: "var(--color-on-surface)",
                 }}
               >
-                Start focusing — it&apos;s free <ArrowRight size={16} />
-              </button>
-            </div>
-
-            <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.7, marginTop: 14 }}>
-              Click anywhere — the space reacts to you.
-            </p>
-          </div>
-
-          <div className="fade-up shrink-0">
-            <DemoRing />
-          </div>
-        </section>
-
-        {/* Brand logo — sits in the existing gap between the hero and the features */}
-        <div className="flex justify-center w-full">
-          <Image
-            src={appIcon}
-            alt="FocusSpace"
-            width={156}
-            height={156}
-            priority
-            className="rounded-[36px]"
-            style={{ filter: "drop-shadow(0 22px 55px color-mix(in srgb, var(--color-primary) 38%, transparent))" }}
-          />
-        </div>
-
-        {/* Features */}
-        <section className="w-full" style={{ maxWidth: 980, paddingBottom: 24 }}>
-          <h2
-            className="text-center"
-            style={{
-              fontFamily: "var(--font-display)", fontSize: 26, fontWeight: 800,
-              letterSpacing: "-.02em", color: "var(--color-on-surface)", marginBottom: 8,
-            }}
-          >
-            Everything you need. Nothing you don&apos;t.
-          </h2>
-          <p className="text-center" style={{ fontSize: 14, color: "var(--color-on-surface-variant)", marginBottom: 28 }}>
-            Compact on purpose — the app is the focus, these are the tools.
-          </p>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3" style={{ gap: 14 }}>
-            {FEATURES.map(({ icon: Icon, visual, title, desc }, i) => (
-              <motion.div
-                key={title}
-                initial={{ opacity: 0, y: 18 }}
-                whileInView={{ opacity: 1, y: 0 }}
-                viewport={{ once: true, margin: "-40px" }}
-                transition={{ duration: 0.45, delay: (i % 3) * 0.08, ease: [0.22, 1, 0.36, 1] }}
-                className="glass hover-lift relative overflow-hidden"
-                style={{ borderRadius: 20, padding: 18 }}
-              >
-                <div className="flex items-start justify-between" style={{ marginBottom: 12 }}>
-                  <div
-                    className="flex items-center justify-center"
-                    style={{
-                      width: 34, height: 34, borderRadius: 11,
-                      color: "var(--color-primary)",
-                      background: "color-mix(in srgb, var(--color-primary) 14%, transparent)",
-                    }}
-                  >
-                    <Icon size={17} />
-                  </div>
-                  <div style={{ opacity: 0.9 }}>{visual}</div>
-                </div>
-                <p style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 700, color: "var(--color-on-surface)" }}>
-                  {title}
-                </p>
-                <p style={{ fontSize: 12.5, lineHeight: 1.55, color: "var(--color-on-surface-variant)", marginTop: 5 }}>
-                  {desc}
-                </p>
-              </motion.div>
-            ))}
-          </div>
-
-          {/* Focus AI — wide feature banner */}
-          <motion.div
-            initial={{ opacity: 0, y: 18 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true, margin: "-40px" }}
-            transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-            className="glass hover-lift relative overflow-hidden"
-            style={{ borderRadius: 20, padding: 20, marginTop: 14 }}
-          >
-            {/* dynamic sparkles — soft glowing dots, not icons */}
-            {[
-              { top: 18, left: 92, size: 7, color: "var(--color-primary)", delay: "0s" },
-              { top: 58, left: 140, size: 4, color: "var(--color-secondary)", delay: "0.7s" },
-              { bottom: 22, left: 64, size: 5, color: "#7cbcff", delay: "1.2s" },
-              { top: 22, right: 40, size: 5, color: "var(--color-primary)", delay: "0.4s" },
-              { bottom: 26, right: 104, size: 4, color: "var(--color-secondary)", delay: "1.5s" },
-              { top: 62, right: 160, size: 3, color: "#7cbcff", delay: "0.95s" },
-            ].map((s, i) => (
-              <span
-                key={i}
-                className="twinkle absolute pointer-events-none rounded-full"
-                style={{
-                  top: s.top, left: s.left, right: s.right, bottom: s.bottom,
-                  width: s.size, height: s.size,
-                  background: s.color,
-                  boxShadow: `0 0 ${s.size * 2.5}px ${s.size}px ${s.color}`,
-                  animationDelay: s.delay,
-                }}
-              />
-            ))}
-
-            <div className="relative flex flex-col sm:flex-row items-center" style={{ gap: 20 }}>
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src="/focus-ai.png"
-                alt="Focus AI"
-                className="shrink-0"
-                style={{ width: 104, height: 104, objectFit: "contain", filter: "drop-shadow(0 12px 30px rgba(90,160,255,0.4))" }}
-              />
-
-              <div className="flex-1 min-w-0 text-center sm:text-left">
-                <div className="flex items-center justify-center sm:justify-start" style={{ gap: 8 }}>
-                  <p style={{ fontFamily: "var(--font-display)", fontSize: 19, fontWeight: 800, letterSpacing: "-.01em", color: "var(--color-on-surface)" }}>
-                    Meet Focus AI
-                  </p>
-                  <span className="pill chip-primary" style={{ padding: "2px 9px", fontSize: 10.5, fontWeight: 700, letterSpacing: ".04em" }}>
-                    NEW
-                  </span>
-                </div>
-                <p style={{ fontSize: 13.5, lineHeight: 1.55, color: "var(--color-on-surface-variant)", marginTop: 5, maxWidth: 560 }}>
-                  Your built-in productivity co-pilot. Just describe what you need and Focus AI shapes your
-                  board for you — adding personalized tasks, breaking big goals into subtasks, and reading your
-                  habits — so you spend your energy doing the work, not organizing it.
-                </p>
-
-                <div className="flex items-center justify-center sm:justify-start flex-wrap" style={{ gap: 8, marginTop: 12 }}>
-                  {["Add new tasks", "Edit & modify your tasks", "Understand your focus routine"].map((chip) => (
-                    <span
-                      key={chip}
-                      className="pill"
+                Find your{" "}
+                <span className="inline-grid text-left align-baseline" style={{ minWidth: "5.2em" }}>
+                  <AnimatePresence mode="popLayout" initial={false}>
+                    <motion.span
+                      key={ROTATING[wordIdx]}
+                      initial={{ y: 18, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      exit={{ y: -18, opacity: 0 }}
+                      transition={{ duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
                       style={{
-                        padding: "5px 12px", fontSize: 12, fontWeight: 600,
-                        color: "var(--color-on-surface)",
-                        background: "rgba(255,255,255,0.06)",
-                        border: "1px solid rgba(255,255,255,0.10)",
+                        gridArea: "1 / 1",
+                        background: "linear-gradient(135deg, var(--color-primary), var(--color-secondary))",
+                        WebkitBackgroundClip: "text",
+                        backgroundClip: "text",
+                        color: "transparent",
                       }}
                     >
-                      {chip}
-                    </span>
-                  ))}
-                </div>
+                      {ROTATING[wordIdx]}.
+                    </motion.span>
+                  </AnimatePresence>
+                </span>
+              </h1>
 
-                <p style={{ fontSize: 11, color: "var(--color-on-surface-variant)", opacity: 0.65, marginTop: 12 }}>
-                  Optional — Focus AI can be turned off anytime in Settings.
-                </p>
+              <p style={{ fontSize: 16.5, lineHeight: 1.65, color: "var(--color-on-surface-variant)", marginTop: 18, maxWidth: 480 }}>
+                One task, one timer, your music, and a space that disappears around the work.
+                FocusSpace is a pomodoro workspace — and the same tools are open to Hermes and OpenClaw.
+                Fully open source.
+              </p>
+
+              <div className="flex flex-col items-center lg:items-start w-full" style={{ gap: 14, marginTop: 28 }}>
+                <StartCta isLocal={LOCAL} onStart={openStart}>
+                  {LOCAL ? "Open FocusSpace" : "Start focusing — it's free"}
+                </StartCta>
+                <CopyInstallBox />
+              </div>
+
+              <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.7, marginTop: 14 }}>
+                Click anywhere — the space reacts to you.
+              </p>
+            </div>
+
+            <div className="fade-up shrink-0">
+              <DemoRing />
+            </div>
+          </section>
+
+          {/* ── How it works ─────────────────────────────────────── */}
+          <LandingSection id="how">
+            <div className="flex flex-col" style={{ gap: 28 }}>
+              <SectionHead
+                eyebrow="How it works"
+                title="One core. Two ways in."
+                copy="You, Ask AI, and your agents all hit the same tools and the same data. Nothing forks. The board you see is the board they edit."
+              />
+              <HowItWorksDiagram />
+            </div>
+          </LandingSection>
+
+          {/* ── Pomodoro ─────────────────────────────────────────── */}
+          <LandingSection id="pomodoro">
+            <div className="grid grid-cols-1 lg:grid-cols-2 items-center" style={{ gap: 36 }}>
+              <SectionHead
+                eyebrow="Pomodoro"
+                title="Your length. Your count."
+                copy="Focus is 5–120 minutes — you set it. Three pomodoros at 25 minutes is not three at 50. Estimates, including half-pomo leftovers, scale with the length you chose. Sessions stay tied to a task, with smart breaks and a timeline of dots so you can see where you are."
+              />
+              <PomodoroVisual />
+            </div>
+          </LandingSection>
+
+          {/* ── Projects ─────────────────────────────────────────── */}
+          <LandingSection id="projects">
+            <div className="grid grid-cols-1 lg:grid-cols-2 items-center" style={{ gap: 36 }}>
+              <div className="lg:order-2">
+                <SectionHead
+                  eyebrow="Projects & tasks"
+                  title="Break it down. Then run."
+                  copy="Projects hold tasks. Tasks hold subtasks, tags, notes, and a pomodoro estimate. One tap on Run and you're in the ring with that task already selected."
+                />
+              </div>
+              <div className="lg:order-1">
+                <ProjectsVisual />
               </div>
             </div>
-          </motion.div>
+          </LandingSection>
 
-          {/* Bottom CTA */}
-          <div className="flex flex-col items-center" style={{ marginTop: 48, marginBottom: 56 }}>
-            <button
-              onClick={() => setAuthOpen(true)}
-              className="pill hover-lift grad-primary"
-              style={{
-                padding: "13px 28px", fontSize: 15, fontWeight: 700, color: "var(--color-on-primary)",
-                boxShadow: "0 14px 40px -8px color-mix(in srgb, var(--color-primary) 60%, transparent)",
-              }}
-            >
-              Start focusing — it&apos;s free <ArrowRight size={16} />
-            </button>
-            <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.7, marginTop: 18 }}>
-              FocusSpace · pick one task, run the timer, review the data.
-            </p>
-          </div>
-        </section>
+          {/* ── Focus AI ─────────────────────────────────────────── */}
+          <LandingSection id="ai">
+            <div className="flex flex-col" style={{ gap: 24 }}>
+              <div className="flex flex-col lg:flex-row lg:items-end justify-between" style={{ gap: 20 }}>
+                <SectionHead
+                  eyebrow="Focus AI"
+                  title="Say it. The board moves."
+                  copy="Ask AI is the in-app assistant. Plain language becomes tool calls — add, edit, retag, re-estimate. Deletes wait for a confirm. Conversations stay in your database, not a pile we train on."
+                />
+                <div className="flex items-center shrink-0" style={{ gap: 14 }}>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src="/focus-ai.png"
+                    alt="Focus AI"
+                    style={{ width: 88, height: 88, objectFit: "contain", filter: "drop-shadow(0 12px 30px rgba(90,160,255,0.4))" }}
+                  />
+                </div>
+              </div>
+              <AskAIDiagram />
+              <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", opacity: 0.75 }}>
+                Optional — turn Ask AI off any time in Settings.
+              </p>
+            </div>
+          </LandingSection>
+
+          {/* ── MCP & agents ─────────────────────────────────────── */}
+          <LandingSection id="agents">
+            <div className="flex flex-col" style={{ gap: 24 }}>
+              <SectionHead
+                eyebrow="MCP & agents"
+                title="Hermes and OpenClaw. Same hands as you."
+                copy="Paste the one-liner. The agent installs a local, no-login FocusSpace and wires MCP. It can do everything a human can: tasks, timer, analytics. After it adds a task, it asks before starting the timer. Individual login on a self-host is coming later. iOS and Android are planned — Hermes and OpenClaw work today."
+              />
+              <McpDiagram />
+              <CopyInstallBox />
+            </div>
+          </LandingSection>
+
+          {/* ── Analytics ────────────────────────────────────────── */}
+          <LandingSection id="analytics">
+            <div className="grid grid-cols-1 lg:grid-cols-2 items-center" style={{ gap: 36 }}>
+              <SectionHead
+                eyebrow="Analytics"
+                title="The hours, not the dopamine."
+                copy="Heatmaps, streaks, breakdowns by project and by tag. The same numbers are available over MCP — an agent can fetch your week, not just look at the charts in the UI."
+              />
+              <AnalyticsVisual />
+            </div>
+          </LandingSection>
+
+          {/* ── Atmosphere ───────────────────────────────────────── */}
+          <LandingSection id="atmosphere">
+            <div className="grid grid-cols-1 lg:grid-cols-2 items-center" style={{ gap: 36 }}>
+              <div className="lg:order-2">
+                <SectionHead
+                  eyebrow="The space"
+                  title="It disappears around the work."
+                  copy="Spotify lives in the dock. Living wallpapers and weather effects sit behind the glass. Focus mode hides everything but the ring. Tint and blur so the UI sits on your space — not on a stock theme."
+                />
+              </div>
+              <div className="lg:order-1">
+                <AtmosphereVisual />
+              </div>
+            </div>
+          </LandingSection>
+
+          {/* ── Open source ──────────────────────────────────────── */}
+          <LandingSection id="open-source">
+            <div className="flex flex-col" style={{ gap: 24 }}>
+              <SectionHead
+                align="center"
+                eyebrow="Open source & self-host"
+                title="Yours to run."
+                copy="Clone it. Change it. Host it. Local mode is npm or Docker, SQLite, no login — one implicit user on the machine. The hosted cloud at focusspace.live uses Supabase. Want that stack on your own servers? The README has the steps."
+              />
+
+              <div className="grid grid-cols-1 md:grid-cols-2" style={{ gap: 14 }}>
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.45, ease: [0.22, 1, 0.36, 1] }}
+                  className="glass"
+                  style={{ borderRadius: 24, padding: 22 }}
+                >
+                  <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--color-on-surface)" }}>
+                    Local
+                  </p>
+                  <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--color-on-surface-variant)", marginTop: 8 }}>
+                    npm or Docker. SQLite in ~/.focusspace. No account. Point Hermes or OpenClaw at it and work.
+                  </p>
+                  <div className="flex flex-wrap" style={{ gap: 8, marginTop: 16 }}>
+                    {["npm", "Docker", "SQLite", "No login"].map((c) => (
+                      <span key={c} className="pill chip-primary" style={{ padding: "4px 10px", fontSize: 11.5 }}>{c}</span>
+                    ))}
+                  </div>
+                </motion.div>
+                <motion.div
+                  initial={{ opacity: 0, y: 16 }}
+                  whileInView={{ opacity: 1, y: 0 }}
+                  viewport={{ once: true }}
+                  transition={{ duration: 0.45, delay: 0.08, ease: [0.22, 1, 0.36, 1] }}
+                  className="glass"
+                  style={{ borderRadius: 24, padding: 22 }}
+                >
+                  <p style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 18, color: "var(--color-on-surface)" }}>
+                    Hosted cloud
+                  </p>
+                  <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--color-on-surface-variant)", marginTop: 8 }}>
+                    focusspace.live — Supabase for auth and data. Sign in and start. Self-hosting the cloud stack is documented on GitHub, not here.
+                  </p>
+                  <div className="flex flex-wrap" style={{ gap: 8, marginTop: 16 }}>
+                    {["Supabase", "Google / email", "focusspace.live"].map((c) => (
+                      <span key={c} className="pill chip-accent" style={{ padding: "4px 10px", fontSize: 11.5 }}>{c}</span>
+                    ))}
+                  </div>
+                </motion.div>
+              </div>
+
+              <div className="flex justify-center">
+                <a
+                  href={REPO_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="pill hover-lift"
+                  style={{
+                    padding: "10px 16px",
+                    fontSize: 13.5,
+                    color: "var(--color-on-surface)",
+                    background: "rgba(255,255,255,0.06)",
+                    border: "1px solid rgba(255,255,255,0.10)",
+                  }}
+                >
+                  <GithubMark size={16} /> View on GitHub <ArrowRight size={14} />
+                </a>
+              </div>
+            </div>
+          </LandingSection>
+
+          {/* ── Coming soon ──────────────────────────────────────── */}
+          <LandingSection id="coming-soon">
+            <div className="flex flex-col" style={{ gap: 24 }}>
+              <SectionHead
+                align="center"
+                eyebrow="Coming soon"
+                title="What's already here, and what isn't."
+                copy="Hermes and OpenClaw work today. Per-user auth on an individual self-host, plus native iOS and Android apps, are next."
+              />
+              <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12 }}>
+                {[
+                  { icon: UserRound, title: "Per-user login on self-host", body: "Local is one implicit user right now. Individual accounts on a personal install are coming later." },
+                  { icon: Smartphone, title: "iOS", body: "A native app is planned. Not shipping yet — Hermes and OpenClaw cover the agent side today." },
+                  { icon: Smartphone, title: "Android", body: "Same story. Planned. The desktop agents and the web app are the path that exists now." },
+                ].map(({ icon: Icon, title, body }, i) => (
+                  <motion.div
+                    key={title}
+                    initial={{ opacity: 0, y: 14 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ duration: 0.45, delay: i * 0.06, ease: [0.22, 1, 0.36, 1] }}
+                    className="glass"
+                    style={{ borderRadius: 22, padding: 18 }}
+                  >
+                    <div
+                      className="flex items-center justify-center"
+                      style={{
+                        width: 34, height: 34, borderRadius: 11, marginBottom: 12,
+                        color: "var(--color-primary)",
+                        background: "color-mix(in srgb, var(--color-primary) 14%, transparent)",
+                      }}
+                    >
+                      <Icon size={17} />
+                    </div>
+                    <p style={{ fontFamily: "var(--font-display)", fontWeight: 700, fontSize: 15, color: "var(--color-on-surface)" }}>
+                      {title}
+                    </p>
+                    <p style={{ fontSize: 13, lineHeight: 1.55, color: "var(--color-on-surface-variant)", marginTop: 6 }}>
+                      {body}
+                    </p>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+          </LandingSection>
+
+          {/* ── Final CTA ────────────────────────────────────────── */}
+          <LandingSection id="start">
+            <div className="flex flex-col items-center text-center" style={{ gap: 18, paddingBottom: 72 }}>
+              <h2
+                style={{
+                  fontFamily: "var(--font-display)",
+                  fontWeight: 800,
+                  letterSpacing: "-.03em",
+                  fontSize: "clamp(28px, 4.4vw, 44px)",
+                  color: "var(--color-on-surface)",
+                }}
+              >
+                Sit down. Start the ring.
+              </h2>
+              <p style={{ fontSize: 16, lineHeight: 1.6, color: "var(--color-on-surface-variant)", maxWidth: 440 }}>
+                Free to use on the web. Free to run on your machine. Hand the line to an agent if you&apos;d rather it set things up.
+              </p>
+              <StartCta isLocal={LOCAL} onStart={openStart}>
+                {LOCAL ? "Open FocusSpace" : "Start focusing — it's free"}
+              </StartCta>
+              <CopyInstallBox />
+            </div>
+          </LandingSection>
+        </div>
       </main>
 
       <SiteFooter />
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} urlError={urlError} />
+      {!LOCAL && (
+        <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} urlError={urlError} />
+      )}
+
+      <Toaster
+        theme="dark"
+        position="bottom-right"
+        toastOptions={{
+          style: {
+            background: "var(--color-surface-container-high)",
+            border: "1px solid rgba(255,255,255,0.08)",
+            color: "var(--color-on-surface)",
+            backdropFilter: "blur(20px)",
+          },
+        }}
+      />
     </div>
   );
 }

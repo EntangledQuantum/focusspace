@@ -176,7 +176,7 @@ function TaskRow({
         {/* session dots */}
         {!done && (
           <div className="hidden sm:flex shrink-0" style={{ gap: 4 }}>
-            {Array.from({ length: Math.min(est, 6) }).map((_, i) => (
+            {Array.from({ length: Math.min(est, 12) }).map((_, i) => (
               <span
                 key={i}
                 className={i < (task.completed_pomodoros ?? 0) ? "grad-primary" : ""}
@@ -186,6 +186,11 @@ function TaskRow({
                 }}
               />
             ))}
+            {est > 12 && (
+              <span style={{ fontSize: 10, fontWeight: 700, color: "var(--color-on-surface-variant)" }}>
+                +{est - 12}
+              </span>
+            )}
           </div>
         )}
 

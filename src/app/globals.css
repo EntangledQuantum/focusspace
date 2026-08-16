@@ -272,6 +272,13 @@ input[type="range"].rng.accent::-moz-range-thumb { background: var(--color-secon
 .no-scrollbar::-webkit-scrollbar { display: none; }
 .no-scrollbar { scrollbar-width: none; }
 
+.dock-subtasks { scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.28) transparent; }
+.dock-subtasks::-webkit-scrollbar { width: 5px; }
+.dock-subtasks::-webkit-scrollbar-thumb {
+  background: rgba(255,255,255,0.28);
+  border-radius: 99px;
+}
+
 /* ─── Animations ────────────────────────────────────────────────── */
 /* Entrance keyframes must NOT gate opacity to 0 — capture/print/reduced-motion
    environments freeze the timeline at frame 0, which would hide content. */
@@ -351,11 +358,27 @@ textarea:focus, textarea:focus-visible {
   color: var(--color-on-surface); margin: 28px 0 10px; letter-spacing: -.01em;
 }
 .legal-prose h2:first-child { margin-top: 0; }
+.legal-prose h3 {
+  font-family: var(--font-display); font-weight: 700; font-size: 15px;
+  color: var(--color-on-surface); margin: 20px 0 8px;
+}
 .legal-prose p { margin: 0 0 12px; }
 .legal-prose ul { margin: 0 0 12px; padding-left: 20px; }
-.legal-prose li { margin: 4px 0; list-style: disc; }
+.legal-prose ol { margin: 0 0 12px; padding-left: 22px; }
+.legal-prose li { margin: 4px 0; }
+.legal-prose ul li { list-style: disc; }
+.legal-prose ol li { list-style: decimal; }
 .legal-prose strong { color: var(--color-on-surface); font-weight: 700; }
 .legal-prose a { color: var(--color-primary); text-decoration: underline; }
+.legal-prose code {
+  font-size: 12.5px; padding: 1px 6px; border-radius: 6px;
+  background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.08);
+}
+.legal-prose pre {
+  margin: 0 0 14px; padding: 12px 14px; border-radius: 12px; overflow-x: auto;
+  background: rgba(0,0,0,0.28); border: 1px solid rgba(255,255,255,0.08);
+}
+.legal-prose pre code { padding: 0; background: none; border: none; font-size: 13px; }
 
 /* ─── Hover utilities ────────────────────────────────────────────── */
 .btn-hover-primary:hover {
@@ -391,6 +414,47 @@ textarea:focus, textarea:focus-visible {
 .btn-hover-error:hover {
   background: color-mix(in srgb, var(--color-error) 14%, transparent) !important;
   color: var(--color-error) !important;
+}
+
+/* ─── landing ───────────────────────────────────────────────────── */
+.landing-scroll {
+  scroll-behavior: smooth;
+  scroll-padding-top: 104px;
+}
+.landing-section { scroll-margin-top: 104px; }
+
+.landing-flow {
+  stroke-dasharray: 5 10;
+  animation: landing-flow 18s linear infinite;
+}
+.landing-flow-rev {
+  stroke-dasharray: 5 10;
+  animation: landing-flow 18s linear infinite reverse;
+}
+.landing-flow-slow {
+  stroke-dasharray: 2 12;
+  animation: landing-flow 28s linear infinite;
+}
+@keyframes landing-flow {
+  to { stroke-dashoffset: -420; }
+}
+
+.landing-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: landing-draw 1.5s var(--ease) forwards;
+}
+@keyframes landing-draw {
+  to { stroke-dashoffset: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .landing-scroll { scroll-behavior: auto; }
+  .landing-flow, .landing-flow-rev, .landing-flow-slow, .landing-draw {
+    animation: none !important;
+    stroke-dashoffset: 0;
+    stroke-dasharray: none;
+  }
 }
 
 /* Standalone form input – nice focus glow */

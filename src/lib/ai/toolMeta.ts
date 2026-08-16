@@ -23,6 +23,23 @@ export const TOOL_META: Record<string, ToolMeta> = {
   delete_subtask:         { verb: "Delete subtask", icon: "Trash2", destructive: true },
   create_tag:             { verb: "Create tag", icon: "Tag" },
   delete_tag:             { verb: "Delete tag", icon: "Trash2", destructive: true },
+  get_workspace_state:    { verb: "Read workspace", icon: "Radar" },
+  reset_task_progress:    { verb: "Reset task", icon: "RotateCcw" },
+  get_settings:           { verb: "Read settings", icon: "Settings" },
+  update_settings:        { verb: "Update settings", icon: "SlidersHorizontal" },
+  start_timer:            { verb: "Start timer", icon: "Play" },
+  pause_timer:            { verb: "Pause timer", icon: "Pause" },
+  resume_timer:           { verb: "Resume timer", icon: "Play" },
+  skip_timer:             { verb: "Skip session", icon: "SkipForward" },
+  reset_timer:            { verb: "Reset timer", icon: "RotateCcw" },
+  set_active_task:        { verb: "Select task", icon: "Target" },
+  confirm_action:         { verb: "Confirm delete", icon: "Check", destructive: true },
+  analytics_overview:     { verb: "Read overview", icon: "BarChart3" },
+  analytics_by_project:   { verb: "Read by project", icon: "FolderKanban" },
+  analytics_by_tag:       { verb: "Read by tag", icon: "Tag" },
+  analytics_heatmap:      { verb: "Read heatmap", icon: "Calendar" },
+  analytics_sessions:     { verb: "Read sessions", icon: "List" },
+  analytics_compare:      { verb: "Compare periods", icon: "GitCompare" },
 };
 
 export function toolMetaFor(name: string): ToolMeta {
