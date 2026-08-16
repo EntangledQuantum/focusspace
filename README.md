@@ -34,9 +34,7 @@ locally with SQLite, or deploy the hosted/Supabase stack.
 
 ### 🏠 Home
 
-<img width="2154" height="1357" alt="image" src="https://github.com/user-attachments/assets/92c10fe7-e96e-4fc3-a030-31dcea22c6d3" />
-
-<img width="2154" height="1357" alt="image" src="https://github.com/user-attachments/assets/33a46880-7623-4fac-99b4-2bbf0e48cb55" />
+<img width="1135" height="1011" alt="image" src="https://github.com/user-attachments/assets/a9ac654b-df40-4ee6-8374-b546e86a2578" />
 
 
 The public landing page: an animated aurora that drifts with your cursor and bursts on click, a live demo
@@ -48,7 +46,6 @@ timer ring, a rotating headline, the feature grid, and the Focus AI banner.
 The focus screen — one task, one timer.
 
 ### 🗂️ Projects
-> _Screenshot placeholder — add `docs/screenshots/projects.png`_
 
 Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro estimates — plus a one-tap
 **Run** pill that switches the active task and jumps straight into a focus session.
