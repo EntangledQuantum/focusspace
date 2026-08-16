@@ -137,10 +137,10 @@ export default function LandingPage() {
 
           {/* ── Hero ─────────────────────────────────────────────── */}
           <section
-            className="w-full flex flex-col lg:flex-row items-center justify-center gap-12 lg:gap-16"
+            className="w-full flex flex-col lg:flex-row items-center lg:items-center justify-start lg:justify-between gap-12 lg:gap-16"
             style={{ minHeight: "92dvh", paddingTop: 108 }}
           >
-            <div className="fade-up flex flex-col items-center lg:items-start text-center lg:text-left" style={{ maxWidth: 560 }}>
+            <div className="fade-up flex flex-col items-center lg:items-start text-center lg:text-left w-full" style={{ maxWidth: 560 }}>
               <span className="pill chip-primary" style={{ padding: "4px 11px", fontSize: 11.5, marginBottom: 16 }}>
                 Fully open source
               </span>
@@ -184,7 +184,21 @@ export default function LandingPage() {
                 <StartCta isLocal={LOCAL} onStart={openStart}>
                   {LOCAL ? "Open FocusSpace" : "Start focusing — it's free"}
                 </StartCta>
-                <CopyInstallBox />
+                <div className="w-full">
+                  <p
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      letterSpacing: ".08em",
+                      textTransform: "uppercase",
+                      color: "var(--color-on-surface-variant)",
+                      marginBottom: 8,
+                    }}
+                  >
+                    Self host
+                  </p>
+                  <CopyInstallBox />
+                </div>
               </div>
 
               <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.7, marginTop: 14 }}>
@@ -268,7 +282,7 @@ export default function LandingPage() {
               <SectionHead
                 eyebrow="MCP & agents"
                 title="Hermes and OpenClaw. Same hands as you."
-                copy="Paste the one-liner. The agent installs a local, no-login FocusSpace and wires MCP. It can do everything a human can: tasks, timer, analytics. After it adds a task, it asks before starting the timer. Individual login on a self-host is coming later. iOS and Android are planned — Hermes and OpenClaw work today."
+                copy="Paste the one-liner. The agent installs a local, no-login FocusSpace and wires MCP. It can do everything a human can: tasks, timer, music, analytics. After it adds a task, it asks before starting the timer. Individual login on a self-host is coming later. iOS and Android are planned — Hermes and OpenClaw work today."
               />
               <McpDiagram />
               <CopyInstallBox />
@@ -307,7 +321,6 @@ export default function LandingPage() {
           <LandingSection id="open-source">
             <div className="flex flex-col" style={{ gap: 24 }}>
               <SectionHead
-                align="center"
                 eyebrow="Open source & self-host"
                 title="Yours to run."
                 copy="Clone it. Change it. Host it. Local mode is npm or Docker, SQLite, no login — one implicit user on the machine. The hosted cloud at focusspace.live uses Supabase. Want that stack on your own servers? The README has the steps."
@@ -356,7 +369,7 @@ export default function LandingPage() {
                 </motion.div>
               </div>
 
-              <div className="flex justify-center">
+              <div className="flex justify-start">
                 <a
                   href={REPO_URL}
                   target="_blank"
@@ -380,7 +393,6 @@ export default function LandingPage() {
           <LandingSection id="coming-soon">
             <div className="flex flex-col" style={{ gap: 24 }}>
               <SectionHead
-                align="center"
                 eyebrow="Coming soon"
                 title="What's already here, and what isn't."
                 copy="Hermes and OpenClaw work today. Per-user auth on an individual self-host, plus native iOS and Android apps, are next."

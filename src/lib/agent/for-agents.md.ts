@@ -139,8 +139,8 @@ Call \`get_workspace_state\` before any other FocusSpace tool. Expect the implic
 1. Always call \`get_workspace_state\` before other FocusSpace tools.
 2. After creating a task, **ask** if the user wants to start the timer. **Never auto-start.**
 3. Auto-decompose large tasks into subtasks when the user did not give any.
-4. You can do everything a human can: board CRUD, timer control, settings, and rich analytics over MCP.
-5. Tools: \`get_workspace_state\`, \`board\`, \`timer\`, \`settings\`, \`analytics_*\`, \`confirm_action\`, \`reset_task_progress\`. See \`skills/focusspace/references/mcp-tools.md\`.
+4. You can do everything a human can: board CRUD, timer control, music (Spotify), settings, and rich analytics over MCP.
+5. Tools: \`get_workspace_state\`, \`board\`, \`timer\`, \`music\`, \`settings\`, \`analytics_*\`, \`confirm_action\`, \`reset_task_progress\`. See \`skills/focusspace/references/mcp-tools.md\`.
 
 ## Coming soon
 

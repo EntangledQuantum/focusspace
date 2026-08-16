@@ -4,13 +4,15 @@ import { useState } from "react";
 import {
   FolderKanban, ListChecks, CheckCheck, FolderPlus, Pencil, Palette, Trash2,
   Plus, CheckCircle2, ListPlus, Tag, Sparkles, Loader2, AlertTriangle,
-  Search, FileText, ChevronRight, BarChart3, type LucideIcon,
+  Search, FileText, ChevronRight, BarChart3, Play, Pause, SkipForward, SkipBack,
+  Disc3, Volume2, Shuffle, type LucideIcon,
 } from "lucide-react";
 import { toolMetaFor } from "@/lib/ai/toolMeta";
 
 const ICONS: Record<string, LucideIcon> = {
   FolderKanban, ListChecks, CheckCheck, FolderPlus, Pencil, Palette, Trash2,
   Plus, CheckCircle2, ListPlus, Tag, Sparkles, Search, FileText, BarChart3,
+  Play, Pause, SkipForward, SkipBack, Disc3, Volume2, Shuffle,
 };
 
 export type ToolState = "running" | "done" | "error";

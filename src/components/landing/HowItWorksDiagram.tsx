@@ -157,7 +157,7 @@ function Desktop() {
         fill="var(--color-on-surface-variant)"
         style={{ fontFamily: "var(--font-sans)", fontSize: 12 }}
       >
-        tasks · timer · analytics · board
+        tasks · timer · music · analytics
       </text>
       <g>
         {["create_task", "start_timer", "get_stats"].map((t, i) => (
@@ -184,7 +184,7 @@ function Mobile() {
     { title: "FocusSpace core", sub: "One workspace. Your data.", tone: "color-mix(in srgb, var(--color-primary) 14%, transparent)" },
     { title: "Ask AI · in-app", sub: "Type it. Tools run. Board updates.", tone: "color-mix(in srgb, #8fb6ff 16%, transparent)" },
     { title: "Hermes / OpenClaw · MCP", sub: "Agents use the same tools you do.", tone: "color-mix(in srgb, var(--color-secondary) 16%, transparent)" },
-    { title: "Same tool layer", sub: "tasks · timer · analytics · board", tone: "rgba(255,255,255,0.05)" },
+    { title: "Same tool layer", sub: "tasks · timer · music · analytics", tone: "rgba(255,255,255,0.05)" },
   ];
 
   return (

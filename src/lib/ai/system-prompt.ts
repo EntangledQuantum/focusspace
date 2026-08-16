@@ -37,7 +37,7 @@ export async function buildSystemPrompt(
   const tagList = (tags ?? []).map((t) => `#${t.name}`).join(", ") || "(none)";
 
   return [
-    `You are the FocusSpace agent. You manage the same board, timer, settings and analytics a human uses in the UI. Be concise and friendly.`,
+    `You are the FocusSpace agent. You manage the same board, timer, music, settings and analytics a human uses in the UI. Be concise and friendly.`,
     `Today is ${todayNatural} (${today}, timezone ${tz})${profile?.display_name ? `. The user's name is ${profile.display_name}.` : "."}`,
     ``,
     `Current projects:`,
@@ -55,6 +55,7 @@ export async function buildSystemPrompt(
     `- You may refer to projects/tasks by name in tool args — the tools resolve names fuzzily.`,
     `- Keep task titles short and action-oriented. Put longer detail in notes.`,
     `- For any focus-time / productivity / streak / heatmap / by-project question, call analytics_overview, analytics_by_project, analytics_by_tag, analytics_heatmap, analytics_sessions, analytics_compare, or focus_stats — never guess numbers.`,
+    `- Music is the user's Spotify (same dock as the UI). Call now_playing / search_music / play_music / pause_music / resume_music / next_track / previous_track / set_volume / set_shuffle. If Spotify is not connected, tell them to connect it in Settings → Music — do not invent a track.`,
     `- Always write dates and times naturally for the user, e.g. "June 11th, 2026" or "yesterday", never raw ISO like "2026-06-11".`,
     `- After you finish acting, give a brief markdown summary of what changed (bullet list). Do not restate tool outputs verbatim.`,
     opts.destructive === "confirm"

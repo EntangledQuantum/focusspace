@@ -40,6 +40,15 @@ export const TOOL_META: Record<string, ToolMeta> = {
   analytics_heatmap:      { verb: "Read heatmap", icon: "Calendar" },
   analytics_sessions:     { verb: "Read sessions", icon: "List" },
   analytics_compare:      { verb: "Compare periods", icon: "GitCompare" },
+  now_playing:            { verb: "Now playing", icon: "Disc3" },
+  search_music:           { verb: "Search music", icon: "Search" },
+  play_music:             { verb: "Play music", icon: "Play" },
+  pause_music:            { verb: "Pause music", icon: "Pause" },
+  resume_music:           { verb: "Resume music", icon: "Play" },
+  next_track:             { verb: "Next track", icon: "SkipForward" },
+  previous_track:         { verb: "Previous track", icon: "SkipBack" },
+  set_volume:             { verb: "Set volume", icon: "Volume2" },
+  set_shuffle:            { verb: "Set shuffle", icon: "Shuffle" },
 };
 
 export function toolMetaFor(name: string): ToolMeta {

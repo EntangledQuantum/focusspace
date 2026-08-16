@@ -15,7 +15,7 @@ export default function ForAgentsPage() {
       <p>
         FocusSpace is a Pomodoro timer, task board, and focus analytics app.
         Agents can do everything a human can — board CRUD, timer control,
-        settings, and rich analytics — over MCP.
+        music, settings, and rich analytics — over MCP.
       </p>
 
       <p>If you are a human talking to an agent, paste this exact line:</p>
@@ -73,8 +73,9 @@ export default function ForAgentsPage() {
         <li>Auto-decompose large tasks into subtasks when you did not give any.</li>
         <li>
           Tools: <code>get_workspace_state</code>, <code>board</code>,{" "}
-          <code>timer</code>, <code>settings</code>, <code>analytics_*</code>,{" "}
-          <code>confirm_action</code>, <code>reset_task_progress</code>.
+          <code>timer</code>, <code>music</code>, <code>settings</code>,{" "}
+          <code>analytics_*</code>, <code>confirm_action</code>,{" "}
+          <code>reset_task_progress</code>.
         </li>
       </ul>
 

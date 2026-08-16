@@ -60,7 +60,7 @@ export async function handleMcpMessage(
       capabilities: { tools: {} },
       serverInfo: { name: "focusspace", version: "0.1.0" },
       instructions:
-        "Call get_workspace_state first. After creating a task, ask before start_timer. Use analytics_* for any focus-time question.",
+        "Call get_workspace_state first. After creating a task, ask before start_timer. Use analytics_* for any focus-time question. Use now_playing / play_music / pause_music for Spotify.",
     });
   }
 

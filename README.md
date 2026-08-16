@@ -24,7 +24,7 @@ that most "productivity" apps bury you in.
 
 It pairs a distraction-free focus screen with full project/task management, Spotify playback, rich
 analytics, living wallpapers, and an optional **Focus AI** assistant. Agents (Hermes, OpenClaw) can drive
-the same board, timer, settings, and analytics over **MCP**. It's **fully open source** — self-host it
+the same board, timer, music, settings, and analytics over **MCP**. It's **fully open source** — self-host it
 locally with SQLite, or deploy the hosted/Supabase stack.
 
 ---
@@ -66,7 +66,7 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
 - **🤖 Ask AI** *(optional)* — open **Ask AI** on the Projects tab and dictate changes in plain language:
   add or edit projects and tasks, search the board, and read your focus stats. Actions render as live
   cards and update the board instantly.
-- **🔌 MCP / agents** — Hermes and OpenClaw can run the same surface over MCP (board, timer, settings,
+- **🔌 MCP / agents** — Hermes and OpenClaw can run the same surface over MCP (board, timer, music, settings,
   analytics). Individual local setup, no login. See [For agents](https://focusspace.live/for-agents).
 - **🎵 Spotify built in** — Web Playback SDK player with search, playlists, your library, volume/shuffle,
   external-device takeover, and a pop-out mini player.

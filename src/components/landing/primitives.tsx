@@ -43,8 +43,8 @@ export function SectionHead({
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true, margin: "-80px" }}
       transition={{ duration: 0.5, ease: EASE }}
-      className={`flex flex-col ${align === "center" ? "items-center text-center" : "items-start text-left"}`}
-      style={{ gap: 12, maxWidth: align === "center" ? 640 : 520 }}
+      className={`flex flex-col w-full ${align === "center" ? "items-center text-center" : "items-start text-left"}`}
+      style={{ gap: 12 }}
     >
       <Eyebrow>{eyebrow}</Eyebrow>
       <h2
@@ -59,7 +59,16 @@ export function SectionHead({
       >
         {title}
       </h2>
-      <p style={{ fontSize: 16, lineHeight: 1.65, color: "var(--color-on-surface-variant)" }}>{copy}</p>
+      <p
+        style={{
+          fontSize: 16,
+          lineHeight: 1.65,
+          color: "var(--color-on-surface-variant)",
+          maxWidth: align === "center" ? 640 : 560,
+        }}
+      >
+        {copy}
+      </p>
     </motion.div>
   );
 }

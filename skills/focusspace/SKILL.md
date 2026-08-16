@@ -18,7 +18,7 @@ metadata:
 
 # FocusSpace
 
-FocusSpace is a Pomodoro + task board. Agents can do everything a human can on the local app: board CRUD, timer control, settings, and analytics — all over MCP.
+FocusSpace is a Pomodoro + task board. Agents can do everything a human can on the local app: board CRUD, timer control, music (Spotify), settings, and analytics — all over MCP.
 
 **Supported agents today:** Hermes and OpenClaw. iOS and Android apps are planned.
 
@@ -123,7 +123,7 @@ Then follow **Operating rules** below. Tool details: [references/mcp-tools.md](r
 1. **Always call `get_workspace_state` first** in a session (and again after anything that might have changed the board or timer).
 2. **Never auto-start the timer.** After creating a task, *ask* whether the user wants to start it. Wait for a yes.
 3. **Auto-decompose large tasks.** If the user describes a large piece of work and gives no subtasks, split it into concrete subtasks yourself.
-4. You can do everything a human can: board CRUD, timer control, settings, and rich analytics over MCP.
+4. You can do everything a human can: board CRUD, timer control, music (Spotify), settings, and rich analytics over MCP.
 5. Destructive deletes go through `confirm_action` when the tool asks for confirmation.
 6. Individual local mode only. One implicit user. No login. Do not mention or offer Supabase.
 

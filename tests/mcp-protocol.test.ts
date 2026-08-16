@@ -49,6 +49,7 @@ describe("MCP protocol", () => {
     for (const required of [
       "get_workspace_state", "create_task", "start_timer", "reset_task_progress",
       "analytics_overview", "analytics_heatmap", "analytics_compare", "confirm_action",
+      "now_playing", "play_music", "pause_music", "search_music",
     ]) {
       expect(names).toContain(required);
     }

@@ -33,7 +33,7 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
       inputSchema: z.object({}),
       execute: async () => {
         const [{ data: settings }, { data: profile }, timer] = await Promise.all([
-          supabase.from("user_settings").select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, ai_destructive, theme").eq("user_id", userId).maybeSingle(),
+          supabase.from("user_settings").select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, ai_destructive, theme, spotify_refresh_token").eq("user_id", userId).maybeSingle(),
           supabase.from("profiles").select("display_name, timezone").eq("id", userId).maybeSingle(),
           readTimerState(supabase, userId),
         ]);
@@ -54,6 +54,9 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
             ? `Timer: ${timer.status} · mode ${timer.mode} · remaining ${fmtDur(rem)} · pomodoro count ${timer.pomodoroCount}`
             : "Timer: idle (no snapshot yet).",
           `Current task: ${currentTask ?? "(none)"}`,
+          settings?.spotify_refresh_token
+            ? "Spotify: connected. Use now_playing, search_music, play_music, pause_music, resume_music, next_track, previous_track, set_volume, set_shuffle."
+            : "Spotify: not connected. The user must connect it in Settings → Music before music tools work.",
           `After you create a task, ASK the user if they want you to start the timer. Do not auto-start.`,
         ].join("\n");
       },
@@ -381,6 +384,156 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
           const when = s.started_at?.slice(0, 16).replace("T", " ");
           return `- ${when}  ${fmtDur(s.actual_duration_sec ?? 0)}  ${s.mode}${s.completed ? "" : " (incomplete)"}  ${s.task_id ? titles.get(s.task_id) ?? s.task_id : "no task"}`;
         }).join("\n");
+      },
+    }),
+
+    now_playing: tool({
+      description: "Read what Spotify is playing now (track, artist, device, paused/playing). Requires the user to have connected Spotify in Settings.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player");
+        if (res.status === 204) return "Nothing is playing.";
+        if (!res.ok) return `Spotify error (${res.status}).`;
+        const p = res.json as {
+          is_playing?: boolean;
+          device?: { name?: string };
+          item?: { name?: string; artists?: { name: string }[]; album?: { name?: string } };
+        } | null;
+        if (!p?.item) return "Nothing is playing.";
+        const artists = (p.item.artists ?? []).map((a) => a.name).join(", ");
+        return `${p.is_playing ? "Playing" : "Paused"}: ${p.item.name} — ${artists}${p.item.album?.name ? ` (${p.item.album.name})` : ""}${p.device?.name ? ` on ${p.device.name}` : ""}.`;
+      },
+    }),
+
+    search_music: tool({
+      description: "Search Spotify for tracks, playlists, albums, or artists. Then play with play_music using a returned uri.",
+      inputSchema: z.object({
+        query: z.string().min(1),
+        type: z.enum(["track", "playlist", "album", "artist"]).optional().default("track"),
+        limit: z.number().int().min(1).max(10).optional().default(5),
+      }),
+      execute: async ({ query, type, limit }) => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/search", { params: { q: query, type, limit: String(limit) } });
+        if (!res.ok) return `Search failed (${res.status}).`;
+        const data = res.json as Record<string, { items?: { name?: string; uri?: string; artists?: { name: string }[]; owner?: { display_name?: string } }[] }>;
+        const items = data[`${type}s`]?.items ?? [];
+        if (!items.length) return `No ${type}s for "${query}".`;
+        return items.map((it) => {
+          const extra = it.artists?.map((a) => a.name).join(", ") ?? it.owner?.display_name ?? "";
+          return `- ${it.name}${extra ? ` — ${extra}` : ""}  uri: ${it.uri}`;
+        }).join("\n");
+      },
+    }),
+
+    play_music: tool({
+      description: "Play a Spotify track, album, or playlist. Pass a spotify: uri from search_music, or a search query (plays the first track match).",
+      inputSchema: z.object({
+        uri: z.string().optional().describe("spotify:track:... / album / playlist uri"),
+        query: z.string().optional().describe("If no uri, search and play the first track"),
+      }),
+      execute: async ({ uri, query }) => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        let playUri = uri;
+        if (!playUri && query) {
+          const found = await spotifyUserFetch(auth.token, "/search", { params: { q: query, type: "track", limit: "1" } });
+          const track = (found.json as { tracks?: { items?: { uri?: string; name?: string; artists?: { name: string }[] }[] } })?.tracks?.items?.[0];
+          if (!track?.uri) return `No track for "${query}".`;
+          playUri = track.uri;
+        }
+        if (!playUri) return "Pass a uri or a query.";
+        const body = playUri.includes(":track:") ? { uris: [playUri] } : { context_uri: playUri };
+        const res = await spotifyUserFetch(auth.token, "/me/player/play", { method: "PUT", body });
+        if (res.status === 404) return "No active Spotify device. Open Spotify (or the FocusSpace player) first.";
+        if (!res.ok && res.status !== 204) return `Play failed (${res.status}).`;
+        return `Playing ${playUri}.`;
+      },
+    }),
+
+    pause_music: tool({
+      description: "Pause Spotify playback.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/pause", { method: "PUT" });
+        if (res.status === 404) return "No active Spotify device.";
+        if (!res.ok && res.status !== 204) return `Pause failed (${res.status}).`;
+        return "Paused.";
+      },
+    }),
+
+    resume_music: tool({
+      description: "Resume Spotify playback on the current device.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/play", { method: "PUT", body: {} });
+        if (res.status === 404) return "No active Spotify device.";
+        if (!res.ok && res.status !== 204) return `Resume failed (${res.status}).`;
+        return "Resumed.";
+      },
+    }),
+
+    next_track: tool({
+      description: "Skip to the next Spotify track.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/next", { method: "POST" });
+        if (!res.ok && res.status !== 204) return `Skip failed (${res.status}).`;
+        return "Skipped to next track.";
+      },
+    }),
+
+    previous_track: tool({
+      description: "Go to the previous Spotify track.",
+      inputSchema: z.object({}),
+      execute: async () => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/previous", { method: "POST" });
+        if (!res.ok && res.status !== 204) return `Previous failed (${res.status}).`;
+        return "Went to previous track.";
+      },
+    }),
+
+    set_volume: tool({
+      description: "Set Spotify volume (0–100).",
+      inputSchema: z.object({ percent: z.number().int().min(0).max(100) }),
+      execute: async ({ percent }) => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/volume", { method: "PUT", params: { volume_percent: String(percent) } });
+        if (!res.ok && res.status !== 204) return `Volume failed (${res.status}).`;
+        return `Volume set to ${percent}%.`;
+      },
+    }),
+
+    set_shuffle: tool({
+      description: "Turn Spotify shuffle on or off.",
+      inputSchema: z.object({ on: z.boolean() }),
+      execute: async ({ on }) => {
+        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+        const auth = await getUserSpotifyAccessToken(supabase, userId);
+        if ("error" in auth) return auth.error;
+        const res = await spotifyUserFetch(auth.token, "/me/player/shuffle", { method: "PUT", params: { state: on ? "true" : "false" } });
+        if (!res.ok && res.status !== 204) return `Shuffle failed (${res.status}).`;
+        return `Shuffle ${on ? "on" : "off"}.`;
       },
     }),
 
