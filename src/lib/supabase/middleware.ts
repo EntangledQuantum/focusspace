@@ -3,6 +3,15 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { Database } from "@/types/database";
 
 export async function updateSession(request: NextRequest) {
+  const { pathname } = request.nextUrl;
+  const isLocal =
+    process.env.FOCUSSPACE_MODE === "local" ||
+    process.env.NEXT_PUBLIC_FOCUSSPACE_MODE === "local";
+
+  if (isLocal) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -30,14 +39,15 @@ export async function updateSession(request: NextRequest) {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { pathname } = request.nextUrl;
-
   const isAuthRoute = pathname.startsWith("/login") || pathname.startsWith("/signup");
   const isCallbackRoute = pathname.startsWith("/auth/callback");
   // "/" is the public landing page (sign-in lives in its auth modal)
   const isLanding = pathname === "/";
-  // Legal pages are public — viewable without an account
-  const isLegal = pathname.startsWith("/privacy") || pathname.startsWith("/terms");
+  // Legal + agent-install pages are public — viewable without an account
+  const isLegal =
+    pathname.startsWith("/privacy") ||
+    pathname.startsWith("/terms") ||
+    pathname.startsWith("/for-agents");
 
   if (!user && !isAuthRoute && !isCallbackRoute && !isLanding && !isLegal) {
     const url = request.nextUrl.clone();

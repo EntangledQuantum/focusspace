@@ -17,6 +17,7 @@ interface Props {
   subtasks: Subtask[];
   onToggleSubtask: (st: Subtask) => void;
   onFinishTask: () => void;
+  onResetTask: () => void;
   estimated: number;
   completed: number;
   progress: number;
@@ -66,7 +67,10 @@ function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "act
           />
         </div>
       </div>
-      <div className="no-scrollbar flex flex-col overflow-y-auto" style={{ gap: 2, maxHeight: 104, paddingRight: 2 }}>
+      <div
+        className="relative flex flex-col overflow-y-auto dock-subtasks"
+        style={{ gap: 2, maxHeight: 104, paddingRight: 4 }}
+      >
         {subtasks.map((st) => (
           <button
             key={st.id}
@@ -89,14 +93,23 @@ function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "act
             </span>
           </button>
         ))}
+        {subtasks.length > 3 && (
+          <div
+            className="pointer-events-none sticky bottom-0 left-0 right-0"
+            style={{
+              height: 18, marginTop: -18,
+              background: "linear-gradient(to bottom, transparent, color-mix(in srgb, var(--color-surface-container) 88%, transparent))",
+            }}
+          />
+        )}
       </div>
     </div>
   );
 }
 
 function SessionCol({
-  activeTask, onFinishTask, estimated, completed, progress, timerStatus, timerMode, longBreakEvery,
-}: Pick<Props, "activeTask" | "onFinishTask" | "estimated" | "completed" | "progress" | "timerStatus" | "timerMode" | "longBreakEvery">) {
+  activeTask, onFinishTask, onResetTask, estimated, completed, progress, timerStatus, timerMode, longBreakEvery,
+}: Pick<Props, "activeTask" | "onFinishTask" | "onResetTask" | "estimated" | "completed" | "progress" | "timerStatus" | "timerMode" | "longBreakEvery">) {
   const isActive = timerStatus === "running" || timerStatus === "paused";
   const isBreak = timerMode === "short_break" || timerMode === "long_break";
   const est = Math.max(1, Math.ceil(estimated));
@@ -118,7 +131,7 @@ function SessionCol({
           <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", marginTop: 8 }}>Custom session</p>
         </div>
       ) : (
-        <div className="flex items-center flex-wrap" style={{ gap: 8, marginBottom: "auto" }}>
+        <div className="flex items-center flex-wrap" style={{ gap: 6, marginBottom: "auto", maxHeight: 52, overflowY: "auto" }}>
           {Array.from({ length: dots }).map((_, i) => {
             const isDone = i < completed;
             const isCurrent = i === completed && isActive && !isBreak;
@@ -153,13 +166,28 @@ function SessionCol({
       )}
 
       {activeTask && (
-        <button
-          onClick={onFinishTask}
-          className="pill hover-lift chip-accent justify-center"
-          style={{ marginTop: 12, padding: "8px 14px", fontSize: 12.5 }}
-        >
-          <Check size={14} /> Mark task done
-        </button>
+        <div className="flex items-center" style={{ gap: 8, marginTop: 12 }}>
+          <button
+            onClick={onFinishTask}
+            className="pill hover-lift chip-accent justify-center flex-1"
+            style={{ padding: "8px 12px", fontSize: 12.5 }}
+          >
+            <Check size={14} /> Mark task done
+          </button>
+          <button
+            onClick={onResetTask}
+            className="pill hover-lift justify-center"
+            title="Reset this task — uncheck every subtask and clear the session timeline"
+            style={{
+              padding: "8px 12px", fontSize: 12.5,
+              color: "var(--color-on-surface-variant)",
+              background: "rgba(255,255,255,0.05)",
+              border: "1px solid rgba(255,255,255,0.08)",
+            }}
+          >
+            Reset
+          </button>
+        </div>
       )}
     </div>
   );
@@ -284,6 +312,7 @@ export function FocusDock(props: Props) {
             <SessionCol
               activeTask={props.activeTask}
               onFinishTask={props.onFinishTask}
+              onResetTask={props.onResetTask}
               estimated={props.estimated}
               completed={props.completed}
               progress={props.progress}

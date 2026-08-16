@@ -315,6 +315,78 @@ export type Database = {
         };
         Relationships: [];
       };
+      timer_state: {
+        Row: {
+          user_id: string;
+          mode: "pomodoro" | "custom" | "short_break" | "long_break";
+          status: "idle" | "running" | "paused" | "completed";
+          planned_duration_sec: number;
+          started_at: number | null;
+          paused_at: number | null;
+          accumulated_paused_ms: number;
+          current_session_id: string | null;
+          current_task_id: string | null;
+          current_project_id: string | null;
+          pomodoro_count: number;
+          source: "ui" | "mcp";
+          updated_at: string;
+        };
+        Insert: {
+          user_id: string;
+          mode?: "pomodoro" | "custom" | "short_break" | "long_break";
+          status?: "idle" | "running" | "paused" | "completed";
+          planned_duration_sec?: number;
+          started_at?: number | null;
+          paused_at?: number | null;
+          accumulated_paused_ms?: number;
+          current_session_id?: string | null;
+          current_task_id?: string | null;
+          current_project_id?: string | null;
+          pomodoro_count?: number;
+          source?: "ui" | "mcp";
+          updated_at?: string;
+        };
+        Update: {
+          mode?: "pomodoro" | "custom" | "short_break" | "long_break";
+          status?: "idle" | "running" | "paused" | "completed";
+          planned_duration_sec?: number;
+          started_at?: number | null;
+          paused_at?: number | null;
+          accumulated_paused_ms?: number;
+          current_session_id?: string | null;
+          current_task_id?: string | null;
+          current_project_id?: string | null;
+          pomodoro_count?: number;
+          source?: "ui" | "mcp";
+          updated_at?: string;
+        };
+        Relationships: [];
+      };
+      mcp_tokens: {
+        Row: {
+          id: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          prefix: string;
+          last_used_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          name: string;
+          token_hash: string;
+          prefix: string;
+          last_used_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          name?: string;
+          last_used_at?: string | null;
+        };
+        Relationships: [];
+      };
       wallpapers: {
         Row: {
           id: string;

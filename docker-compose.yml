@@ -1,13 +1,25 @@
+# Default path = individual local mode (SQLite). No cloud credentials required.
+#   docker compose up --build
 version: "3.9"
 services:
   focusspace:
     build:
       context: .
       args:
-        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL}
-        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY}
-        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL}
-    env_file: .env.local
+        NEXT_PUBLIC_FOCUSSPACE_MODE: local
+        NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+        NEXT_PUBLIC_SUPABASE_URL: ${NEXT_PUBLIC_SUPABASE_URL:-https://placeholder.supabase.co}
+        NEXT_PUBLIC_SUPABASE_ANON_KEY: ${NEXT_PUBLIC_SUPABASE_ANON_KEY:-placeholder-anon-key}
+    environment:
+      FOCUSSPACE_MODE: local
+      NEXT_PUBLIC_FOCUSSPACE_MODE: local
+      FOCUSSPACE_DATA_DIR: /data
+      NEXT_PUBLIC_SITE_URL: ${NEXT_PUBLIC_SITE_URL:-http://localhost:3000}
+    volumes:
+      - focusspace-data:/data
     ports:
       - "3000:3000"
     restart: unless-stopped
+
+volumes:
+  focusspace-data:

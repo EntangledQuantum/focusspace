@@ -2,6 +2,8 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
+import { makeExtraTools } from "./extra-tools";
+import { MAX_ESTIMATED_POMOS } from "@/lib/mode";
 
 type DB = SupabaseClient<Database>;
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
@@ -75,9 +77,9 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       description: "List the user's projects with open/done task counts. Use to find the right project id before mutating.",
       inputSchema: z.object({}),
       execute: async () => {
-        const { data: projects } = await supabase.from("projects").select("id, name, color").is("archived_at", null).order("sort_order");
+        const { data: projects } = await supabase.from("projects").select("id, name, color").eq("user_id", userId).is("archived_at", null).order("sort_order");
         if (!projects?.length) return "No projects yet.";
-        const { data: tasks } = await supabase.from("tasks").select("project_id, status");
+        const { data: tasks } = await supabase.from("tasks").select("project_id, status").eq("user_id", userId);
         const lines = projects.map((p) => {
           const t = (tasks ?? []).filter((x) => x.project_id === p.id);
           const open = t.filter((x) => x.status === "todo").length;
@@ -102,7 +104,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
           if (!p) return `No project matching "${projectRef}".`;
           projectId = p.id;
         }
-        let q = supabase.from("tasks").select("id, title, status, priority, estimated_pomodoros, completed_pomodoros, project_id").order("sort_order").limit(limit);
+        let q = supabase.from("tasks").select("id, title, status, priority, estimated_pomodoros, completed_pomodoros, project_id").eq("user_id", userId).order("sort_order").limit(limit);
         if (projectId) q = q.eq("project_id", projectId);
         if (status !== "all") q = q.eq("status", status);
         const { data } = await q;
@@ -123,7 +125,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       }),
       execute: async ({ query, status, limit }) => {
         const base = () => {
-          let q = supabase.from("tasks").select("id, title, status, project_id");
+          let q = supabase.from("tasks").select("id, title, status, project_id").eq("user_id", userId);
           if (status !== "all") q = q.eq("status", status);
           return q.order("created_at", { ascending: false }).limit(limit);
         };
@@ -172,7 +174,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       description: "List the most recently completed tasks (what the user has finished lately).",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional().default(8) }),
       execute: async ({ limit }) => {
-        const { data } = await supabase.from("tasks").select("title, completed_at, project_id").eq("status", "done").not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(limit);
+        const { data } = await supabase.from("tasks").select("title, completed_at, project_id").eq("user_id", userId).eq("status", "done").not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(limit);
         if (!data?.length) return "No completed tasks yet.";
         return data.map((t) => `- ${t.title} (done ${t.completed_at?.slice(0, 10)})`).join("\n");
       },
@@ -276,13 +278,13 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
 
     // ─── TASKS ─────────────────────────────────────────────────────────
     create_task: tool({
-      description: "Create a task in a project, optionally with notes, priority, pomodoro estimate, tags, and subtasks.",
+      description: "Create a task in a project, optionally with notes, priority, pomodoro estimate, tags, and subtasks. If the user describes a large piece of work and did not give subtasks, invent a sensible subtask breakdown. After creating, ASK before start_timer. Estimate pomodoros from get_workspace_state focus length, not 25 minutes.",
       inputSchema: z.object({
         title: z.string().min(1),
         projectRef: z.string().optional().describe("Project id or name; defaults to the first project"),
         notes: z.string().optional(),
         priority: z.enum(["low", "med", "high", "urgent"]).optional(),
-        estimatedPomodoros: z.number().min(0.5).max(20).optional(),
+        estimatedPomodoros: z.number().min(0.5).max(MAX_ESTIMATED_POMOS).optional(),
         tags: z.array(z.string()).optional(),
         subtasks: z.array(z.string()).optional(),
       }),
@@ -321,7 +323,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
         title: z.string().optional(),
         notes: z.string().optional(),
         priority: z.enum(["low", "med", "high", "urgent"]).optional(),
-        estimatedPomodoros: z.number().min(0.5).max(20).optional(),
+        estimatedPomodoros: z.number().min(0.5).max(MAX_ESTIMATED_POMOS).optional(),
         moveToProjectRef: z.string().optional(),
         setTags: z.array(z.string()).optional().describe("Replace all tags with this set"),
       }),
@@ -448,5 +450,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
         });
       },
     }),
+
+    ...makeExtraTools(supabase, userId, opts),
   };
 }

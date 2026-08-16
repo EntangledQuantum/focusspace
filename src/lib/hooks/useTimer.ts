@@ -86,6 +86,16 @@ export function useTimer() {
         projectId: projectId ?? null,
         sessionId: sessionData?.id ?? null,
       });
+      const next = useTimerStore.getState();
+      if (user) {
+        const { writeTimerState } = await import("@/lib/timer/persist");
+        await writeTimerState(supabase, user.id, {
+          mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
+          startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
+          currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
+          currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
+        });
+      }
     },
     [store, supabase]
   );
@@ -122,6 +132,18 @@ export function useTimer() {
       store.incrementPomodoroCount();
     }
 
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const next = useTimerStore.getState();
+      const { writeTimerState } = await import("@/lib/timer/persist");
+      await writeTimerState(supabase, user.id, {
+        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
+        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
+        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
+        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
+      });
+    }
+
     qc.invalidateQueries({ queryKey: ["sessions"] });
     qc.invalidateQueries({ queryKey: ["tasks"] });
     qc.invalidateQueries({ queryKey: ["analytics"] });
@@ -155,6 +177,17 @@ export function useTimer() {
     store.reset();
     qc.invalidateQueries({ queryKey: ["sessions"] });
     qc.invalidateQueries({ queryKey: ["analytics"] });
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const next = useTimerStore.getState();
+      const { writeTimerState } = await import("@/lib/timer/persist");
+      await writeTimerState(supabase, user.id, {
+        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
+        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
+        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
+        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
+      });
+    }
   }, [supabase, store, qc]);
 
   const resetSession = useCallback(async () => {
@@ -179,6 +212,17 @@ export function useTimer() {
     }
 
     store.reset();
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const next = useTimerStore.getState();
+      const { writeTimerState } = await import("@/lib/timer/persist");
+      await writeTimerState(supabase, user.id, {
+        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
+        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
+        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
+        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
+      });
+    }
   }, [supabase, store, qc]);
 
   const elapsed = getElapsedSec(store);
@@ -191,8 +235,33 @@ export function useTimer() {
   const seconds = remaining % 60;
   const displayTime = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
 
+  const persistUi = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const next = useTimerStore.getState();
+    const { writeTimerState } = await import("@/lib/timer/persist");
+    await writeTimerState(supabase, user.id, {
+      mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
+      startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
+      currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
+      currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
+    });
+  }, [supabase]);
+
+  const pause = useCallback(() => {
+    store.pause();
+    void persistUi();
+  }, [store, persistUi]);
+
+  const resume = useCallback(() => {
+    store.resume();
+    void persistUi();
+  }, [store, persistUi]);
+
   return {
     ...store,
+    pause,
+    resume,
     elapsed,
     remaining,
     progress,

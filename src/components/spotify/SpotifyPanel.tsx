@@ -5,7 +5,7 @@ import { useSpotifyContext } from "@/lib/context/SpotifyContext";
 import { MusicPicker } from "@/components/spotify/MusicPicker";
 import {
   Music, Play, Pause, SkipBack, SkipForward, ChevronDown, ListMusic,
-  Shuffle, Volume2, VolumeX, ExternalLink,
+  Shuffle, Volume2, VolumeX,
 } from "lucide-react";
 
 function SpotifyLogo({ size = 16, color = "#1DB954" }: { size?: number; color?: string }) {
@@ -77,7 +77,7 @@ export function SpotifyPanel() {
   }
 
   return (
-    <div className="flex flex-col h-full" style={{ gap: 9 }}>
+    <div className="flex flex-col h-full min-w-0 overflow-hidden" style={{ gap: 9 }}>
       {/* Header — the pop-out button lives in the dock corner, not here */}
       <div className="flex items-center" style={{ gap: 7, paddingRight: 104 }}>
         <SpotifyLogo size={13} />
@@ -118,7 +118,7 @@ export function SpotifyPanel() {
       />
 
       {/* Now playing row */}
-      <div className="flex items-center gap-2.5">
+      <div className="flex items-center gap-2.5 min-w-0 overflow-hidden">
         {albumArt ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img src={albumArt} alt={trackName} className="w-10 h-10 rounded-lg object-cover shrink-0" />
@@ -130,16 +130,14 @@ export function SpotifyPanel() {
             <Music size={16} style={{ color: "var(--color-on-surface-variant)" }} />
           </div>
         )}
-        <div className="flex-1 min-w-0">
+        <div className="flex-1 min-w-0 overflow-hidden">
           <p className="text-[13px] font-semibold truncate" style={{ color: "var(--color-on-surface)" }}>
             {trackName ?? (isReady ? "Ready" : "Connecting…")}
           </p>
           <p className="text-[11px] truncate mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
             {trackArtists ?? (extTrack ? "" : "Pick something to play")}
             {isExternal && externalState?.device && (
-              <span className="inline-flex items-center gap-1 ml-1">
-                <ExternalLink size={8} /> {externalState.device.name}
-              </span>
+              <span className="ml-1 opacity-70">· {externalState.device.name}</span>
             )}
           </p>
         </div>

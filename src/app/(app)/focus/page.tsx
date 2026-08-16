@@ -4,6 +4,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
+import { useTimerSync } from "@/lib/hooks/useTimerSync";
 import { useTimerStore } from "@/lib/stores/timer";
 import { useUiStore } from "@/lib/stores/ui";
 import { useNotifications } from "@/lib/hooks/useNotifications";
@@ -19,6 +20,7 @@ import type { Project, Subtask, TaskWithTags } from "@/types/database";
 export default function FocusPage() {
   const supabase = createClient();
   const qc = useQueryClient();
+  useTimerSync();
 
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<TaskWithTags | null>(null);
@@ -301,6 +303,19 @@ export default function FocusPage() {
     }
   }
 
+  async function handleResetTask() {
+    if (!activeTask) return;
+    await supabase.from("subtasks").update({ done: false }).eq("task_id", activeTask.id);
+    await supabase.from("tasks").update({ completed_pomodoros: 0 }).eq("id", activeTask.id);
+    await timer.resetSession();
+    useTimerStore.setState({ pomodoroCount: 0 });
+    setActiveTask((prev) => prev ? { ...prev, completed_pomodoros: 0, subtasks: (prev.subtasks ?? []).map((s) => ({ ...s, done: false })) } : prev);
+    qc.invalidateQueries({ queryKey: ["subtasks", activeTask.id] });
+    qc.invalidateQueries({ queryKey: ["tasks"] });
+    qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
+    toast("Task reset — timeline and subtasks cleared");
+  }
+
   function selectTask(task: TaskWithTags, project: Project | null) {
     setActiveTask(task);
     setActiveProject(project);
@@ -451,6 +466,7 @@ export default function FocusPage() {
         subtasks={subtasks}
         onToggleSubtask={toggleSubtask}
         onFinishTask={handleFinishTask}
+        onResetTask={handleResetTask}
         estimated={activeTask?.estimated_pomodoros ?? 1}
         completed={activeTask?.completed_pomodoros ?? 0}
         progress={timer.progress}
