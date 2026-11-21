@@ -145,6 +145,26 @@ describe("extension service (local SQLite)", () => {
     expect((await readTimerState(db, userId))!.status).toBe("paused");
   });
 
+  it("extension commands drive music-follows-focus like MCP (synced rows → focus transitions)", async () => {
+    const svc = await import("@/lib/extension/service");
+    const { readTimerState } = await import("@/lib/timer/persist");
+    const { focusTransition } = await import("@/lib/spotify/focusMusic");
+    const now = Date.now();
+    let prev = (await readTimerState(db, userId))!;
+    const step = async (action: "start" | "pause" | "resume" | "stop", at: number) => {
+      await svc.runTimerCommand(db, userId, action, {}, at);
+      const next = (await readTimerState(db, userId))!;
+      expect(next.source).not.toBe("ui"); // useTimerSync only applies non-UI rows
+      const t = focusTransition(prev, next);
+      prev = next;
+      return t;
+    };
+    expect(await step("start", now)).toBe("focus_start");
+    expect(await step("pause", now + 60_000)).toBe("focus_end");
+    expect(await step("resume", now + 90_000)).toBe("focus_resume");
+    expect(await step("stop", now + 120_000)).toBe("focus_end");
+  });
+
   it("finishing the active task while idle moves on to the next todo", async () => {
     const svc = await import("@/lib/extension/service");
     const first = await makeTask();

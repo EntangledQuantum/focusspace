@@ -18,6 +18,7 @@
 * { box-sizing: border-box; }
 
 html, body { margin: 0; }
+html { background: var(--bg); }
 
 body {
   font: 13px/1.4 var(--font);
@@ -26,6 +27,7 @@ body {
     radial-gradient(120% 70% at 0% 0%, rgba(255, 95, 162, 0.20), transparent 60%),
     radial-gradient(120% 70% at 100% 100%, rgba(176, 107, 246, 0.22), transparent 60%),
     var(--bg);
+  background-repeat: no-repeat;
   min-height: 100vh;
 }
 

@@ -14,10 +14,21 @@ import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
 import { MiniPlayer } from "@/components/MiniPlayer";
 import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
 import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
+import { useTimerSync } from "@/lib/hooks/useTimerSync";
 import { fetchDailyFocus, fetchTagFocus, fetchRecentSessions, fetchStreak, type AnalyticsFilter } from "@/lib/analytics/queries";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const THEME_KEY = "focusspace-theme";
+
+/**
+ * Applies timer commands from MCP / Ask AI / the Chrome extension on every app
+ * page (not just /focus), so music-follows-focus in SpotifyProvider reacts to
+ * them wherever the player is running.
+ */
+function TimerSyncHost() {
+  useTimerSync();
+  return null;
+}
 
 function TimerTitle() {
   const status = useTimerStore((s) => s.status);
@@ -199,6 +210,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
     <SpotifyProvider>
       <>
         <TimerTitle />
+        <TimerSyncHost />
         <PrefetchAppData />
         <WallpaperRenderer
           wallpaper={wallpaper ?? null}

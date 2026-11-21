@@ -4,7 +4,6 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
-import { useTimerSync } from "@/lib/hooks/useTimerSync";
 import { useTimerStore } from "@/lib/stores/timer";
 import { useUiStore } from "@/lib/stores/ui";
 import { useNotifications } from "@/lib/hooks/useNotifications";
@@ -20,7 +19,6 @@ import type { Project, Subtask, TaskWithTags } from "@/types/database";
 export default function FocusPage() {
   const supabase = createClient();
   const qc = useQueryClient();
-  useTimerSync();
 
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<TaskWithTags | null>(null);
