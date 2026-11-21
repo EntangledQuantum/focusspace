@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useSpotifyContext } from "@/lib/context/SpotifyContext";
 import { MusicPicker } from "@/components/spotify/MusicPicker";
+import { FocusSyncMenu } from "@/components/spotify/FocusSyncMenu";
 import {
   Music, Play, Pause, SkipBack, SkipForward, ChevronDown, ListMusic,
   Shuffle, Volume2, VolumeX,
@@ -90,6 +91,7 @@ export function SpotifyPanel() {
         >
           Now playing
         </span>
+        <FocusSyncMenu />
       </div>
 
       {/* Music chooser — opens the big browse/search modal */}

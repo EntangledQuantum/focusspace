@@ -29,9 +29,39 @@ export function getSqlite() {
   _db.pragma("journal_mode = WAL");
   _db.pragma("foreign_keys = ON");
   _db.exec(LOCAL_SCHEMA);
+  addMissingColumns(_db);
   if (firstBoot) bootstrap(_db);
   ensureBootstrap(_db);
   return _db;
+}
+
+/**
+ * `CREATE TABLE IF NOT EXISTS` never alters an existing table, so columns added
+ * after a local DB was created are backfilled here (the SQLite counterpart of
+ * the additive Supabase migrations).
+ */
+const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
+  // 0012_sounds_settings
+  { table: "user_settings", column: "break_end_tone", ddl: "TEXT NOT NULL DEFAULT 'marimba'" },
+  { table: "user_settings", column: "sound_enabled", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "user_settings", column: "sound_volume", ddl: "INTEGER NOT NULL DEFAULT 80" },
+  // 0013_music_focus_sync
+  { table: "user_settings", column: "spotify_auto_pause", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "user_settings", column: "spotify_resume_on_focus", ddl: "INTEGER NOT NULL DEFAULT 1" },
+];
+
+function addMissingColumns(db: InstanceType<BetterSqlite>) {
+  const existing = new Map<string, Set<string>>();
+  for (const { table, column, ddl } of ADDED_COLUMNS) {
+    if (!existing.has(table)) {
+      const cols = db.prepare(`PRAGMA table_info("${table}")`).all() as { name: string }[];
+      existing.set(table, new Set(cols.map((c) => c.name)));
+    }
+    const cols = existing.get(table)!;
+    if (cols.has(column)) continue;
+    db.exec(`ALTER TABLE "${table}" ADD COLUMN "${column}" ${ddl}`);
+    cols.add(column);
+  }
 }
 
 /** Create the implicit local user + a starter project on first launch. */
