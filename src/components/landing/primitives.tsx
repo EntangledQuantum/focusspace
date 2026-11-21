@@ -9,8 +9,8 @@ export const NAV_BG: React.CSSProperties = {
   background: "color-mix(in srgb, var(--color-surface-container) 88%, transparent)",
   backdropFilter: "blur(24px) saturate(140%)",
   WebkitBackdropFilter: "blur(24px) saturate(140%)",
-  border: "1px solid rgba(255,255,255,0.10)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.07), 0 18px 48px -16px rgba(0,0,0,0.6)",
+  border: "1px solid rgba(var(--ink), 0.10)",
+  boxShadow: "inset 0 1px 0 rgba(var(--ink), 0.07), 0 18px 48px -16px rgba(0,0,0,0.6)",
 };
 
 const EASE = [0.22, 1, 0.36, 1] as const;

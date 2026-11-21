@@ -67,23 +67,30 @@ export function WallpaperRenderer({ wallpaper, supabaseUrl, blur = 60, opacity =
     : `${supabaseUrl}/storage/v1/object/public/wallpapers/${path}`;
 
   const blurPx = (blur / 100) * 32;
+  // Dark theme: dim the photo so light text reads. Light theme: keep the photo
+  // bright and wash it with the background colour instead, so dark text reads
+  // (the "brightness" slider maps to how strong that wash is). See globals.css.
   const brightness = 0.35 + (opacity / 100) * 0.55;
+  const lightWash = Math.round(70 - (opacity / 100) * 45); // 25%–70%
 
   return (
-    <div className="fixed inset-0 z-0 pointer-events-none overflow-hidden">
+    <div
+      className="wp-photo-layer fixed inset-0 z-0 pointer-events-none overflow-hidden"
+      style={{ "--wp-blur": `${blurPx.toFixed(1)}px`, "--wp-bright": brightness.toFixed(2), "--wp-wash": `${lightWash}%` } as React.CSSProperties}
+    >
       <Image
         src={imageUrl}
         alt={wallpaper.name}
         fill priority quality={90} sizes="100vw"
-        className="object-cover"
+        className="object-cover wp-photo-img"
         style={{
-          filter: `blur(${blurPx.toFixed(1)}px) brightness(${brightness.toFixed(2)})`,
           transform: "scale(1.08)",
           opacity: loaded ? 1 : 0,
           transition: "opacity 0.8s ease",
         }}
         onLoad={() => setLoaded(true)}
       />
+      <div className="wp-photo-wash absolute inset-0" />
     </div>
   );
 }

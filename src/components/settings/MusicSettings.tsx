@@ -116,7 +116,7 @@ function Row({ label, description, children }: { label: string; description?: st
   return (
     <div
       className="flex items-center justify-between gap-4"
-      style={{ padding: "11px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}
+      style={{ padding: "11px 0", borderTop: "1px solid rgba(var(--ink), 0.06)" }}
     >
       <div className="min-w-0">
         <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--color-on-surface)" }}>{label}</p>
@@ -136,7 +136,7 @@ function Switch({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       className={`flex shrink-0 ${checked ? "grad-primary justify-end" : "justify-start"}`}
       style={{
         width: 46, height: 27, borderRadius: 99, padding: 3,
-        background: checked ? undefined : "rgba(255,255,255,0.13)",
+        background: checked ? undefined : "rgba(var(--ink), 0.13)",
         transition: "background .2s",
       }}
     >

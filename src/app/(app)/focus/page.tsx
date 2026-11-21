@@ -441,7 +441,7 @@ export default function FocusPage() {
                   className="px-2 py-0.5 rounded-full text-[10px] font-medium leading-none"
                   style={{
                     background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                    color: tag.color,
+                    color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                     border: `1px solid color-mix(in srgb, ${tag.color} 28%, transparent)`,
                   }}
                 >

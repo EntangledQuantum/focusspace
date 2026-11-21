@@ -12,7 +12,7 @@ export function AtmosphereVisual() {
       viewport={{ once: true, margin: "-40px" }}
       transition={{ duration: 0.55, ease: EASE }}
       className="relative overflow-hidden"
-      style={{ borderRadius: 24, minHeight: 320, border: "1px solid rgba(255,255,255,0.10)" }}
+      style={{ borderRadius: 24, minHeight: 320, border: "1px solid rgba(var(--ink), 0.10)" }}
     >
       <div className="absolute inset-0 wp-aurora" />
       <div
@@ -29,7 +29,7 @@ export function AtmosphereVisual() {
 
         <div className="relative" style={{ width: 132, height: 132, display: "grid", placeItems: "center" }}>
           <svg width="132" height="132" viewBox="0 0 132 132" style={{ transform: "rotate(-90deg)" }} aria-hidden>
-            <circle cx="66" cy="66" r="54" fill="none" stroke="rgba(255,255,255,0.16)" strokeWidth="6" />
+            <circle cx="66" cy="66" r="54" fill="none" stroke="rgba(var(--ink), 0.16)" strokeWidth="6" />
             <circle
               className="ring-loop"
               cx="66" cy="66" r="54" fill="none"
@@ -74,13 +74,13 @@ export function AtmosphereVisual() {
         <div className="w-full flex" style={{ gap: 10 }}>
           <div className="flex-1 glass-soft" style={{ borderRadius: 14, padding: "8px 10px" }}>
             <p style={{ fontSize: 10.5, color: "var(--color-on-surface-variant)" }}>Tint</p>
-            <div className="rounded-full" style={{ height: 4, marginTop: 6, background: "rgba(255,255,255,0.12)" }}>
+            <div className="rounded-full" style={{ height: 4, marginTop: 6, background: "rgba(var(--ink), 0.12)" }}>
               <div className="rounded-full h-full" style={{ width: "55%", background: "var(--color-primary)" }} />
             </div>
           </div>
           <div className="flex-1 glass-soft" style={{ borderRadius: 14, padding: "8px 10px" }}>
             <p style={{ fontSize: 10.5, color: "var(--color-on-surface-variant)" }}>Blur</p>
-            <div className="rounded-full" style={{ height: 4, marginTop: 6, background: "rgba(255,255,255,0.12)" }}>
+            <div className="rounded-full" style={{ height: 4, marginTop: 6, background: "rgba(var(--ink), 0.12)" }}>
               <div className="rounded-full h-full" style={{ width: "70%", background: "var(--color-secondary)" }} />
             </div>
           </div>

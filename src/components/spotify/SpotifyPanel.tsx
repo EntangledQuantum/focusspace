@@ -99,8 +99,8 @@ export function SpotifyPanel() {
         onClick={() => setPickerOpen(true)}
         className="w-full flex items-center gap-2 px-2.5 py-1.5 rounded-lg text-left transition-colors btn-hover-surface"
         style={{
-          background: "rgba(255,255,255,0.04)",
-          border: "1px solid rgba(255,255,255,0.07)",
+          background: "rgba(var(--ink), 0.04)",
+          border: "1px solid rgba(var(--ink), 0.07)",
           color: "var(--color-on-surface-variant)",
         }}
       >
@@ -146,7 +146,7 @@ export function SpotifyPanel() {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.08)" }}>
+      <div className="w-full h-1 rounded-full overflow-hidden" style={{ background: "rgba(var(--ink), 0.08)" }}>
         <div
           className="h-full rounded-full transition-all duration-500"
           style={{ width: `${extProgress * 100}%`, background: "#1DB954" }}
@@ -210,7 +210,7 @@ export function SpotifyPanel() {
               className="absolute bottom-full right-0 mb-2 p-3 rounded-xl flex items-center gap-2"
               style={{
                 background: "var(--color-surface-container-high)",
-                border: "1px solid rgba(255,255,255,0.08)",
+                border: "1px solid rgba(var(--ink), 0.08)",
                 boxShadow: "0 -4px 16px rgba(0,0,0,0.3)",
                 width: 180,
               }}
@@ -241,8 +241,8 @@ export function SpotifyPanel() {
           className="w-full text-[10.5px] py-1 rounded-lg transition-all btn-hover-surface"
           style={{
             color: "var(--color-on-surface-variant)",
-            background: "rgba(255,255,255,0.04)",
-            border: "1px solid rgba(255,255,255,0.07)",
+            background: "rgba(var(--ink), 0.04)",
+            border: "1px solid rgba(var(--ink), 0.07)",
           }}
         >
           Take over playback here

@@ -85,7 +85,13 @@
 :root {
   --glass-tint: 0.5;   /* 0 = clear → 1 = solid */
   --glass-blur: 22px;
+  /* "Ink" for translucent hairlines, fills and hover states: white on the dark
+     theme, deep plum on the light one. Use as rgba(var(--ink), <alpha>). */
+  --ink: 255, 255, 255;
+  /* How much of a user-picked tag colour to keep for tag text (pastels vanish on light glass). */
+  --tag-mix: 100%;
 }
+.light { --ink: 42, 22, 35; --tag-mix: 55%; }
 
 /* ─── Light theme (applied via .light class on <html>) ─────────── */
 .light {
@@ -114,6 +120,10 @@
   --color-on-tertiary:               #ffffff;
   --color-tertiary-container:        #cbe0ff;
   --color-on-tertiary-container:     #001e3c;
+  --color-error:                     #ba1a1a;
+  --color-on-error:                  #ffffff;
+  --color-error-container:           #ffdad6;
+  --color-on-error-container:        #410002;
 }
 
 /* ─── Base reset ────────────────────────────────────────────────── */
@@ -478,3 +488,9 @@ textarea:focus, textarea:focus-visible {
   .focus-dock-grid > .dock-divider { display: none; }
   .focus-dock-grid > .dock-rail { order: -1; flex-direction: row; justify-content: flex-end; margin-right: 0; }
 }
+
+/* Photo wallpaper: dimmed under the dark theme, washed light under the light theme */
+.wp-photo-img { filter: blur(var(--wp-blur, 0px)) brightness(var(--wp-bright, 0.6)); }
+.wp-photo-wash { background: transparent; }
+.light .wp-photo-img { filter: blur(var(--wp-blur, 0px)) brightness(1.04) saturate(0.9); }
+.light .wp-photo-wash { background: color-mix(in srgb, var(--color-background) var(--wp-wash, 50%), transparent); }

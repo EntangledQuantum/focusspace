@@ -70,7 +70,7 @@ export function LegalShell({
               className="pill hover-lift"
               style={{
                 padding: "8px 15px", fontSize: 13, color: "var(--color-on-surface)",
-                background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)",
+                background: "rgba(var(--ink), 0.05)", border: "1px solid rgba(var(--ink), 0.10)",
               }}
             >
               <ArrowLeft size={14} /> Home

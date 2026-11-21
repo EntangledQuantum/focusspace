@@ -92,7 +92,7 @@ export function ToolCard({
       >
         <div
           className="flex items-center justify-center shrink-0"
-          style={{ width: 25, height: 25, borderRadius: 8, background: "rgba(255,255,255,0.22)", color: "var(--color-on-surface)" }}
+          style={{ width: 25, height: 25, borderRadius: 8, background: "rgba(var(--ink), 0.22)", color: "var(--color-on-surface)" }}
         >
           {state === "running" ? <Loader2 size={13} className="animate-spin" /> : isErr ? <AlertTriangle size={13} /> : <Icon size={13} />}
         </div>
@@ -122,7 +122,7 @@ export function ToolCard({
           style={{
             fontSize: 12.5, lineHeight: 1.55, whiteSpace: "pre-wrap",
             color: "var(--color-on-surface)", opacity: 0.92,
-            paddingLeft: 34, borderTop: "1px solid rgba(255,255,255,0.18)", paddingTop: 6,
+            paddingLeft: 34, borderTop: "1px solid rgba(var(--ink), 0.18)", paddingTop: 6,
           }}
         >
           {detail}
@@ -147,7 +147,7 @@ export function ToolCard({
           <button
             onClick={() => setResolved("cancelled")}
             className="pill"
-            style={{ padding: "5px 12px", fontSize: 11.5, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}
+            style={{ padding: "5px 12px", fontSize: 11.5, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}
           >
             Cancel
           </button>

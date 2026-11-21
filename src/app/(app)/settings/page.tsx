@@ -251,7 +251,7 @@ export default function SettingsPage() {
           </Field>
 
           {/* Background */}
-          <div className="space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 4 }}>
+          <div className="space-y-3" style={{ borderTop: "1px solid rgba(var(--ink), 0.06)", paddingTop: 14, marginTop: 4 }}>
             <div>
               <p className="text-sm font-medium" style={{ color: "var(--color-on-surface)" }}>Background</p>
               <p className="text-xs mt-0.5" style={{ color: "var(--color-on-surface-variant)" }}>
@@ -374,7 +374,7 @@ export default function SettingsPage() {
 
             {/* Photo adjustments — only when an uploaded photo is the background */}
             {activeIsPhoto && (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 12, marginTop: 4 }}>
+              <div style={{ borderTop: "1px solid rgba(var(--ink), 0.06)", paddingTop: 12, marginTop: 4 }}>
                 <p className="text-xs font-medium mb-3" style={{ color: "var(--color-on-surface)" }}>
                   Photo adjustments
                 </p>
@@ -469,7 +469,7 @@ export default function SettingsPage() {
             if (!def) return null;
             const s = effectSettingsFor(activeEffect, storedEffectSettings);
             return (
-              <div style={{ borderTop: "1px solid rgba(255,255,255,0.06)", paddingTop: 14, marginTop: 14 }} className="space-y-4">
+              <div style={{ borderTop: "1px solid rgba(var(--ink), 0.06)", paddingTop: 14, marginTop: 14 }} className="space-y-4">
                 <p className="text-xs font-medium" style={{ color: "var(--color-on-surface)" }}>
                   {def.name} settings
                 </p>
@@ -667,8 +667,8 @@ function SignOutButton() {
       style={{
         padding: "11px 18px", fontSize: 13.5,
         color: "var(--color-on-surface-variant)",
-        background: "rgba(255,255,255,0.05)",
-        border: "1px solid rgba(255,255,255,0.10)",
+        background: "rgba(var(--ink), 0.05)",
+        border: "1px solid rgba(var(--ink), 0.10)",
       }}
     >
       <LogOut size={16} /> Sign out
@@ -706,7 +706,7 @@ function Field({ label, description, children }: { label: string; description?: 
   return (
     <div
       className="flex items-center justify-between gap-4"
-      style={{ padding: "11px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}
+      style={{ padding: "11px 0", borderTop: "1px solid rgba(var(--ink), 0.06)" }}
     >
       <div className="min-w-0">
         <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--color-on-surface)" }}>{label}</p>
@@ -726,7 +726,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       className={`flex shrink-0 ${checked ? "grad-primary justify-end" : "justify-start"}`}
       style={{
         width: 46, height: 27, borderRadius: 99, padding: 3,
-        background: checked ? undefined : "rgba(255,255,255,0.13)",
+        background: checked ? undefined : "rgba(var(--ink), 0.13)",
         transition: "background .2s",
       }}
     >

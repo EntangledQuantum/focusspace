@@ -25,7 +25,7 @@ function Dot({ state }: { state: "done" | "half" | "now" | "empty" }) {
       <circle
         cx="11" cy="11" r="8"
         fill={fill}
-        stroke={state === "empty" ? "rgba(255,255,255,0.22)" : "var(--color-primary)"}
+        stroke={state === "empty" ? "rgba(var(--ink), 0.22)" : "var(--color-primary)"}
         strokeWidth="1.6"
       />
       {state === "now" && (
@@ -78,8 +78,8 @@ export function PomodoroVisual() {
                 fontSize: 12.5,
                 fontWeight: 700,
                 color: n === mins ? "var(--color-on-primary)" : "var(--color-on-surface)",
-                background: n === mins ? undefined : "rgba(255,255,255,0.06)",
-                border: n === mins ? "none" : "1px solid rgba(255,255,255,0.10)",
+                background: n === mins ? undefined : "rgba(var(--ink), 0.06)",
+                border: n === mins ? "none" : "1px solid rgba(var(--ink), 0.10)",
               }}
             >
               {n}m
@@ -99,7 +99,7 @@ export function PomodoroVisual() {
           </p>
         </div>
         <svg width="72" height="72" viewBox="0 0 72 72" style={{ transform: "rotate(-90deg)" }} aria-hidden>
-          <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(255,255,255,0.12)" strokeWidth="6" />
+          <circle cx="36" cy="36" r="28" fill="none" stroke="rgba(var(--ink), 0.12)" strokeWidth="6" />
           <circle
             className="ring-loop"
             cx="36" cy="36" r="28" fill="none"
@@ -127,13 +127,13 @@ export function PomodoroVisual() {
         className="flex flex-col sm:flex-row"
         style={{ gap: 10 }}
       >
-        <div className="flex-1" style={{ borderRadius: 16, padding: "12px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="flex-1" style={{ borderRadius: 16, padding: "12px 14px", background: "rgba(var(--ink), 0.04)", border: "1px solid rgba(var(--ink), 0.08)" }}>
           <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)" }}>3 pomodoros</p>
           <p className="tabular-nums" style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, color: "var(--color-on-surface)", marginTop: 2 }}>
             {formatHours(three)}
           </p>
         </div>
-        <div className="flex-1" style={{ borderRadius: 16, padding: "12px 14px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+        <div className="flex-1" style={{ borderRadius: 16, padding: "12px 14px", background: "rgba(var(--ink), 0.04)", border: "1px solid rgba(var(--ink), 0.08)" }}>
           <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)" }}>half-pomo</p>
           <p className="tabular-nums" style={{ fontFamily: "var(--font-display)", fontWeight: 800, fontSize: 20, color: "var(--color-on-surface)", marginTop: 2 }}>
             {half} min

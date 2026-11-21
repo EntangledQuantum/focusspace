@@ -60,7 +60,7 @@ function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "act
         <span className="tabular-nums" style={{ fontSize: 11, fontWeight: 700, color: "var(--color-primary)" }}>
           {done}/{subtasks.length}
         </span>
-        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: "rgba(255,255,255,0.13)" }}>
+        <div className="flex-1 rounded-full overflow-hidden" style={{ height: 4, background: "rgba(var(--ink), 0.13)" }}>
           <div
             className="grad-primary h-full rounded-full"
             style={{ width: `${(done / subtasks.length) * 100}%`, transition: "width .3s" }}
@@ -122,7 +122,7 @@ function SessionCol({
 
       {timerMode === "custom" ? (
         <div style={{ marginBottom: "auto" }}>
-          <div className="w-full rounded-full overflow-hidden" style={{ height: 5, background: "rgba(255,255,255,0.13)" }}>
+          <div className="w-full rounded-full overflow-hidden" style={{ height: 5, background: "rgba(var(--ink), 0.13)" }}>
             <div
               className="grad-primary h-full rounded-full"
               style={{ width: `${Math.min(progress, 1) * 100}%`, transition: "width .5s linear" }}
@@ -142,7 +142,7 @@ function SessionCol({
                 className={isCurrent ? "pulse-dot" : isDone ? "grad-primary" : ""}
                 style={{
                   width: isCurrent ? 16 : 13, height: isCurrent ? 16 : 13, borderRadius: "50%",
-                  background: isDone ? undefined : isCurrent ? "var(--color-primary)" : "rgba(255,255,255,0.13)",
+                  background: isDone ? undefined : isCurrent ? "var(--color-primary)" : "rgba(var(--ink), 0.13)",
                   border: isCurrent ? "2px solid color-mix(in srgb, var(--color-primary) 40%, transparent)" : "none",
                   transition: "all .3s",
                 }}
@@ -181,8 +181,8 @@ function SessionCol({
             style={{
               padding: "8px 12px", fontSize: 12.5, whiteSpace: "nowrap",
               color: "var(--color-on-surface-variant)",
-              background: "rgba(255,255,255,0.05)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "rgba(var(--ink), 0.05)",
+              border: "1px solid rgba(var(--ink), 0.08)",
             }}
           >
             Reset
@@ -251,7 +251,7 @@ export function FocusDock(props: Props) {
     if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
   }
 
-  const divider = <div className="dock-divider" style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.06)" }} />;
+  const divider = <div className="dock-divider" style={{ width: 1, alignSelf: "stretch", background: "rgba(var(--ink), 0.06)" }} />;
 
   return (
     <>
@@ -353,7 +353,7 @@ export function FocusDock(props: Props) {
           {isConnected && (
             <>
               <MiniMusicBar />
-              <div style={{ width: 1, height: 28, background: "rgba(255,255,255,0.06)" }} />
+              <div style={{ width: 1, height: 28, background: "rgba(var(--ink), 0.06)" }} />
             </>
           )}
           <button

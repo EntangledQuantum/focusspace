@@ -224,12 +224,12 @@ export function MusicPicker({
               background: "color-mix(in srgb, var(--color-surface-container) 94%, transparent)",
               backdropFilter: "blur(28px) saturate(140%)",
               WebkitBackdropFilter: "blur(28px) saturate(140%)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
+              border: "1px solid rgba(var(--ink), 0.10)",
+              boxShadow: "inset 0 1px 0 rgba(var(--ink), 0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
             }}
           >
             {/* Search bar */}
-            <div className="flex items-center" style={{ gap: 10, padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="flex items-center" style={{ gap: 10, padding: "16px 18px", borderBottom: "1px solid rgba(var(--ink), 0.06)" }}>
               <Search size={17} style={{ color: "var(--color-on-surface-variant)", opacity: 0.7 }} />
               <input
                 autoFocus
@@ -245,7 +245,7 @@ export function MusicPicker({
             </div>
 
             {/* Filter tabs */}
-            <div className="flex items-center flex-wrap" style={{ gap: 6, padding: "12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="flex items-center flex-wrap" style={{ gap: 6, padding: "12px 16px", borderBottom: "1px solid rgba(var(--ink), 0.06)" }}>
               {TABS.map((t) => {
                 const on = tab === t.id;
                 const Icon = t.icon;
@@ -257,7 +257,7 @@ export function MusicPicker({
                     style={{
                       padding: "6px 12px", fontSize: 12,
                       color: on ? "var(--color-primary)" : "var(--color-on-surface-variant)",
-                      background: on ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(255,255,255,0.04)",
+                      background: on ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(var(--ink), 0.04)",
                       border: on ? "1px solid color-mix(in srgb, var(--color-primary) 28%, transparent)" : "1px solid transparent",
                     }}
                   >

@@ -23,7 +23,7 @@ const LEVELS = [
 ];
 
 const FILL = [
-  "rgba(255,255,255,0.06)",
+  "rgba(var(--ink), 0.06)",
   "color-mix(in srgb, var(--color-primary) 28%, transparent)",
   "color-mix(in srgb, var(--color-primary) 48%, transparent)",
   "color-mix(in srgb, var(--color-primary) 72%, transparent)",

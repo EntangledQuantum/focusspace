@@ -133,7 +133,7 @@ export function WallpaperEditModal({ file, onConfirm, onCancel }: Props) {
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4"
       style={{ background: "rgba(0,0,0,0.88)", backdropFilter: "blur(12px)" }}>
       <div className="w-full max-w-2xl rounded-2xl overflow-hidden flex flex-col"
-        style={{ background: "var(--color-surface-container)", border: "1px solid rgba(255,255,255,0.1)" }}>
+        style={{ background: "var(--color-surface-container)", border: "1px solid rgba(var(--ink), 0.1)" }}>
 
         {/* Header */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0">

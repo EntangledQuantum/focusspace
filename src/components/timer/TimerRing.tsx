@@ -43,7 +43,7 @@ export function TimerRing({ progress, displayTime, status }: Props) {
         <circle
           cx="126" cy="126" r={RADIUS}
           fill="none"
-          stroke="rgba(255,255,255,0.13)"
+          stroke="rgba(var(--ink), 0.13)"
           strokeWidth="6"
         />
 

@@ -9,7 +9,7 @@ const MENU_BG: React.CSSProperties = {
   background: "color-mix(in srgb, var(--color-surface-container-high) 96%, transparent)",
   backdropFilter: "blur(20px) saturate(140%)",
   WebkitBackdropFilter: "blur(20px) saturate(140%)",
-  border: "1px solid rgba(255,255,255,0.12)",
+  border: "1px solid rgba(var(--ink), 0.12)",
   boxShadow: "0 18px 50px -18px rgba(0,0,0,0.65)",
 };
 
@@ -107,7 +107,7 @@ export function ModelPicker({
         className="flex items-center btn-hover-surface disabled:opacity-50"
         title={value ?? "Choose a model"}
         style={compact
-          ? { gap: 5, padding: "3px 8px 3px 9px", borderRadius: 999, fontSize: 11.5, maxWidth: 190, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }
+          ? { gap: 5, padding: "3px 8px 3px 9px", borderRadius: 999, fontSize: 11.5, maxWidth: 190, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)", border: "1px solid rgba(var(--ink), 0.10)" }
           : { gap: 8, padding: "8px 12px", borderRadius: 12, fontSize: 13, width: 260, maxWidth: "100%", color: "var(--color-on-surface)", background: "var(--color-surface-container-high)", border: "1px solid var(--color-outline-variant)" }}
       >
         <span className="min-w-0 flex-1 text-left" style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -122,7 +122,7 @@ export function ModelPicker({
           className="fixed flex flex-col"
           style={{ ...MENU_BG, zIndex: 90, top: pos.top, bottom: pos.bottom, left: pos.left, right: pos.right, maxHeight: pos.maxH, width: compact ? 300 : 340, maxWidth: "calc(100vw - 24px)", borderRadius: 14, padding: 6 }}
         >
-          <div className="flex items-center" style={{ gap: 7, padding: "6px 8px", borderRadius: 10, background: "rgba(255,255,255,0.05)", marginBottom: 4 }}>
+          <div className="flex items-center" style={{ gap: 7, padding: "6px 8px", borderRadius: 10, background: "rgba(var(--ink), 0.05)", marginBottom: 4 }}>
             <Search size={13} style={{ color: "var(--color-on-surface-variant)" }} />
             <input
               ref={inputRef}
@@ -163,7 +163,7 @@ export function ModelPicker({
                   className="flex items-center text-left"
                   style={{
                     gap: 8, padding: "7px 9px", borderRadius: 9,
-                    background: cursor === i ? "rgba(255,255,255,0.07)" : active ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "transparent",
+                    background: cursor === i ? "rgba(var(--ink), 0.07)" : active ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "transparent",
                   }}
                 >
                   <div className="min-w-0 flex-1">
@@ -191,7 +191,7 @@ export function ModelPicker({
                 onMouseEnter={() => setCursor(list.length)}
                 onClick={() => choose(custom)}
                 className="text-left"
-                style={{ padding: "7px 9px", borderRadius: 9, fontSize: 12.5, color: "var(--color-primary)", background: cursor === list.length ? "rgba(255,255,255,0.07)" : "transparent" }}
+                style={{ padding: "7px 9px", borderRadius: 9, fontSize: 12.5, color: "var(--color-primary)", background: cursor === list.length ? "rgba(var(--ink), 0.07)" : "transparent" }}
               >
                 Use “{custom}”
               </button>

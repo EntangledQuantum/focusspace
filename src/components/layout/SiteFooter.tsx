@@ -14,7 +14,7 @@ export function GithubMark({ size = 18 }: { size?: number }) {
 
 export function SiteFooter() {
   return (
-    <footer className="relative z-10 w-full" style={{ borderTop: "1px solid rgba(255,255,255,0.08)" }}>
+    <footer className="relative z-10 w-full" style={{ borderTop: "1px solid rgba(var(--ink), 0.08)" }}>
       <div
         className="mx-auto w-full flex flex-col sm:flex-row items-center justify-between"
         style={{ maxWidth: 980, gap: 16, padding: "24px 20px 30px" }}

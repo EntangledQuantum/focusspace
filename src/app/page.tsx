@@ -373,8 +373,8 @@ export default function LandingPage() {
                     padding: "10px 16px",
                     fontSize: 13.5,
                     color: "var(--color-on-surface)",
-                    background: "rgba(255,255,255,0.06)",
-                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "rgba(var(--ink), 0.06)",
+                    border: "1px solid rgba(var(--ink), 0.10)",
                   }}
                 >
                   <GithubMark size={16} /> View on GitHub <ArrowRight size={14} />
@@ -466,7 +466,7 @@ export default function LandingPage() {
         toastOptions={{
           style: {
             background: "var(--color-surface-container-high)",
-            border: "1px solid rgba(255,255,255,0.08)",
+            border: "1px solid rgba(var(--ink), 0.08)",
             color: "var(--color-on-surface)",
             backdropFilter: "blur(20px)",
           },

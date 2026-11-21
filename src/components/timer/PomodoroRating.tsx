@@ -32,20 +32,20 @@ function PomoIcon({ state }: { state: "full" | "half" | "empty" }) {
       {/* Outline circle */}
       <circle
         cx="8" cy="9" r="6"
-        stroke={state === "empty" ? "rgba(255,255,255,0.22)" : "var(--color-primary)"}
+        stroke={state === "empty" ? "rgba(var(--ink), 0.22)" : "var(--color-primary)"}
         strokeWidth="1.4"
         fill="none"
       />
       {/* Top stem */}
       <rect
         x="6.5" y="2" width="3" height="2" rx="0.8"
-        fill={state === "empty" ? "rgba(255,255,255,0.22)" : "var(--color-primary)"}
+        fill={state === "empty" ? "rgba(var(--ink), 0.22)" : "var(--color-primary)"}
       />
       {/* Clock hands — only on empty/outlined to keep it readable */}
       {state === "empty" && (
         <>
-          <line x1="8" y1="9" x2="8" y2="6.5" stroke="rgba(255,255,255,0.22)" strokeWidth="1.2" strokeLinecap="round" />
-          <line x1="8" y1="9" x2="10" y2="9" stroke="rgba(255,255,255,0.22)" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="8" y1="9" x2="8" y2="6.5" stroke="rgba(var(--ink), 0.22)" strokeWidth="1.2" strokeLinecap="round" />
+          <line x1="8" y1="9" x2="10" y2="9" stroke="rgba(var(--ink), 0.22)" strokeWidth="1.2" strokeLinecap="round" />
         </>
       )}
       {/* Clock hands on filled — contrasting white */}
@@ -170,7 +170,7 @@ export function PomodoroMiniPips({
             style={{
               width: isHalf ? 5 : 7,
               height: 7,
-              background: isDone ? "var(--color-primary)" : "rgba(255,255,255,0.14)",
+              background: isDone ? "var(--color-primary)" : "rgba(var(--ink), 0.14)",
             }}
           />
         );
