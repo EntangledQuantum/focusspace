@@ -1,10 +1,15 @@
 # LiteLLM proxy for FocusSpace
 #
 # One OpenAI-compatible gateway in front of many providers. The app's
-# AI_BASE_URL points at this proxy's /v1, AI_API_KEY = LITELLM_MASTER_KEY,
-# and AI_ALLOWED_MODELS lists the `model_name`s below.
+# AI_BASE_URL points at this proxy's /v1, AI_API_KEY = LITELLM_MASTER_KEY
+# (or a virtual key), and AI_ALLOWED_MODELS lists the `model_name`s below.
 #
-# Add only the providers you have keys for; comment out the rest.
+# FocusSpace reads the proxy's GET /v1/models and GET /model_group/info, so
+# whatever you declare here (plus the model_info hints) shows up in the
+# model pickers with provider, context window and tool support.
+#
+# Focus AI drives the app through tool calls — only list models that support
+# function calling. Add only the providers you have keys for.
 
 model_list:
   # ── Google Gemini ──
@@ -18,20 +23,31 @@ model_list:
       api_key: os.environ/GEMINI_API_KEY
 
   # ── Anthropic (Claude) — needs ANTHROPIC_API_KEY ──
-  - model_name: claude-sonnet
+  # Wildcard route: any `anthropic/<model-id>` is forwarded, so new Claude
+  # models work without editing this file. Clients call e.g.
+  # "anthropic/claude-sonnet-4-5" (add those ids to AI_ALLOWED_MODELS).
+  - model_name: anthropic/*
     litellm_params:
-      model: anthropic/claude-3-5-sonnet-20241022
+      model: anthropic/*
       api_key: os.environ/ANTHROPIC_API_KEY
 
-  # ── OpenAI (ChatGPT) — needs OPENAI_API_KEY ──
-  - model_name: gpt-4o
-    litellm_params:
-      model: openai/gpt-4o
-      api_key: os.environ/OPENAI_API_KEY
+  # ── OpenAI — needs OPENAI_API_KEY ──
   - model_name: gpt-4o-mini
     litellm_params:
       model: openai/gpt-4o-mini
       api_key: os.environ/OPENAI_API_KEY
+
+  # ── OpenRouter / Groq (optional) ──
+  # - model_name: openrouter/*
+  #   litellm_params:
+  #     model: openrouter/*
+  #     api_key: os.environ/OPENROUTER_API_KEY
+  # - model_name: llama-3.3-70b
+  #   litellm_params:
+  #     model: groq/llama-3.3-70b-versatile
+  #     api_key: os.environ/GROQ_API_KEY
+  #   model_info:
+  #     supports_function_calling: true
 
 litellm_settings:
   drop_params: true            # tolerate provider-specific param gaps

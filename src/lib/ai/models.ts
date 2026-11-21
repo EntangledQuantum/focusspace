@@ -11,6 +11,8 @@ export interface ModelOption {
   /** true/false when the provider tells us; undefined when unknown. */
   supportsTools?: boolean;
   mode?: string;
+  /** APIs the provider says the model speaks (e.g. "chat-completions", "responses", "messages"). */
+  apis?: string[];
 }
 
 /** Trim, drop trailing slashes and accidentally pasted endpoint suffixes. */
@@ -91,6 +93,9 @@ const NON_CHAT_RE = /(embed|whisper|tts|dall-e|moderation|transcri|rerank|imagen
 /** Heuristic: is this a model you can chat with (vs embeddings, TTS, image…)? */
 export function isChatModel(m: ModelOption): boolean {
   if (m.id.includes("*")) return false; // LiteLLM wildcard routes aren't callable ids
+  // Gateways like OpenCode list models that only speak the Responses /
+  // Anthropic Messages / Gemini APIs; we only call /chat/completions.
+  if (m.apis && !m.apis.includes("chat-completions")) return false;
   if (m.mode) return m.mode === "chat" || m.mode === "responses";
   return !NON_CHAT_RE.test(m.id);
 }
@@ -126,13 +131,19 @@ export function parseModelList(json: unknown): ModelOption[] {
     const id = rawId.replace(/^models\//, ""); // Gemini prefixes ids with "models/"
     const label = str(it.display_name) ?? str(it.displayName) ?? (str(it.name) && str(it.name) !== rawId ? str(it.name) : undefined);
     const params = Array.isArray(it.supported_parameters) ? (it.supported_parameters as unknown[]) : null;
+    const caps = (it.capabilities && typeof it.capabilities === "object" ? it.capabilities : {}) as Raw;
+    const capTools = caps.tools && typeof caps.tools === "object" ? (caps.tools as Raw).supported : caps.tools;
+    const limit = (it.limit && typeof it.limit === "object" ? it.limit : {}) as Raw;
+    const type = str(it.type);
     out.push({
       id,
       label,
       provider: str(it.owned_by),
-      contextWindow: num(it.context_window) ?? num(it.context_length) ?? num(it.max_input_tokens) ?? num(it.inputTokenLimit),
-      supportsTools: params ? params.includes("tools") : undefined,
-      mode: str(it.mode),
+      contextWindow: num(it.context_window) ?? num(it.context_length) ?? num(it.max_input_tokens) ?? num(it.inputTokenLimit) ?? num(limit.context),
+      supportsTools: typeof capTools === "boolean" ? capTools : params ? params.includes("tools") : undefined,
+      // `type: "model"` (Anthropic) is just the object kind, not a mode.
+      mode: str(it.mode) ?? (type && type !== "model" ? type : undefined),
+      apis: it.api && typeof it.api === "object" && !Array.isArray(it.api) ? Object.keys(it.api as Raw) : undefined,
     });
   }
   return out;
