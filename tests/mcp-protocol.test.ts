@@ -32,7 +32,7 @@ const fakeDb = {
 describe("MCP protocol", () => {
   it("answers initialize", async () => {
     const res = await handleMcpMessage(
-      { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26" } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { supabase: fakeDb as any, userId: "u", destructive: "allow" },
     );

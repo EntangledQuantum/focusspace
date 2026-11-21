@@ -29,6 +29,7 @@ const PRESETS: { label: string; url: string; localOnly?: boolean }[] = [
   { label: "OpenRouter", url: "https://openrouter.ai/api/v1" },
   { label: "Groq", url: "https://api.groq.com/openai/v1" },
   { label: "Anthropic", url: "https://api.anthropic.com/v1" },
+  { label: "OpenCode Go", url: "https://opencode.ai/inference/go/openai/v1" },
   { label: "Ollama", url: "http://localhost:11434/v1", localOnly: true },
 ];
 

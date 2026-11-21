@@ -6,7 +6,7 @@ import type { Database } from "@/types/database";
 import { aiServerConfig } from "./config";
 import { decryptSecret } from "./crypto";
 import { isAllowedGlobalModel } from "./discovery";
-import { isProxyLike } from "./models";
+import { isProxyLike, providerHeaders } from "./models";
 
 export interface ResolvedModel {
   model: LanguageModel;
@@ -34,8 +34,13 @@ export async function loadOwnCredentials(supabase: SupabaseClient<Database>): Pr
   }
 }
 
-function provider(name: string, baseURL: string, apiKey: string) {
-  return createOpenAICompatible({ name, baseURL, apiKey, includeUsage: true });
+function provider(name: string, baseURL: string, apiKey: string, sessionId?: string | null) {
+  return createOpenAICompatible({ name, baseURL, apiKey, includeUsage: true, headers: providerHeaders(baseURL, sessionId) });
+}
+
+/** Stable, opaque per-conversation id for gateways that route by session (OpenCode). */
+export function sessionIdFor(userId: string, chatId: string | null | undefined): string | null {
+  return chatId ? createHash("sha256").update(`${userId}:${chatId}`).digest("hex").slice(0, 32) : null;
 }
 
 /**
@@ -47,6 +52,7 @@ export async function resolveModel(
   supabase: SupabaseClient<Database>,
   settings: SettingsLite,
   userId: string,
+  opts: { sessionId?: string | null } = {},
 ): Promise<ResolvedModel | null> {
   const cfg = aiServerConfig();
 
@@ -54,7 +60,7 @@ export async function resolveModel(
     const cred = await loadOwnCredentials(supabase);
     if (cred) {
       const modelId = cred.model || settings.ai_model || cfg.defaultModel;
-      return { model: provider("user-gateway", cred.baseUrl, cred.apiKey).chatModel(modelId), modelId, isOwnKey: true };
+      return { model: provider("user-gateway", cred.baseUrl, cred.apiKey, opts.sessionId).chatModel(modelId), modelId, isOwnKey: true };
     }
   }
 
@@ -62,7 +68,7 @@ export async function resolveModel(
   let modelId = settings.ai_model || cfg.defaultModel;
   if (!(await isAllowedGlobalModel(modelId))) modelId = cfg.defaultModel;
   return {
-    model: provider("global-gateway", cfg.baseURL, cfg.apiKey).chatModel(modelId),
+    model: provider("global-gateway", cfg.baseURL, cfg.apiKey, opts.sessionId).chatModel(modelId),
     modelId,
     isOwnKey: false,
     // LiteLLM attributes spend to the OpenAI `user` field (end-user tracking
@@ -76,5 +82,5 @@ export async function resolveModel(
 
 /** Lightweight model build for the validate route (explicit creds, no DB). */
 export function modelFromCreds(baseURL: string, apiKey: string, modelId: string): LanguageModel {
-  return provider("validate", baseURL, apiKey).chatModel(modelId);
+  return provider("validate", baseURL, apiKey, crypto.randomUUID()).chatModel(modelId);
 }

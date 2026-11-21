@@ -22,11 +22,16 @@ export async function POST(req: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const body = await req.json().catch(() => ({}));
-  const name = String(body.name || "Hermes").slice(0, 60);
+  const name = String(body.name || "My agent").trim().slice(0, 60) || "My agent";
   const { token, hash, prefix } = newMcpToken();
-  const { error } = await supabase.from("mcp_tokens").insert({ user_id: user.id, name, token_hash: hash, prefix });
+  const { data: row, error } = await supabase.from("mcp_tokens")
+    .insert({ user_id: user.id, name, token_hash: hash, prefix })
+    .select("id, name, prefix, created_at, last_used_at").single();
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ token, prefix, name, warning: "Copy this token now. It will not be shown again." });
+  return NextResponse.json(
+    { token, ...row, warning: "Copy this token now. It will not be shown again." },
+    { headers: { "Cache-Control": "no-store" } },
+  );
 }
 
 export async function DELETE(req: NextRequest) {

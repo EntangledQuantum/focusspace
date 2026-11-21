@@ -188,7 +188,7 @@ export type TimerAction = "start" | "pause" | "resume" | "stop" | "skip";
 const TIMER_MODES: TimerMode[] = ["pomodoro", "custom", "short_break", "long_break"];
 
 export async function runTimerCommand(
-  db: Db, userId: string, action: TimerAction, opts: { mode?: string } = {}, now = Date.now(),
+  db: Db, userId: string, action: TimerAction, opts: { mode?: string; durationSec?: number } = {}, now = Date.now(),
 ): Promise<void> {
   const { settings, snap: raw } = await readFresh(db, userId, now);
   const snap = raw ?? emptySnapshot(settings);
@@ -218,9 +218,11 @@ export async function runTimerCommand(
   const task = await loadTask(db, userId, snap.currentTaskId);
   const progress = progressOf(task);
   const requested = TIMER_MODES.includes(opts.mode as TimerMode) ? (opts.mode as TimerMode) : null;
-  const plan = requested
+  const planned = requested
     ? { mode: requested, durationSec: durationFor(requested, snap, settings, progress) }
     : defaultStart(snap, settings, progress);
+  // Explicit length (MCP / Focus AI "start a 45-minute session").
+  const plan = opts.durationSec && opts.durationSec > 0 ? { ...planned, durationSec: Math.round(opts.durationSec) } : planned;
   const focus = !isBreakMode(plan.mode);
 
   const { data: session, error } = await db.from("focus_sessions").insert({

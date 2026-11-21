@@ -290,7 +290,7 @@ export function makeTaskTools(db: DB, userId: string, opts: MakeToolsOpts): Tool
           if (ids.length) await supabase.from("task_tags").insert(ids.map((tag_id) => ({ task_id: task!.id, tag_id })));
         }
         const extra = [subtasks?.length ? `${subtasks.length} subtasks` : "", tags?.length ? `tags ${tags.join(", ")}` : ""].filter(Boolean).join(", ");
-        return `Created task "${title}" (id: ${task!.id}) in ${project.name}${extra ? ` · ${extra}` : ""}.`;
+        return `Created task "${title}" (id: ${task!.id}) in ${project.name} (id: ${project.id})${extra ? ` · ${extra}` : ""}.`;
       },
     }),
 
@@ -332,7 +332,7 @@ export function makeTaskTools(db: DB, userId: string, opts: MakeToolsOpts): Tool
           const ids = await resolveTagIds(setTags);
           if (ids.length) await supabase.from("task_tags").insert(ids.map((tag_id) => ({ task_id: t.id, tag_id })));
         }
-        return `Updated task "${title ?? t.title}"${moved}.`;
+        return `Updated task "${title ?? t.title}" (id: ${t.id})${moved}.`;
       },
     }),
 
@@ -343,7 +343,7 @@ export function makeTaskTools(db: DB, userId: string, opts: MakeToolsOpts): Tool
         const t = await resolve.task(taskRef);
         const { error } = await supabase.from("tasks").update({ status, completed_at: status === "done" ? new Date().toISOString() : null }).eq("id", t.id);
         must(error, "change the status");
-        return `Marked "${t.title}" as ${status}.`;
+        return `Marked "${t.title}" (id: ${t.id}) as ${status}.`;
       },
     }),
 
@@ -388,9 +388,12 @@ export function makeTaskTools(db: DB, userId: string, opts: MakeToolsOpts): Tool
         const t = await resolve.task(taskRef);
         const { count } = await supabase.from("subtasks").select("id", { count: "exact", head: true }).eq("task_id", t.id);
         const base = count ?? 0;
-        const { error } = await supabase.from("subtasks").insert(titles.map((title, i) => ({ task_id: t.id, user_id: userId, title, sort_order: base + i })));
+        const { data: added, error } = await supabase.from("subtasks")
+          .insert(titles.map((title, i) => ({ task_id: t.id, user_id: userId, title, sort_order: base + i })))
+          .select("id, title");
         must(error, "add subtasks");
-        return `Added ${titles.length} subtask(s) to "${t.title}".`;
+        const list = (added ?? []).map((x) => `${x.title} (id: ${x.id})`).join("; ");
+        return `Added ${titles.length} subtask(s) to "${t.title}"${list ? `: ${list}` : ""}.`;
       },
     }),
 
