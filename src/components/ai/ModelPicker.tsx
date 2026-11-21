@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { Check, ChevronDown, Loader2, Search, Wrench, AlertTriangle, RefreshCw } from "lucide-react";
 import { filterModels, formatContext, type ModelOption } from "@/lib/ai/models";
 
@@ -12,9 +13,16 @@ const MENU_BG: React.CSSProperties = {
   boxShadow: "0 18px 50px -18px rgba(0,0,0,0.65)",
 };
 
+const MENU_MAX_H = 360;
+type MenuPos = { top?: number; bottom?: number; left?: number; right?: number; maxH: number };
+
 /**
  * Searchable model dropdown shared by Settings → AI and the chat header.
  * `allowCustom` lets own-key users use an id the provider didn't list.
+ *
+ * The menu is portalled to <body> with fixed positioning: glass cards create
+ * their own stacking contexts (backdrop-filter), so an in-place absolute menu
+ * got painted under the next card and clipped by the chat panel.
  */
 export function ModelPicker({
   models, value, onChange, loading, error, allowCustom, compact, onRefresh, align = "left", disabled,
@@ -34,15 +42,39 @@ export function ModelPicker({
   const [q, setQ] = useState("");
   const [cursor, setCursor] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
+  const [pos, setPos] = useState<MenuPos | null>(null);
 
   const list = useMemo(() => filterModels(models, q).slice(0, 200), [models, q]);
   const custom = allowCustom && q.trim() && !models.some((m) => m.id === q.trim()) ? q.trim() : null;
 
+  // Anchor the portalled menu to the trigger; open upward when there's more room above.
+  useLayoutEffect(() => {
+    if (!open) return;
+    const place = () => {
+      const r = rootRef.current?.getBoundingClientRect();
+      if (!r) return;
+      const vw = window.innerWidth, vh = window.innerHeight, gap = 6, margin = 12;
+      const below = vh - r.bottom - gap - margin, above = r.top - gap - margin;
+      const up = below < 220 && above > below;
+      const maxH = Math.max(160, Math.min(MENU_MAX_H, up ? above : below));
+      const horiz = align === "right" ? { right: Math.max(margin, vw - r.right) } : { left: Math.max(margin, r.left) };
+      setPos(up ? { bottom: vh - r.top + gap, ...horiz, maxH } : { top: r.bottom + gap, ...horiz, maxH });
+    };
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); window.removeEventListener("scroll", place, true); };
+  }, [open, align]);
+
   useEffect(() => {
     if (!open) return;
     inputRef.current?.focus();
-    const onDown = (e: MouseEvent) => { if (!rootRef.current?.contains(e.target as Node)) setOpen(false); };
+    const onDown = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!rootRef.current?.contains(t) && !menuRef.current?.contains(t)) setOpen(false);
+    };
     document.addEventListener("mousedown", onDown);
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
@@ -84,10 +116,11 @@ export function ModelPicker({
         {loading ? <Loader2 size={compact ? 11 : 13} className="animate-spin shrink-0" /> : <ChevronDown size={compact ? 11 : 14} className="shrink-0" />}
       </button>
 
-      {open && (
+      {open && pos && createPortal(
         <div
-          className="absolute z-[5] flex flex-col"
-          style={{ ...MENU_BG, top: "calc(100% + 6px)", [align]: 0, width: compact ? 300 : 340, maxWidth: "calc(100vw - 32px)", borderRadius: 14, padding: 6 }}
+          ref={menuRef}
+          className="fixed flex flex-col"
+          style={{ ...MENU_BG, zIndex: 90, top: pos.top, bottom: pos.bottom, left: pos.left, right: pos.right, maxHeight: pos.maxH, width: compact ? 300 : 340, maxWidth: "calc(100vw - 24px)", borderRadius: 14, padding: 6 }}
         >
           <div className="flex items-center" style={{ gap: 7, padding: "6px 8px", borderRadius: 10, background: "rgba(255,255,255,0.05)", marginBottom: 4 }}>
             <Search size={13} style={{ color: "var(--color-on-surface-variant)" }} />
@@ -107,7 +140,7 @@ export function ModelPicker({
             )}
           </div>
 
-          <div className="no-scrollbar flex flex-col" style={{ maxHeight: 300, overflowY: "auto" }}>
+          <div className="no-scrollbar flex flex-col" style={{ minHeight: 0, flex: 1, overflowY: "auto" }}>
             {loading && !models.length && (
               <div className="flex items-center" style={{ gap: 8, padding: "10px 8px", fontSize: 12, color: "var(--color-on-surface-variant)" }}>
                 <Loader2 size={12} className="animate-spin" /> Loading models…
@@ -169,7 +202,8 @@ export function ModelPicker({
               </p>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

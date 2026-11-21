@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import { useChat } from "@ai-sdk/react";
 import { DefaultChatTransport, type UIMessage } from "ai";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Plus, ArrowUp, Loader2, History, MessageSquare, Trash2, ArrowLeft, Square, AlertTriangle, RotateCcw } from "lucide-react";
+import { X, Plus, ArrowUp, Loader2, History, MessageSquare, Trash2, ArrowLeft, Square, AlertTriangle, RotateCcw, WifiOff } from "lucide-react";
 import { toast } from "sonner";
 import { ChatMessage } from "./ChatMessage";
 import { ModelPicker } from "./ModelPicker";
@@ -13,6 +13,8 @@ import { useAIModels } from "./useAIModels";
 import { useAIPanel } from "@/lib/stores/ai";
 import { pullTimerState } from "@/lib/hooks/useTimerSync";
 import { TIMER_TOOLS } from "@/lib/ai/toolMeta";
+import { deriveTitle } from "@/lib/ai/chat-store";
+import { isNetworkError, pendingActivity } from "./chatActivity";
 
 interface ConversationMeta { id: string; title: string; updated_at: string }
 
@@ -34,6 +36,8 @@ const DEFAULT_SUGGESTIONS = ["Add a task to read 30 pages tonight", "What did I 
 
 /** Record "the user just used the chat" (kept outside render for the React compiler). */
 function touch(ref: { current: number }) { ref.current = Date.now(); }
+/** Event-handler clock (kept outside the component so render stays pure). */
+const clock = () => Date.now();
 
 const newId = () => (typeof crypto !== "undefined" && "randomUUID" in crypto ? crypto.randomUUID() : `${Date.now()}`);
 
@@ -66,9 +70,17 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
   const models = useAIModels(open);
 
   const transport = useMemo(() => new DefaultChatTransport({ api: "/api/ai/chat" }), []);
+  // Set when the connection drops mid-reply: the server keeps generating and
+  // saves the result, so we poll for it instead of showing a dead end.
+  const [recoverFor, setRecoverFor] = useState<string | null>(null);
+  const recovering = recoverFor !== null;
+  const recoverRef = useRef<() => void>(() => {});
   const { messages, sendMessage, status, setMessages, stop, error, regenerate, clearError } = useChat({
     transport,
-    onError: (e) => toast.error(e?.message || "AI request failed"),
+    onError: (e) => {
+      if (isNetworkError(e)) recoverRef.current();
+      else toast.error(e?.message || "AI request failed");
+    },
   });
   const busy = status === "streaming" || status === "submitted";
 
@@ -84,7 +96,9 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
   });
 
   function resetChat() {
+    // New chat ≠ Stop: an in-flight reply still finishes and lands in history.
     if (busy) stop();
+    setRecoverFor(null);
     clearError();
     setMessages([]);
     setChatId(newId());
@@ -112,8 +126,9 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
 
   function send(text: string) {
     const t = text.trim();
-    if (!t || busy || loadingChat) return;
+    if (!t || busy || loadingChat || recovering) return;
     touch(lastActivity);
+    setNow(clock()); // fresh baseline for the "taking a while" hint
     sendMessage({ text: t }, { body: { focusProjectId: projectId, page: pathname, chatId } });
     setInput("");
   }
@@ -153,25 +168,86 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
     if (timer) void pullTimerState(qc);
   }, [messages, qc]);
 
-  // Persist after each finished turn (creates the chat on first save).
+  // The server saves every turn itself (even if we disconnect); just refresh
+  // the history list when a reply finishes.
   const prevStatus = useRef(status);
   const messagesRef = useRef<UIMessage[]>([]);
   useEffect(() => { messagesRef.current = messages; });
   useEffect(() => {
-    if (prevStatus.current === "streaming" && status === "ready" && messagesRef.current.length) {
+    if (prevStatus.current === "streaming" && status === "ready") {
       touch(lastActivity);
-      fetch(`/api/ai/conversations/${chatId}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ messages: messagesRef.current, title: deriveTitle(messagesRef.current) }),
-      }).then(() => qc.invalidateQueries({ queryKey: ["ai-conversations"] })).catch(() => {});
+      qc.invalidateQueries({ queryKey: ["ai-conversations"] });
     }
     prevStatus.current = status;
-  }, [status, chatId, qc]);
+  }, [status, qc]);
+
+  /** Stop = really stop: tell the server first (it would otherwise finish the
+   *  reply in the background), then keep exactly what the user saw. */
+  function stopReply() {
+    const id = chatId;
+    void fetch(`/api/ai/conversations/${id}/cancel`, { method: "POST" }).catch(() => {});
+    stop();
+    setTimeout(() => {
+      const msgs = messagesRef.current;
+      if (!msgs.length) return;
+      void fetch(`/api/ai/conversations/${id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ messages: msgs, title: deriveTitle(msgs) }),
+      }).then(() => qc.invalidateQueries({ queryKey: ["ai-conversations"] })).catch(() => {});
+    }, 150);
+  }
+
+  // Poll the saved conversation until the server's run settles, then show it.
+  useEffect(() => { recoverRef.current = () => setRecoverFor(chatId); });
+  useEffect(() => {
+    if (!recoverFor) return;
+    const id = recoverFor;
+    let cancelled = false;
+    let wake: () => void = () => {};
+    const onOnline = () => wake();
+    window.addEventListener("online", onOnline);
+    (async () => {
+      const deadline = Date.now() + 6 * 60_000;
+      while (!cancelled && Date.now() < deadline) {
+        await new Promise<void>((r) => { wake = r; setTimeout(r, navigator.onLine ? 2500 : 5000); });
+        if (cancelled) return;
+        try {
+          const res = await fetch(`/api/ai/conversations/${id}`, { cache: "no-store" });
+          if (!res.ok) continue; // 404 = user turn not saved yet; 5xx = try again
+          const data = await res.json();
+          const state: string | null = data.conversation?.runState ?? null;
+          const rows: { role: string }[] = data.messages ?? [];
+          const settled = state ? state !== "running" : rows.at(-1)?.role === "assistant";
+          if (!settled || cancelled) continue;
+          clearError();
+          setMessages(toUIMessages(data.messages ?? []));
+          if (state === "error") toast.error(data.conversation?.runError || "The reply failed on the server.");
+          qc.invalidateQueries({ queryKey: ["ai-conversations"] });
+          break;
+        } catch { /* still offline — keep waiting */ }
+      }
+      if (!cancelled) setRecoverFor(null);
+    })();
+    return () => { cancelled = true; wake(); window.removeEventListener("online", onOnline); };
+  }, [recoverFor, clearError, setMessages, qc]);
+
+  // Tick while busy so the "taking a while" hint can appear without new chunks.
+  const [now, setNow] = useState(clock);
+  useEffect(() => {
+    if (!busy) return;
+    const t = setInterval(() => setNow(clock()), 1000);
+    return () => clearInterval(t);
+  }, [busy]);
+  // Remember when the message list last changed (update-during-render pattern).
+  const [lastSeen, setLastSeen] = useState({ messages, at: now });
+  if (lastSeen.messages !== messages) setLastSeen({ messages, at: now });
+  const activity = pendingActivity(messages, status);
+  const quietFor = busy ? Math.max(0, now - lastSeen.at) : 0;
 
   async function loadConversation(id: string) {
     if (id === chatId && messages.length) { setView("chat"); return; }
     if (busy) stop();
+    setRecoverFor(null);
     clearError();
     setView("chat");
     setLoadingChat(id);
@@ -189,6 +265,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
       setChatId(id);
       setMessages(loaded);
       touch(lastActivity);
+      if (data.conversation?.runState === "running") setRecoverFor(id);
     } catch {
       toast.error("Couldn't open that chat");
       setChatId(newId());
@@ -382,16 +459,25 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
           ) : (
             messages.map((msg) => <ChatMessage key={msg.id} message={msg} onConfirm={handleConfirm} />)
           )}
-          {status === "submitted" && (
-            <div className="flex items-center" style={{ gap: 8, color: "var(--color-on-surface-variant)", fontSize: 13.5 }}>
-              <Loader2 size={14} className="animate-spin" /> Thinking…
+          {busy && activity && (
+            <div className="flex items-center" role="status" aria-live="polite" style={{ gap: 8, color: "var(--color-on-surface-variant)", fontSize: 13.5 }}>
+              <span className="ai-dots" aria-hidden><i /><i /><i /></span>
+              {activity}
+              {quietFor > 20_000 && <span style={{ opacity: 0.7 }}>— the model is taking a while</span>}
             </div>
           )}
-          {error && !busy && (
+          {recovering && (
+            <div className="flex items-start" role="status" style={{ gap: 8, padding: "9px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45, color: "var(--color-on-surface)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+              <WifiOff size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--color-on-surface-variant)" }} />
+              <span className="flex-1">Connection lost — the reply is still being written on the server and will appear here.</span>
+              <Loader2 size={13} className="animate-spin shrink-0" style={{ marginTop: 2 }} />
+            </div>
+          )}
+          {error && !busy && !recovering && (
             <div className="flex items-start" style={{ gap: 8, padding: "9px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45, color: "var(--color-on-surface)", background: "color-mix(in srgb, var(--color-error) 22%, transparent)", border: "1px solid color-mix(in srgb, var(--color-error) 40%, transparent)" }}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--color-error)" }} />
               <span className="flex-1">{error.message || "Something went wrong."}</span>
-              <button onClick={() => { clearError(); regenerate({ body: { focusProjectId: projectId, page: pathname, chatId } }); }} className="pill btn-hover-surface" style={{ padding: "3px 9px", fontSize: 11.5, background: "rgba(255,255,255,0.08)" }}>
+              <button onClick={() => { clearError(); setNow(clock()); regenerate({ body: { focusProjectId: projectId, page: pathname, chatId } }); }} className="pill btn-hover-surface" style={{ padding: "3px 9px", fontSize: 11.5, background: "rgba(255,255,255,0.08)" }}>
                 <RotateCcw size={11} /> Retry
               </button>
             </div>
@@ -413,7 +499,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
             style={{ fontSize: 14.5, lineHeight: 1.45, color: "var(--color-on-surface)", maxHeight: INPUT_MAX_HEIGHT, padding: "5px 6px", overflowY: "auto" }}
           />
           <button
-            onClick={() => { if (busy) stop(); else { if (view === "history") setView("chat"); send(input); } }}
+            onClick={() => { if (busy) stopReply(); else { if (view === "history") setView("chat"); send(input); } }}
             disabled={!busy && (!input.trim() || !!loadingChat)}
             title={busy ? "Stop" : "Send"}
             className="grad-primary flex items-center justify-center shrink-0 disabled:opacity-40"
@@ -427,8 +513,3 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
   );
 }
 
-function deriveTitle(messages: UIMessage[]): string {
-  const firstUser = messages.find((m) => m.role === "user");
-  const text = firstUser?.parts.find((p: { type: string }) => p.type === "text") as { text?: string } | undefined;
-  return (text?.text ?? "Untitled chat").replace(/\s+/g, " ").slice(0, 60);
-}
