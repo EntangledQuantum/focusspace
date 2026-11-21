@@ -31,6 +31,8 @@ CREATE TABLE IF NOT EXISTS user_settings (
   spotify_token_expires_at TEXT,
   spotify_auto_start      INTEGER NOT NULL DEFAULT 0,
   spotify_takeover        INTEGER NOT NULL DEFAULT 1,
+  spotify_auto_pause      INTEGER NOT NULL DEFAULT 1,
+  spotify_resume_on_focus INTEGER NOT NULL DEFAULT 1,
   glass_tint              REAL NOT NULL DEFAULT 0.5,
   glass_blur              INTEGER NOT NULL DEFAULT 22,
   active_effect           TEXT,
