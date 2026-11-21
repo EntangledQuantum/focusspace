@@ -12,7 +12,7 @@ so there is no build step.
 3. Click the FocusSpace icon → **Log in**.
 
 Releases are built by `.github/workflows/extension-release.yml`: bump `version` in `manifest.json`, then push a
-tag like `extension-v0.9.0-beta`.
+tag like `extension-v0.9.0-beta`, or run the workflow from the Actions tab.
 
 ## Install (load unpacked from the repo)
 
