@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "@tanstack/react-query";
 import { spotifyJson } from "@/lib/spotify/api";
+import { playlistSubtitle } from "@/lib/spotify/normalize";
 import { motion, AnimatePresence } from "framer-motion";
 import { Search, X, Music, ListMusic, Disc3, User, Library, Sparkles } from "lucide-react";
 import type { PlayableContext } from "@/lib/context/SpotifyContext";
@@ -44,7 +45,9 @@ function artistRow(a: any): Row {
   return { uri: a.uri, name: a.name, type: "artist", imageUrl: img(a.images), subtitle: a.genres?.[0] ?? "Artist" };
 }
 function playlistRow(p: any): Row {
-  return { uri: p.uri, name: p.name, type: "playlist", imageUrl: img(p.images), subtitle: `${p.tracks?.total ?? 0} tracks` };
+  // Count lives in `items.total` since the Feb 2026 Web API change (was
+  // `tracks.total`); shown only when Spotify actually returns one.
+  return { uri: p.uri, name: p.name, type: "playlist", imageUrl: img(p.images), subtitle: playlistSubtitle(p) };
 }
 /* eslint-enable @typescript-eslint/no-explicit-any */
 

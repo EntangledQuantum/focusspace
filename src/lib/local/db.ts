@@ -45,6 +45,9 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "user_settings", column: "break_end_tone", ddl: "TEXT NOT NULL DEFAULT 'marimba'" },
   { table: "user_settings", column: "sound_enabled", ddl: "INTEGER NOT NULL DEFAULT 1" },
   { table: "user_settings", column: "sound_volume", ddl: "INTEGER NOT NULL DEFAULT 80" },
+  // 0013_music_focus_sync
+  { table: "user_settings", column: "spotify_auto_pause", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "user_settings", column: "spotify_resume_on_focus", ddl: "INTEGER NOT NULL DEFAULT 1" },
 ];
 
 function addMissingColumns(db: InstanceType<BetterSqlite>) {
