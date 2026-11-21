@@ -1,7 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalMode } from "@/lib/mode";
-import { newMcpToken } from "@/lib/mcp/auth";
+import { newMcpToken, tokenAuthConfigured, TOKEN_AUTH_MISSING } from "@/lib/mcp/auth";
 
 export async function GET() {
   if (isLocalMode()) {
@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!tokenAuthConfigured()) {
+    console.error("[mcp]", TOKEN_AUTH_MISSING);
+    return NextResponse.json({ error: TOKEN_AUTH_MISSING }, { status: 503 });
+  }
   const body = await req.json().catch(() => ({}));
   const name = String(body.name || "My agent").trim().slice(0, 60) || "My agent";
   const { token, hash, prefix } = newMcpToken();

@@ -35,16 +35,17 @@ function chromeRuntime(): ChromeRuntime | null {
   return rt && typeof rt.sendMessage === "function" ? rt : null;
 }
 
-function deliver(ext: string, token: string): Promise<boolean> {
+function deliver(ext: string, token: string): Promise<{ ok: boolean; error?: string }> {
   const rt = chromeRuntime();
-  if (!rt) return Promise.resolve(false);
+  if (!rt) return Promise.resolve({ ok: false });
   return new Promise((resolve) => {
     try {
       rt.sendMessage(ext, { type: "focusspace:connect", token, apiBase: window.location.origin }, (resp) => {
-        resolve(!rt.lastError && !!resp?.ok);
+        if (rt.lastError || !resp) resolve({ ok: false });
+        else resolve({ ok: !!resp.ok, error: resp.ok ? undefined : resp.error });
       });
     } catch {
-      resolve(false);
+      resolve({ ok: false });
     }
   });
 }
@@ -81,7 +82,11 @@ export function ConnectExtension() {
       const body = (await res.json().catch(() => ({}))) as { token?: string; error?: string };
       if (!res.ok || !body.token) throw new Error(body.error || `Request failed (${res.status})`);
       setToken(body.token);
-      setPhase(ext && (await deliver(ext, body.token)) ? "done" : "manual");
+      if (!ext) { setPhase("manual"); return; }
+      const res2 = await deliver(ext, body.token);
+      if (res2.ok) setPhase("done");
+      else if (res2.error) throw new Error(res2.error);
+      else setPhase("manual");
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setPhase("error");

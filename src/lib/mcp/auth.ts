@@ -20,6 +20,18 @@ export function bearerFrom(header: string | null | undefined): string | null {
   return m ? m[1] : null;
 }
 
+/**
+ * Hosted tokens are verified with the service-role client. Without
+ * SUPABASE_SERVICE_ROLE_KEY every token is rejected, so refuse to mint
+ * tokens that could never work and say why.
+ */
+export const TOKEN_AUTH_MISSING =
+  "This server can't verify agent/extension tokens yet: SUPABASE_SERVICE_ROLE_KEY is not set. Add it in the hosting env (Vercel → Settings → Environment Variables) and redeploy.";
+
+export function tokenAuthConfigured(): boolean {
+  return isLocalMode() || (!!process.env.NEXT_PUBLIC_SUPABASE_URL && !!process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
 export interface McpContext {
   supabase: SupabaseClient<Database>;
   userId: string;
