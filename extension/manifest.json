@@ -1,7 +1,8 @@
 {
   "manifest_version": 3,
   "name": "FocusSpace",
-  "version": "1.0.0",
+  "version": "0.9.0",
+  "version_name": "0.9.0 beta",
   "description": "Your FocusSpace timer, task and music from the toolbar. Synced live with focusspace.live.",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvXYijF0YZHgpI639HleMCmT/yz3xO6lhrDlEAfiAqxT3uLHTD2W3pd5obV78yMxDjxmWbXaeVdO0rgGpDKpWvqwM5JvpNxWx950K+dK+X5EAGwvpZ08vfO4rJdt0xAh+suWSAhVcilfmrH1sL1mDnzlDi6/zYwD/drWpdHmFzKJ5v1Ne1fcuWXFIrXQkOPErqvOEHjCVvaoj/Si/zRsybPap85aF/P/Om6CeYK2ArQ0T5O5w9y2qUqleTwezfzmVpT2JMuna0N3Xo1O4m2Y1GZE1r2r0lHBzlxrYpV8RSy1tU2RBuQgr+q0t8HwxG29SH1yKC4JmAFYBnVe2bkN41QIDAQAB",
   "icons": {

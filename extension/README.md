@@ -4,7 +4,17 @@ A small Manifest V3 extension: your FocusSpace timer, current task and Spotify
 playback in the toolbar, synced both ways with the website. Plain HTML/CSS/JS,
 so there is no build step.
 
-## Install (load unpacked)
+## Install from a release (beta)
+
+1. Download `focusspace-extension-<version>.zip` from the
+   [GitHub releases](https://github.com/EntangledQuantum/focusspace/releases) (tags `extension-v*`) and unzip it.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder.
+3. Click the FocusSpace icon → **Log in**.
+
+Releases are built by `.github/workflows/extension-release.yml`: bump `version` in `manifest.json`, then push a
+tag like `extension-v0.9.0-beta`.
+
+## Install (load unpacked from the repo)
 
 1. Open `chrome://extensions` and turn on **Developer mode** (top right).
 2. Click **Load unpacked** and pick this `extension/` folder.

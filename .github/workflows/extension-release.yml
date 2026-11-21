@@ -1,0 +1,51 @@
+name: Chrome extension release
+
+# Push a tag like `extension-v0.9.0-beta` to publish extension/ as a zip on a
+# GitHub release. Tags containing "beta"/"alpha"/"rc" become pre-releases.
+on:
+  push:
+    tags: ["extension-v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check manifest version matches tag
+        run: |
+          tag="${GITHUB_REF_NAME#extension-v}"
+          manifest=$(jq -r .version extension/manifest.json)
+          case "$tag" in
+            "$manifest"|"$manifest"-*) echo "tag $tag ↔ manifest $manifest" ;;
+            *) echo "::error::tag $tag does not match manifest version $manifest"; exit 1 ;;
+          esac
+
+      - name: Build zip
+        run: |
+          name="focusspace-extension-${GITHUB_REF_NAME#extension-v}.zip"
+          (cd extension && zip -r -X "../$name" . -x "README.md" -x "*.DS_Store")
+          unzip -l "$name"
+          echo "ZIP=$name" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *beta*|*alpha*|*rc*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" "$ZIP" $pre \
+            --title "FocusSpace Chrome extension ${GITHUB_REF_NAME#extension-v}" \
+            --notes "$(cat <<'NOTES'
+          Beta of the FocusSpace Chrome extension: live timer, session, project/task and subtasks, Spotify now playing,
+          and controls (start/pause/resume/stop/skip, complete task, tick subtasks, switch project/task, music) —
+          synced both ways with focusspace.live.
+
+          **Install:** download the zip below and unzip it → `chrome://extensions` → enable **Developer mode** →
+          **Load unpacked** → pick the unzipped folder → click the FocusSpace icon → **Log in** (uses your
+          focusspace.live session; revoke any time in Settings → Agents & MCP).
+          NOTES
+          )"
