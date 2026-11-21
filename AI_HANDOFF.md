@@ -55,12 +55,12 @@ Gemini **direct** via Google's OpenAI-compatible endpoint (LiteLLM not deployed)
 ```
 NEXT_PUBLIC_AI_ENABLED = true            # build-time → must redeploy after adding
 AI_BASE_URL            = https://generativelanguage.googleapis.com/v1beta/openai   # no trailing slash
-AI_API_KEY             = <Gemini key, starts AIzaSyDhx0...>   # also in gitignored .env.local
+AI_API_KEY             = <Gemini API key — set in Vercel env / gitignored .env.local, never commit>
 AI_DEFAULT_MODEL       = gemini-2.5-flash
 AI_ALLOWED_MODELS      = gemini-2.5-flash,gemini-2.5-pro,gemini-2.0-flash,gemini-2.5-flash-lite
 AI_FREE_MONTHLY_TOKENS = 150000
 AI_MAX_STEPS           = 8
-AI_ENCRYPTION_KEY      = 158511edf4b803859e33d090b4e484f1032fbf46f1be454253e8f00d59586dab
+AI_ENCRYPTION_KEY      = <random 32-byte hex, e.g. `openssl rand -hex 32` — set in Vercel env only, never commit>
 ```
 Verified live (curl): the Gemini key + endpoint work, including **function/tool calling**. So the provider side is good; the bug is likely in app wiring/env/runtime.
 - Multi-provider (gemini+claude+gpt on one shared key) requires deploying the **LiteLLM proxy** under `litellm/` (config.yaml/Dockerfile/README) and pointing `AI_BASE_URL` at `https://<proxy>/v1`, `AI_API_KEY` = its master key. Needs Anthropic/OpenAI keys (user only has Gemini). Per-user "own key" path already works without the proxy.
