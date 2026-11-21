@@ -24,6 +24,8 @@ interface Props {
   onClose: () => void;
   /** error code from ?error= (auth callback failures) */
   urlError?: string | null;
+  /** Same-site path to land on after signing in (default /focus). */
+  redirectTo?: string;
 }
 
 /**
@@ -31,7 +33,7 @@ interface Props {
  * and email+password first tries to sign in, then transparently creates the
  * account if it doesn't exist yet.
  */
-export function AuthModal({ open, onClose, urlError }: Props) {
+export function AuthModal({ open, onClose, urlError, redirectTo = "/focus" }: Props) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -40,6 +42,8 @@ export function AuthModal({ open, onClose, urlError }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [emailSent, setEmailSent] = useState(false);
   const router = useRouter();
+  const callbackUrl = () =>
+    `${window.location.origin}/auth/callback${redirectTo === "/focus" ? "" : `?next=${encodeURIComponent(redirectTo)}`}`;
 
   useEffect(() => {
     if (!open) return;
@@ -59,7 +63,7 @@ export function AuthModal({ open, onClose, urlError }: Props) {
     // 1) Try signing in
     const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     if (!signInError) {
-      router.push("/focus");
+      router.push(redirectTo);
       router.refresh();
       return;
     }
@@ -71,12 +75,12 @@ export function AuthModal({ open, onClose, urlError }: Props) {
         password,
         options: {
           data: { display_name: email.split("@")[0] },
-          emailRedirectTo: `${window.location.origin}/auth/callback`,
+          emailRedirectTo: callbackUrl(),
         },
       });
       if (!signUpError) {
         if (data.session) {
-          router.push("/focus");
+          router.push(redirectTo);
           router.refresh();
         } else {
           setEmailSent(true);
@@ -103,7 +107,7 @@ export function AuthModal({ open, onClose, urlError }: Props) {
     const supabase = createClient();
     const { error } = await supabase.auth.signInWithOAuth({
       provider: "google",
-      options: { redirectTo: `${window.location.origin}/auth/callback` },
+      options: { redirectTo: callbackUrl() },
     });
     if (error) { setError(error.message); setGoogleLoading(false); }
   }
@@ -115,7 +119,7 @@ export function AuthModal({ open, onClose, urlError }: Props) {
       provider: "spotify",
       options: {
         scopes: "streaming user-read-email user-read-private user-read-playback-state user-modify-playback-state playlist-read-private user-library-read user-top-read user-read-recently-played",
-        redirectTo: `${window.location.origin}/auth/callback`,
+        redirectTo: callbackUrl(),
       },
     });
     if (error) { setError(error.message); setSpotifyLoading(false); }

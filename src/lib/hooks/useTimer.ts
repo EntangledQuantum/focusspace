@@ -104,15 +104,27 @@ export function useTimer() {
     const state = useTimerStore.getState();
     if (!state.currentSessionId) return;
 
-    const elapsed = getElapsedSec(state);
-    await supabase
+    // Clamp: a session picked up late (e.g. started from the extension while this
+    // tab was closed) must not record more than its planned length.
+    const elapsed = Math.min(getElapsedSec(state), state.plannedDurationSec);
+    // Only the writer that flips ended_at from NULL counts the pomodoro — the
+    // extension API may already have recorded this session server-side.
+    const { data: ended, count } = await supabase
       .from("focus_sessions")
       .update({
         ended_at: new Date().toISOString(),
         actual_duration_sec: elapsed,
         completed: true,
       })
-      .eq("id", state.currentSessionId);
+      .eq("id", state.currentSessionId)
+      .is("ended_at", null)
+      .select("id");
+    const won = Array.isArray(ended) ? ended.length > 0 : (count ?? 0) > 0;
+    if (!won) {
+      qc.invalidateQueries({ queryKey: ["sessions"] });
+      qc.invalidateQueries({ queryKey: ["tasks"] });
+      return;
+    }
 
     if (state.mode === "pomodoro" && state.currentTaskId) {
       const { data: taskData } = await supabase
@@ -271,5 +283,7 @@ export function useTimer() {
     skipSession,
     resetSession,
     setOnComplete,
+    /** Mirror the store into timer_state so the extension / MCP see UI-side changes. */
+    persist: persistUi,
   };
 }

@@ -7,8 +7,9 @@ import { createClient } from "@/lib/supabase/client";
 
 
 /**
- * Picks up timer commands written by MCP / Ask AI so the live ring
- * follows start/pause/reset that happened outside the browser.
+ * Picks up timer commands written outside this tab (MCP / Ask AI / the Chrome
+ * extension — anything not tagged "ui") so the live ring follows
+ * start/pause/reset that happened elsewhere.
  */
 export function useTimerSync() {
   const qc = useQueryClient();
@@ -24,7 +25,7 @@ export function useTimerSync() {
         if (!user || cancelled) return;
         const { data } = await supabase.from("timer_state").select("*").eq("user_id", user.id).maybeSingle();
         if (!data || cancelled) return;
-        if (data.source !== "mcp") return;
+        if (data.source === "ui") return;
         if (data.updated_at && data.updated_at === lastUpdated) return;
         lastUpdated = data.updated_at ?? "";
         useTimerStore.setState({
@@ -41,6 +42,8 @@ export function useTimerSync() {
         });
         qc.invalidateQueries({ queryKey: ["tasks"] });
         qc.invalidateQueries({ queryKey: ["sessions"] });
+        qc.invalidateQueries({ queryKey: ["subtasks"] });
+        qc.invalidateQueries({ queryKey: ["projects-with-tasks"] });
       } catch {
         /* ignore — cloud without migration, or offline */
       }

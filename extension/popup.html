@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>FocusSpace</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="popup">
+  <header class="top">
+    <img src="icons/icon48.png" alt="" class="logo" />
+    <span class="brand">FocusSpace</span>
+    <span class="spacer"></span>
+    <button id="account-btn" class="avatar" hidden title="Account"></button>
+  </header>
+
+  <div id="account-menu" class="menu glass" hidden>
+    <div class="menu-head">
+      <div id="menu-name" class="menu-name"></div>
+      <div id="menu-email" class="menu-email"></div>
+    </div>
+    <button data-open="/focus">Open FocusSpace</button>
+    <button id="menu-options">Options</button>
+    <button id="menu-logout" class="danger">Log out</button>
+  </div>
+
+  <!-- Signed out -->
+  <section id="view-login" class="view" hidden>
+    <div class="login">
+      <img src="icons/icon128.png" alt="" class="login-logo" />
+      <h1>Your focus, one click away</h1>
+      <p class="muted">Timer, current task and music — synced live with FocusSpace.</p>
+      <button id="login-btn" class="btn primary wide">Log in with FocusSpace</button>
+      <p class="muted small">Uses the session you already have on <span id="login-host">focusspace.live</span>.</p>
+      <button id="login-options" class="link small">Server &amp; manual token…</button>
+    </div>
+  </section>
+
+  <!-- Signed in -->
+  <section id="view-main" class="view" hidden>
+    <div class="card timer-card">
+      <div class="mode-row">
+        <span id="mode-pill" class="pill">Focus</span>
+        <span id="status-label" class="muted small">Ready</span>
+      </div>
+      <div class="ring-wrap">
+        <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+          <defs>
+            <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0%" stop-color="#ff5fa2" />
+              <stop offset="100%" stop-color="#b06bf6" />
+            </linearGradient>
+          </defs>
+          <circle cx="60" cy="60" r="52" class="ring-track" />
+          <circle cx="60" cy="60" r="52" class="ring-bar" id="ring-bar" />
+        </svg>
+        <div class="time" id="time">25:00</div>
+      </div>
+      <div class="controls" id="timer-controls"></div>
+    </div>
+
+    <div class="card task-card">
+      <div class="task-head">
+        <span id="project-chip" class="chip" hidden></span>
+        <span class="spacer"></span>
+        <button id="change-task" class="link small">Change</button>
+      </div>
+      <div id="task-empty" class="muted" hidden>No task selected.</div>
+      <label id="task-row" class="task-row" hidden>
+        <input type="checkbox" id="task-done" />
+        <span id="task-title" class="task-title"></span>
+      </label>
+      <div id="pomos" class="pomos"></div>
+      <ul id="subtasks" class="subtasks"></ul>
+    </div>
+
+    <div class="card music-card" id="music-card">
+      <img id="music-art" class="art" alt="" hidden />
+      <div class="art art-empty" id="music-art-empty" data-icon="music"></div>
+      <div class="music-meta">
+        <div id="music-title" class="music-title">Spotify</div>
+        <div id="music-sub" class="muted small truncate">Loading…</div>
+      </div>
+      <div class="music-controls" id="music-controls">
+        <button class="icon-btn" data-music="previous" data-icon="prev" title="Previous"></button>
+        <button class="icon-btn play" data-music="toggle" data-icon="play" id="music-toggle" title="Play"></button>
+        <button class="icon-btn" data-music="next" data-icon="next" title="Next"></button>
+      </div>
+    </div>
+  </section>
+
+  <!-- Task picker -->
+  <section id="view-picker" class="view" hidden>
+    <div class="picker-head">
+      <button id="picker-back" class="link">← Back</button>
+      <select id="picker-project"></select>
+    </div>
+    <ul id="picker-list" class="picker-list"></ul>
+  </section>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="popup.js"></script>
+</body>
+</html>
