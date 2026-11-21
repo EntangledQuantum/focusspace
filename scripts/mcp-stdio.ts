@@ -1,6 +1,6 @@
 #!/usr/bin/env npx tsx
 /**
- * stdio MCP transport for Hermes / OpenClaw on the same machine.
+ * stdio MCP transport for any local MCP client (Claude, Cursor, Hermes, OpenClaw, …).
  * Speaks JSON-RPC lines on stdin/stdout. Uses local SQLite when
  * FOCUSSPACE_MODE=local (the default for this script).
  */

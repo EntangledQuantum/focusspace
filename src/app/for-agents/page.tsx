@@ -6,7 +6,7 @@ import { AGENT_CLOUD_MD_URL, AGENT_SETUP_LINE, AGENT_SETUP_MD_URL } from "@/lib/
 export const metadata: Metadata = {
   title: "FocusSpace for agents",
   description:
-    "Connect Claude, Cursor, Hermes or any MCP agent to FocusSpace — use your focusspace.live account with a token, or have the agent self-host it on your machine.",
+    "Connect Claude, ChatGPT, Cursor, Hermes, OpenClaw or any MCP agent to FocusSpace — use your focusspace.live account with a token, or have the agent self-host it on your machine.",
 };
 
 export default function ForAgentsPage() {
@@ -14,7 +14,8 @@ export default function ForAgentsPage() {
     <LegalShell title="FocusSpace for agents" updated="November 21, 2026">
       <p>
         FocusSpace is a Pomodoro timer, task board, and focus analytics app.
-        Agents can do everything you can — projects, tasks, subtasks, the
+        Any agent that speaks MCP works — Claude (Code and Desktop), ChatGPT,
+        Cursor, Windsurf, Hermes, OpenClaw and more. Agents can do everything you can — projects, tasks, subtasks, the
         timer and pomodoros, live status (what&apos;s running, time left),
         settings, analytics and Spotify — over MCP. There are two ways to set
         it up. Pick one:
@@ -66,8 +67,8 @@ export default function ForAgentsPage() {
         </li>
       </ol>
       <p>
-        Agent guide: <a href={AGENT_SETUP_MD_URL}>/for-agents.md</a>. Hermes /
-        OpenClaw skill: <code>skills/focusspace/</code> in the repo.
+        Agent guide: <a href={AGENT_SETUP_MD_URL}>/for-agents.md</a>. Ready-made
+        skill for Hermes and OpenClaw: <code>skills/focusspace/</code> in the repo.
       </p>
 
       <h2>What agents can do</h2>

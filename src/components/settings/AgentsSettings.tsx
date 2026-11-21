@@ -109,7 +109,7 @@ export function AgentsSettings() {
         <div>
           <p style={{ fontFamily: "var(--font-display)", fontSize: 15.5, fontWeight: 700, color: "var(--color-on-surface)" }}>Agents &amp; MCP</p>
           <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", opacity: 0.8, marginTop: 1 }}>
-            Let Claude, Cursor, Hermes or any MCP agent run your timer, tasks and projects.
+            Let Claude, ChatGPT, Cursor, Hermes, OpenClaw — any MCP agent — run your timer, tasks and projects.
           </p>
         </div>
       </div>

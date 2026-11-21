@@ -23,8 +23,8 @@ time. You pick a task, run the timer, and review the data — without the clutte
 that most "productivity" apps bury you in.
 
 It pairs a distraction-free focus screen with full project/task management, Spotify playback, rich
-analytics, living wallpapers, and an optional **Focus AI** assistant. Agents (Hermes, OpenClaw) can drive
-the same board, timer, music, settings, and analytics over **MCP**. It's **fully open source** — self-host it
+analytics, living wallpapers, and an optional **Focus AI** assistant. Any MCP agent (Claude, ChatGPT, Cursor,
+Hermes, OpenClaw, …) can drive the same board, timer, music, settings, and analytics over **MCP**. It's **fully open source** — self-host it
 locally with SQLite, or deploy the hosted/Supabase stack.
 
 ---
@@ -60,11 +60,14 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
   auto-start, and a per-task session timeline.
 - **🗂️ Projects, tasks, subtasks & tags** — full CRUD with notes, priorities, pomodoro estimates, and
   collapsible subtask checklists. Pick which projects to show, or show them all.
-- **🤖 Ask AI** *(optional)* — open **Ask AI** on the Projects tab and dictate changes in plain language:
+- **🤖 Focus AI** *(optional)* — open the floating **Focus AI** button on any tab and dictate changes in plain language:
   add or edit projects and tasks, search the board, and read your focus stats. Actions render as live
   cards and update the board instantly.
-- **🔌 MCP / agents** — Hermes and OpenClaw can run the same surface over MCP (board, timer, music, settings,
-  analytics). Individual local setup, no login. See [For agents](https://focusspace.live/for-agents).
+- **🔌 MCP / agents** — any MCP agent (Claude, ChatGPT, Cursor, Hermes, OpenClaw, …) can run the same surface
+  over MCP (board, timer, music, settings, analytics). Use your focusspace.live account with a token from
+  Settings → Agents & MCP, or have the agent self-host it. See [For agents](https://focusspace.live/for-agents).
+- **🧩 Chrome extension** — live timer, task, subtasks and Spotify controls in your toolbar, synced with the
+  site. Load `extension/` unpacked; see [extension/README.md](./extension/README.md).
 - **🎵 Spotify built in** — Web Playback SDK player with search, playlists, your library, volume/shuffle,
   external-device takeover, and a pop-out mini player.
 - **📊 Analytics & streaks** — focus-time KPIs, a last-7-days bar chart, per-tag and per-project
@@ -160,7 +163,7 @@ npm install
 node scripts/setup-env.mjs
 # Enter Supabase URL, anon key, service role key, site URL (http://localhost:3000)
 
-# Apply migrations 0001–0010 in order via Supabase Dashboard → SQL Editor
+# Apply migrations 0001–0013 in order via Supabase Dashboard → SQL Editor
 #    supabase/migrations/0001_init.sql … 0010_timer_mcp.sql
 
 npm run dev
@@ -241,21 +244,24 @@ docker compose build \
   --build-arg NEXT_PUBLIC_SITE_URL=https://your-domain.com
 ```
 
-Set `FOCUSSPACE_MODE=cloud` (and the same `NEXT_PUBLIC_*` values) at runtime. Apply migrations 0001–0010
+Set `FOCUSSPACE_MODE=cloud` (and the same `NEXT_PUBLIC_*` values) at runtime. Apply migrations 0001–0013
 on the Supabase project first.
 
 ---
 
 ## Agent one-liner
 
-Paste this to Hermes or OpenClaw (supported agents today):
+Works with any MCP agent — Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …
+
+- **Hosted account (nothing to install):** focusspace.live → Settings → Agents & MCP → **New token**, then
+  paste the one-liner it shows. Agent guide: https://focusspace.live/for-agents/cloud.md
+- **Self-host:** paste this to your agent:
 
 ```
-read this and setup focusspace for me https://focusspace.live/for-agents
+Read https://focusspace.live/for-agents.md and self-host FocusSpace for me on this machine.
 ```
 
-Machine-readable twin: https://focusspace.live/for-agents.md  
-Skill: [`skills/focusspace/`](./skills/focusspace/)
+Ready-made Hermes / OpenClaw skill: [`skills/focusspace/`](./skills/focusspace/)
 
 ---
 

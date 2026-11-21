@@ -1,6 +1,6 @@
 # FocusSpace — self-host guide for agents
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Agents control all of it through **MCP tools**: the same actions a human has in the app.
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Any MCP-capable agent (Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …) controls all of it through **MCP tools**: the same actions a human has in the app.
 
 **This guide = self-host.** You install FocusSpace on the human's own machine. It ships with its own MCP server, so after install you connect to that local server. Nothing goes to focusspace.live; all data stays in a local SQLite file.
 
@@ -33,7 +33,7 @@ The local install exposes MCP on the machine itself. **No token is needed** — 
 - **stdio** (works without the web app running; run from the repo root): command `npm run mcp` (= `npx tsx scripts/mcp-stdio.ts`)
   JSON: `{ "mcpServers": { "focusspace": { "command": "npm", "args": ["run", "mcp"], "cwd": "<repo path>" } } }`
 
-Then call `get_workspace_state`: you should see an idle timer and a starter board. Hermes / OpenClaw / Docker specifics: `skills/focusspace/` in the repo.
+Then call `get_workspace_state`: you should see an idle timer and a starter board. Docker details and a ready-made Hermes / OpenClaw skill: `skills/focusspace/` in the repo.
 
 ## Rules
 

@@ -1,6 +1,6 @@
 # FocusSpace — cloud (focusspace.live) guide for agents
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. You control the human's account through **MCP tools**: the same actions they have in the app.
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Any MCP-capable agent (Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …) controls the human's account through **MCP tools**: the same actions they have in the app.
 
 **This guide = hosted.** The human's FocusSpace runs on focusspace.live and their data lives there. **Do not clone, install or run anything.** Your only job is to register a remote MCP server using the token the human gave you, then act on their behalf.
 
@@ -18,7 +18,7 @@ Claude Code:
 claude mcp add --transport http focusspace https://focusspace.live/api/mcp --header "Authorization: Bearer fs_…"
 ```
 
-JSON config — Cursor (`~/.cursor/mcp.json`), Claude Code (`.mcp.json`), Windsurf, Hermes, OpenClaw and most clients:
+JSON config — Cursor (`~/.cursor/mcp.json`), Claude Code (`.mcp.json`), Windsurf, Hermes, OpenClaw and most clients (ChatGPT and other URL-only clients: add it as a custom MCP connector with this URL and header where supported):
 ```json
 { "mcpServers": { "focusspace": { "type": "http", "url": "https://focusspace.live/api/mcp", "headers": { "Authorization": "Bearer fs_…" } } } }
 ```

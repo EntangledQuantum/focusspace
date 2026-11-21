@@ -1,8 +1,8 @@
 ---
 name: focusspace
-description: Install and operate FocusSpace (Pomodoro timer, task board, analytics) over MCP. Use when the user mentions FocusSpace, focusspace.live/for-agents, Pomodoro, local setup, timer, or agent productivity. Supported today: Hermes and OpenClaw. Individual self-host only (local SQLite, no login). Register MCP at http://127.0.0.1:3000/api/mcp or stdio `npx tsx scripts/mcp-stdio.ts`. Always call get_workspace_state first; never auto-start the timer after creating a task.
+description: Install and operate FocusSpace (Pomodoro timer, task board, analytics) over MCP. Use when the user mentions FocusSpace, focusspace.live/for-agents, Pomodoro, local setup, timer, or agent productivity. Works with any MCP agent; drop-in steps for Hermes and OpenClaw. Individual self-host only (local SQLite, no login). Register MCP at http://127.0.0.1:3000/api/mcp or stdio `npx tsx scripts/mcp-stdio.ts`. Always call get_workspace_state first; never auto-start the timer after creating a task.
 license: MIT
-compatibility: Requires Node 20+ or Docker. Hermes or OpenClaw. Individual local SQLite setup only.
+compatibility: Requires Node 20+ or Docker. Any MCP client (drop-in steps for Hermes and OpenClaw). Individual local SQLite setup only.
 metadata:
   author: EntangledQuantum
   version: "1.0.0"
@@ -20,7 +20,7 @@ metadata:
 
 FocusSpace is a Pomodoro + task board. Agents can do everything a human can on the local app: board CRUD, timer control, music (Spotify), settings, and analytics — all over MCP.
 
-**Supported agents today:** Hermes and OpenClaw. iOS and Android apps are planned.
+**Works with any MCP agent** (Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …). This skill has ready-made drop-in steps for Hermes and OpenClaw; for other clients register the same MCP server in their config. iOS and Android apps are planned.
 
 **Setup mode today:** individual self-host only. Local SQLite at `~/.focusspace/focusspace.db`, no login, one implicit user. Per-user auth for this mode is coming later.
 

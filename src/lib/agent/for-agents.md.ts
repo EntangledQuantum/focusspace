@@ -94,7 +94,7 @@ tz: Europe/Berlin · deletes: confirm
 
 export const FOR_AGENTS_MD = `# FocusSpace — self-host guide for agents
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Agents control all of it through **MCP tools**: the same actions a human has in the app.
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Any MCP-capable agent (Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …) controls all of it through **MCP tools**: the same actions a human has in the app.
 
 **This guide = self-host.** You install FocusSpace on the human's own machine. It ships with its own MCP server, so after install you connect to that local server. Nothing goes to focusspace.live; all data stays in a local SQLite file.
 
@@ -127,13 +127,13 @@ The local install exposes MCP on the machine itself. **No token is needed** — 
 - **stdio** (works without the web app running; run from the repo root): command \`npm run mcp\` (= \`npx tsx scripts/mcp-stdio.ts\`)
   JSON: \`{ "mcpServers": { "focusspace": { "command": "npm", "args": ["run", "mcp"], "cwd": "<repo path>" } } }\`
 
-Then call \`get_workspace_state\`: you should see an idle timer and a starter board. Hermes / OpenClaw / Docker specifics: \`skills/focusspace/\` in the repo.
+Then call \`get_workspace_state\`: you should see an idle timer and a starter board. Docker details and a ready-made Hermes / OpenClaw skill: \`skills/focusspace/\` in the repo.
 
 ${TOOL_REFERENCE_MD}`;
 
 export const FOR_AGENTS_CLOUD_MD = `# FocusSpace — cloud (focusspace.live) guide for agents
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. You control the human's account through **MCP tools**: the same actions they have in the app.
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Any MCP-capable agent (Claude, ChatGPT, Cursor, Windsurf, Hermes, OpenClaw, …) controls the human's account through **MCP tools**: the same actions they have in the app.
 
 **This guide = hosted.** The human's FocusSpace runs on focusspace.live and their data lives there. **Do not clone, install or run anything.** Your only job is to register a remote MCP server using the token the human gave you, then act on their behalf.
 
@@ -151,7 +151,7 @@ Claude Code:
 claude mcp add --transport http focusspace ${SITE}/api/mcp --header "Authorization: Bearer fs_…"
 \`\`\`
 
-JSON config — Cursor (\`~/.cursor/mcp.json\`), Claude Code (\`.mcp.json\`), Windsurf, Hermes, OpenClaw and most clients:
+JSON config — Cursor (\`~/.cursor/mcp.json\`), Claude Code (\`.mcp.json\`), Windsurf, Hermes, OpenClaw and most clients (ChatGPT and other URL-only clients: add it as a custom MCP connector with this URL and header where supported):
 \`\`\`json
 { "mcpServers": { "focusspace": { "type": "http", "url": "${SITE}/api/mcp", "headers": { "Authorization": "Bearer fs_…" } } } }
 \`\`\`

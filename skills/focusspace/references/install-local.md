@@ -76,7 +76,7 @@ With the app running:
 - HTTP: `http://127.0.0.1:3000/api/mcp`
 - stdio (from the repo root): `npx tsx scripts/mcp-stdio.ts`
 
-Then register the server in Hermes or OpenClaw ([hermes.md](hermes.md), [openclaw.md](openclaw.md)) and call `get_workspace_state`.
+Then register the server in your MCP client — Claude, Cursor, Hermes, OpenClaw, … (drop-in steps: [hermes.md](hermes.md), [openclaw.md](openclaw.md)) and call `get_workspace_state`.
 
 ## Notes
 
