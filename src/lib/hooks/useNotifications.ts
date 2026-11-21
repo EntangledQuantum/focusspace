@@ -1,13 +1,17 @@
 "use client";
 
-import { useCallback } from "react";
-import { playTone } from "@/lib/audio/tones";
+import { useCallback, useEffect } from "react";
+import { installAudioUnlock, playSound } from "@/lib/audio/tones";
+import { resolveSoundSettings, toneFor, type SoundKind, type SoundSettingsInput } from "@/lib/audio/sound-settings";
 
-export function useNotifications(settings: {
+export function useNotifications(settings: (SoundSettingsInput & {
   dnd_during_focus: boolean;
   browser_notifs_enabled: boolean;
-  completion_tone: string;
-} | null) {
+}) | null) {
+  // Any interaction with the page unlocks audio, so a session that ends while
+  // the tab is hidden can still play its sound.
+  useEffect(() => installAudioUnlock(), []);
+
   const requestPermission = useCallback(async () => {
     if ("Notification" in window && Notification.permission === "default") {
       await Notification.requestPermission();
@@ -15,12 +19,13 @@ export function useNotifications(settings: {
   }, []);
 
   const notifyCompletion = useCallback(
-    async (title: string, body: string, isDuringFocus = false) => {
-      const tone = settings?.completion_tone ?? "soft-chime";
+    async (title: string, body: string, opts: { kind?: SoundKind; isDuringFocus?: boolean } = {}) => {
+      const sound = resolveSoundSettings(settings);
       const dnd = settings?.dnd_during_focus ?? false;
 
-      if (!dnd || !isDuringFocus) {
-        await playTone(tone).catch(() => {});
+      if (sound.enabled && (!dnd || !opts.isDuringFocus)) {
+        const kind = opts.kind ?? "focus";
+        void playSound(toneFor(kind, sound), { kind, volume: sound.volume }).catch(() => {});
       }
 
       if (

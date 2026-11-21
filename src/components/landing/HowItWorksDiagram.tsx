@@ -97,7 +97,7 @@ function Desktop() {
         strokeWidth="1.7"
         markerEnd="url(#how-ah-blue)"
       />
-      {/* Hermes / OpenClaw → tools */}
+      {/* MCP agents → tools */}
       <path
         className="landing-flow-slow"
         d="M 500 168 C 460 176, 448 236, 430 258"
@@ -140,7 +140,7 @@ function Desktop() {
       </text>
 
       <Node x={500} y={42} w={184} h={72} title="Ask AI" sub="in-app assistant" fill="url(#how-ai)" stroke="rgba(143,182,255,0.45)" />
-      <Node x={500} y={132} w={184} h={72} title="Hermes / OpenClaw" sub="via MCP" fill="rgba(176,107,246,0.12)" stroke="rgba(176,107,246,0.42)" />
+      <Node x={500} y={132} w={184} h={72} title="Any MCP agent" sub="Claude · ChatGPT · Hermes…" fill="rgba(176,107,246,0.12)" stroke="rgba(176,107,246,0.42)" />
 
       <rect x={150} y={248} width={420} height={118} rx={22} fill="rgba(19,16,23,0.55)" stroke="rgba(255,255,255,0.12)" strokeWidth={1.4} />
       <text
@@ -183,7 +183,7 @@ function Mobile() {
     { title: "You", sub: "Pick a task. Run the ring.", tone: "rgba(255,255,255,0.06)" },
     { title: "FocusSpace core", sub: "One workspace. Your data.", tone: "color-mix(in srgb, var(--color-primary) 14%, transparent)" },
     { title: "Ask AI · in-app", sub: "Type it. Tools run. Board updates.", tone: "color-mix(in srgb, #8fb6ff 16%, transparent)" },
-    { title: "Hermes / OpenClaw · MCP", sub: "Agents use the same tools you do.", tone: "color-mix(in srgb, var(--color-secondary) 16%, transparent)" },
+    { title: "Any MCP agent", sub: "Claude, ChatGPT, Cursor, Hermes, OpenClaw — same tools you use.", tone: "color-mix(in srgb, var(--color-secondary) 16%, transparent)" },
     { title: "Same tool layer", sub: "tasks · timer · music · analytics", tone: "rgba(255,255,255,0.05)" },
   ];
 

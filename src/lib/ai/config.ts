@@ -8,22 +8,28 @@ export interface AiServerConfig {
   baseURL?: string;
   apiKey?: string;
   defaultModel: string;
+  /** Explicit allow-list from AI_ALLOWED_MODELS (or just the default model). */
   allowedModels: string[];
+  /** AI_ALLOWED_MODELS=* → expose every chat model the gateway key can list. */
+  allowAllModels: boolean;
   freeMonthlyTokens: number;
   maxSteps: number;
 }
 
 export function aiServerConfig(): AiServerConfig {
   const defaultModel = process.env.AI_DEFAULT_MODEL || "gpt-4o-mini";
-  const allowed = (process.env.AI_ALLOWED_MODELS || defaultModel)
+  const rawAllowed = (process.env.AI_ALLOWED_MODELS || "").trim();
+  const allowAllModels = rawAllowed === "*";
+  const allowed = (allowAllModels ? "" : rawAllowed || defaultModel)
     .split(",")
     .map((s) => s.trim())
     .filter(Boolean);
   return {
-    baseURL: process.env.AI_BASE_URL,
+    baseURL: process.env.AI_BASE_URL?.trim().replace(/\/+$/, "") || undefined,
     apiKey: process.env.AI_API_KEY,
     defaultModel,
     allowedModels: allowed.length ? allowed : [defaultModel],
+    allowAllModels,
     freeMonthlyTokens: parseInt(process.env.AI_FREE_MONTHLY_TOKENS || "150000", 10),
     maxSteps: parseInt(process.env.AI_MAX_STEPS || "8", 10),
   };

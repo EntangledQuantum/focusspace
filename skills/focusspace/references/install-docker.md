@@ -51,7 +51,7 @@ HTTP (app must be up): `http://127.0.0.1:3000/api/mcp`
 
 stdio from a container is awkward; prefer HTTP. If you have Node on the host and a checkout, you can still run `npx tsx scripts/mcp-stdio.ts` against the same `~/.focusspace` data dir — but only if `FOCUSSPACE_DATA_DIR` points at the same files the container uses. For Docker-first setups, use HTTP.
 
-Register the server in Hermes or OpenClaw ([hermes.md](hermes.md), [openclaw.md](openclaw.md)) and call `get_workspace_state`.
+Register the server in your MCP client — Claude, Cursor, Hermes, OpenClaw, … (drop-in steps: [hermes.md](hermes.md), [openclaw.md](openclaw.md)) and call `get_workspace_state`.
 
 ## Useful commands
 

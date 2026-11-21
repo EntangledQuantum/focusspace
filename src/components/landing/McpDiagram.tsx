@@ -6,7 +6,7 @@ const EASE = [0.22, 1, 0.36, 1] as const;
 
 function Desktop() {
   return (
-    <svg viewBox="0 0 720 380" className="w-full h-auto" role="img" aria-label="Hermes and OpenClaw connect to FocusSpace over MCP">
+    <svg viewBox="0 0 720 380" className="w-full h-auto" role="img" aria-label="Any MCP agent — Claude, ChatGPT, Cursor, Hermes, OpenClaw — connects to FocusSpace over MCP">
       <defs>
         <linearGradient id="mcp-stroke" x1="0" y1="0" x2="1" y2="1">
           <stop offset="0%" stopColor="#ff5fa2" />
@@ -28,21 +28,21 @@ function Desktop() {
         </marker>
       </defs>
 
-      {/* Hermes → MCP */}
+      {/* Claude / ChatGPT → MCP */}
       <path className="landing-flow" d="M 176 78 C 260 78, 280 168, 300 188" fill="none" stroke="#ff5fa2" strokeWidth="1.8" markerEnd="url(#mcp-ah)" />
-      {/* OpenClaw → MCP */}
+      {/* Hermes / OpenClaw → MCP */}
       <path className="landing-flow-slow" d="M 176 302 C 260 302, 280 212, 300 196" fill="none" stroke="#8fb6ff" strokeWidth="1.8" markerEnd="url(#mcp-ah)" />
       {/* MCP → tools */}
       <path className="landing-flow" d="M 420 190 H 508" fill="none" stroke="url(#mcp-bus)" strokeWidth="1.9" markerEnd="url(#mcp-ah)" />
 
       {/* Agents */}
       <rect x={28} y={36} width={148} height={84} rx={20} fill="rgba(255,95,162,0.10)" stroke="rgba(255,95,162,0.38)" />
-      <text x={102} y={74} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 800 }}>Hermes</text>
-      <text x={102} y={94} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>desktop agent</text>
+      <text x={102} y={74} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 13.5, fontWeight: 800 }}>Claude · ChatGPT</text>
+      <text x={102} y={94} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>Cursor · any MCP client</text>
 
       <rect x={28} y={260} width={148} height={84} rx={20} fill="rgba(143,182,255,0.10)" stroke="rgba(143,182,255,0.38)" />
-      <text x={102} y={298} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 15, fontWeight: 800 }}>OpenClaw</text>
-      <text x={102} y={318} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>desktop agent</text>
+      <text x={102} y={298} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 13.5, fontWeight: 800 }}>Hermes · OpenClaw</text>
+      <text x={102} y={318} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>desktop agents</text>
 
       {/* MCP bus */}
       <g filter="url(#mcp-glow)">
@@ -54,7 +54,7 @@ function Desktop() {
       {/* FocusSpace tools */}
       <rect x={508} y={78} width={184} height={224} rx={22} fill="rgba(19,16,23,0.55)" stroke="rgba(255,255,255,0.12)" />
       <text x={600} y={112} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800 }}>FocusSpace</text>
-      <text x={600} y={130} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>local · no login</text>
+      <text x={600} y={130} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>hosted or local</text>
       {["tasks & subtasks", "timer + music", "analytics", "asks before the ring"].map((label, i) => (
         <g key={label}>
           <rect x={528} y={148 + i * 34} width={144} height={26} rx={13} fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.10)" />
@@ -65,16 +65,16 @@ function Desktop() {
       ))}
 
       <text x={360} y={364} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11.5 }}>
-        Paste the one-liner. The agent installs the app and wires the tools.
+        Paste the one-liner. The agent connects to your account — or installs it locally.
       </text>
     </svg>
   );
 }
 
 const MOBILE = [
-  { title: "Hermes or OpenClaw", sub: "The agents that work today. iOS and Android are planned." },
+  { title: "Any MCP agent", sub: "Claude, ChatGPT, Cursor, Hermes, OpenClaw and more." },
   { title: "MCP", sub: "One protocol into the same tool layer a human uses." },
-  { title: "Local FocusSpace", sub: "No login. SQLite on the machine. Tasks, timer, music, analytics." },
+  { title: "Your FocusSpace", sub: "Hosted with a token, or local with no login. Tasks, timer, music, analytics." },
   { title: "Then it asks", sub: "After adding a task, the agent asks before starting the timer." },
 ];
 

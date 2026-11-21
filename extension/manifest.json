@@ -1,0 +1,44 @@
+{
+  "manifest_version": 3,
+  "name": "FocusSpace",
+  "version": "0.9.0",
+  "version_name": "0.9.0 beta",
+  "description": "Your FocusSpace timer, task and music from the toolbar. Synced live with focusspace.live.",
+  "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAvXYijF0YZHgpI639HleMCmT/yz3xO6lhrDlEAfiAqxT3uLHTD2W3pd5obV78yMxDjxmWbXaeVdO0rgGpDKpWvqwM5JvpNxWx950K+dK+X5EAGwvpZ08vfO4rJdt0xAh+suWSAhVcilfmrH1sL1mDnzlDi6/zYwD/drWpdHmFzKJ5v1Ne1fcuWXFIrXQkOPErqvOEHjCVvaoj/Si/zRsybPap85aF/P/Om6CeYK2ArQ0T5O5w9y2qUqleTwezfzmVpT2JMuna0N3Xo1O4m2Y1GZE1r2r0lHBzlxrYpV8RSy1tU2RBuQgr+q0t8HwxG29SH1yKC4JmAFYBnVe2bkN41QIDAQAB",
+  "icons": {
+    "16": "icons/icon16.png",
+    "32": "icons/icon32.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_title": "FocusSpace",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "32": "icons/icon32.png"
+    }
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": ["storage", "alarms", "notifications"],
+  "host_permissions": [
+    "https://focusspace.live/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": ["https://*/*", "http://*/*"],
+  "externally_connectable": {
+    "matches": [
+      "https://focusspace.live/*",
+      "http://localhost/*",
+      "http://127.0.0.1/*"
+    ]
+  }
+}

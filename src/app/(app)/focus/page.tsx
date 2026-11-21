@@ -4,7 +4,6 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
-import { useTimerSync } from "@/lib/hooks/useTimerSync";
 import { useTimerStore } from "@/lib/stores/timer";
 import { useUiStore } from "@/lib/stores/ui";
 import { useNotifications } from "@/lib/hooks/useNotifications";
@@ -20,7 +19,6 @@ import type { Project, Subtask, TaskWithTags } from "@/types/database";
 export default function FocusPage() {
   const supabase = createClient();
   const qc = useQueryClient();
-  useTimerSync();
 
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
   const [activeTask, setActiveTask] = useState<TaskWithTags | null>(null);
@@ -74,6 +72,29 @@ export default function FocusPage() {
   const timer = useTimer();
   const { requestPermission, notifyCompletion } = useNotifications(settings ?? null);
 
+  // Follow task switches made elsewhere (Chrome extension / MCP) while this page is open.
+  const syncedTaskRef = useRef(useTimerStore.getState().currentTaskId);
+  useEffect(() => {
+    const id = timer.currentTaskId;
+    if (id === syncedTaskRef.current) return;
+    syncedTaskRef.current = id;
+    if (id === activeTask?.id) return;
+    void loadActiveTask(id, timer.currentProjectId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timer.currentTaskId]);
+
+  /** Show a task and, while the clock is idle, make it the timer's task so other devices see it too. */
+  function adoptTask(task: TaskWithTags | null, project: Project | null) {
+    setActiveTask(task);
+    setActiveProject(project);
+    const s = useTimerStore.getState();
+    const id = task?.id ?? null;
+    if (s.status === "running" || s.status === "paused" || s.currentTaskId === id) return;
+    syncedTaskRef.current = id;
+    useTimerStore.setState({ currentTaskId: id, currentProjectId: project?.id ?? task?.project_id ?? null, pomodoroCount: 0 });
+    void timer.persist();
+  }
+
   const pomoDurationSec = settings?.focus_duration_sec ?? 25 * 60;
   const longBreakEvery = settings?.long_break_every ?? 4;
 
@@ -108,31 +129,41 @@ export default function FocusPage() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
   }
 
+  async function loadActiveTask(currentTaskId: string | null, currentProjectId: string | null) {
+    if (!currentTaskId) {
+      setActiveTask(null);
+      setActiveProject(null);
+      return;
+    }
+    const { data: task } = await supabase
+      .from("tasks")
+      .select("*, task_tags(tag_id, tags(id, name, color))")
+      .eq("id", currentTaskId)
+      .maybeSingle();
+    if (task) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const t = task as any;
+      setActiveTask({
+        ...t,
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
+      } as TaskWithTags);
+    }
+    const projectId = currentProjectId ?? (task as { project_id?: string | null } | null)?.project_id ?? null;
+    if (projectId) {
+      const { data: project } = await supabase
+        .from("projects").select("*").eq("id", projectId).maybeSingle();
+      setActiveProject((project as Project | null) ?? null);
+    } else {
+      setActiveProject(null);
+    }
+  }
+
   // On mount: restore task/project that were active when the browser was closed
   useEffect(() => {
     const { currentTaskId, currentProjectId } = useTimerStore.getState();
     if (!currentTaskId) return;
-    (async () => {
-      const { data: task } = await supabase
-        .from("tasks")
-        .select("*, task_tags(tag_id, tags(id, name, color))")
-        .eq("id", currentTaskId)
-        .maybeSingle();
-      if (task) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const t = task as any;
-        setActiveTask({
-          ...t,
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          tags: (t.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
-        } as TaskWithTags);
-      }
-      if (currentProjectId) {
-        const { data: project } = await supabase
-          .from("projects").select("*").eq("id", currentProjectId).maybeSingle();
-        if (project) setActiveProject(project as Project);
-      }
-    })();
+    void loadActiveTask(currentTaskId, currentProjectId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -161,10 +192,12 @@ export default function FocusPage() {
   }, [settings]);
 
   const handleSessionComplete = useCallback(async () => {
-    await timer.completeSession();
+    // Alert first: recording the session is several network round-trips, and
+    // the sound shouldn't wait on (or be lost to) a slow/failed request.
     const label = isBreak ? "Break complete — back to work!" : "Session complete! Great focus.";
-    notifyCompletion(label, activeTask?.title ?? "");
+    notifyCompletion(label, activeTask?.title ?? "", { kind: isBreak ? "break" : "focus" });
     toast.success(label);
+    await timer.completeSession();
 
     // Immediately update local task completed count so timeline reflects it
     if (!isBreak && activeTask) {
@@ -289,16 +322,14 @@ export default function FocusPage() {
       }
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const n = next as any;
-      setActiveTask({
+      adoptTask({
         ...n,
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         tags: (n.task_tags ?? []).map((tt: any) => tt.tags).filter(Boolean),
-      } as TaskWithTags);
-      setActiveProject(nextProject);
+      } as TaskWithTags, nextProject);
       toast.success(`Done! Now: ${next.title}`);
     } else {
-      setActiveTask(null);
-      setActiveProject(null);
+      adoptTask(null, null);
       toast.success("Task complete! No more tasks.");
     }
   }
@@ -317,8 +348,7 @@ export default function FocusPage() {
   }
 
   function selectTask(task: TaskWithTags, project: Project | null) {
-    setActiveTask(task);
-    setActiveProject(project);
+    adoptTask(task, project);
     if (timer.status === "idle" || timer.status === "completed") {
       toast.success(`Ready: ${task.title}`);
     }

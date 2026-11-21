@@ -2,21 +2,16 @@ import { tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
-import { executeConfirmedAction } from "./confirm";
-import { remainingSec, writeTimerState, readTimerState } from "@/lib/timer/persist";
-import { MAX_ESTIMATED_POMOS } from "@/lib/mode";
+import { performDelete, DESTRUCTIVE_ACTIONS } from "./confirm";
+import { UUID_RE, ToolError, type makeResolvers } from "./resolve";
+import { formatStatus, timerLine } from "./status";
+import { readTimerState } from "@/lib/timer/persist";
+import { CommandError, getExtensionState, runTaskCommand, runTimerCommand, type TimerAction } from "@/lib/extension/service";
+import { SOUND_PRESETS, type SoundPresetId } from "@/lib/audio/sound-settings";
 
 type DB = SupabaseClient<Database>;
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-async function resolveTask(supabase: DB, ref: string) {
-  if (UUID_RE.test(ref)) {
-    const { data } = await supabase.from("tasks").select("*").eq("id", ref).maybeSingle();
-    if (data) return data;
-  }
-  const { data } = await supabase.from("tasks").select("*").ilike("title", `%${ref}%`).order("created_at", { ascending: false }).limit(1);
-  return data?.[0] ?? null;
-}
+type Resolvers = ReturnType<typeof makeResolvers>;
+type TaskRow = Database["public"]["Tables"]["tasks"]["Row"];
 
 function fmtDur(sec: number) {
   const m = Math.round(sec / 60);
@@ -24,84 +19,151 @@ function fmtDur(sec: number) {
   return h ? `${h}h ${m % 60}m` : `${m}m`;
 }
 
-export function makeExtraTools(supabase: DB, userId: string, opts: { destructive: "allow" | "confirm" }): ToolSet {
+const TONE_IDS = SOUND_PRESETS.map((p) => p.id) as [SoundPresetId, ...SoundPresetId[]];
+const TIMER_MODE = z.enum(["pomodoro", "custom", "short_break", "long_break"]);
+
+/**
+ * `supabase` must already be user-scoped (see scopeToUser) — makeTaskTools
+ * passes the scoped client and shared resolvers. Timer commands go through
+ * the same service as the Chrome extension (lib/extension/service.ts), so
+ * every remote client follows one set of rules (optimistic concurrency,
+ * overdue sessions recorded, accidental <10s sessions dropped).
+ */
+export function makeExtraTools(
+  supabase: DB,
+  userId: string,
+  opts: { destructive: "allow" | "confirm" },
+  resolve: Resolvers,
+): ToolSet {
+  /** Task from an explicit ref, else the first open task of a project. */
+  async function pickTask(taskRef?: string, projectRef?: string): Promise<TaskRow | null> {
+    if (taskRef) {
+      const project = projectRef ? await resolve.project(projectRef) : null;
+      return resolve.task(taskRef, project?.id);
+    }
+    if (projectRef) {
+      const p = await resolve.project(projectRef);
+      const { data } = await supabase.from("tasks").select("*").eq("project_id", p.id).eq("status", "todo").order("sort_order").limit(1);
+      if (!data?.[0]) throw new ToolError(`"${p.name}" has no open tasks.`);
+      return data[0];
+    }
+    return null;
+  }
+
+  /** Run a service command, turning its conflicts into tool errors the agent can read. */
+  async function command<T>(fn: () => Promise<T>): Promise<T> {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof CommandError) throw new ToolError(e.message);
+      throw e;
+    }
+  }
+
+  async function timezone(): Promise<string | null> {
+    const { data } = await supabase.from("profiles").select("timezone").maybeSingle();
+    return data?.timezone ?? null;
+  }
+
+  /** Timer line after a command — the agent sees the new state without another call. */
+  async function timerAfter(prefix: string): Promise<string> {
+    const [state, tz] = await Promise.all([getExtensionState(supabase, userId), timezone()]);
+    const task = state.task ? ` · task: ${state.task.title} (id: ${state.task.id})` : "";
+    return `${prefix}\n${timerLine(state, tz)}${task}`;
+  }
+
+  async function nowPlaying(): Promise<string | null> {
+    const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+    const auth = await getUserSpotifyAccessToken(supabase, userId);
+    if ("error" in auth) return null;
+    try {
+      const res = await spotifyUserFetch(auth.token, "/me/player");
+      if (res.status === 204 || !res.ok) return "nothing playing";
+      const p = res.json as { is_playing?: boolean; item?: { name?: string; artists?: { name: string }[] } } | null;
+      if (!p?.item) return "nothing playing";
+      return `${p.is_playing ? "playing" : "paused"} · ${p.item.name} — ${(p.item.artists ?? []).map((a) => a.name).join(", ")}`;
+    } catch {
+      return "unavailable";
+    }
+  }
+
+  const simple = (action: TimerAction, done: string) => tool({
+    description: {
+      pause: "Pause the running timer.",
+      resume: "Resume a paused timer.",
+      skip: "Skip the current session — ends it without counting it as completed (sessions under 10s are discarded).",
+      stop: "Stop / reset the timer: ends the current session (not counted) and returns to idle. Keeps the selected task and its completed pomodoros.",
+      start: "",
+    }[action],
+    inputSchema: z.object({}),
+    execute: async () => {
+      await command(() => runTimerCommand(supabase, userId, action));
+      return timerAfter(done);
+    },
+  });
+
   return {
     get_workspace_state: tool({
       description:
-        "REQUIRED FIRST CALL. Snapshot of the live timer, current task, and the user's Pomodoro settings. " +
-        "Call this before creating/editing tasks or touching the timer so estimates use the real focus length.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const [{ data: settings }, { data: profile }, timer] = await Promise.all([
-          supabase.from("user_settings").select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, ai_destructive, theme, spotify_refresh_token").eq("user_id", userId).maybeSingle(),
-          supabase.from("profiles").select("display_name, timezone").eq("id", userId).maybeSingle(),
-          readTimerState(supabase, userId),
+        "CALL FIRST. Compact live status: timer (running/paused/idle, mode, mm:ss + seconds left, ends_at), selected task + subtasks, project, " +
+        "pomodoro cycle, timer settings, Spotify now playing, timezone. Cheap — call again whenever you need fresh state.",
+      inputSchema: z.object({ music: z.boolean().optional().default(true).describe("Include Spotify now playing (one extra API call)") }),
+      execute: async ({ music }) => {
+        const [state, { data: s }, { data: profile }] = await Promise.all([
+          getExtensionState(supabase, userId),
+          supabase.from("user_settings").select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, ai_destructive, spotify_refresh_token").maybeSingle(),
+          supabase.from("profiles").select("timezone").maybeSingle(),
         ]);
-        const focusSec = settings?.focus_duration_sec ?? 1500;
-        const focusMin = Math.round(focusSec / 60);
-        let currentTask: string | null = null;
-        if (timer?.currentTaskId) {
-          const { data: t } = await supabase.from("tasks").select("id, title, estimated_pomodoros, completed_pomodoros, status").eq("id", timer.currentTaskId).maybeSingle();
-          if (t) currentTask = `${t.title} (id: ${t.id}) [${t.completed_pomodoros}/${t.estimated_pomodoros} pomos, ${t.status}]`;
-        }
-        const rem = timer ? remainingSec(timer) : focusSec;
-        return [
-          `Timezone: ${profile?.timezone || "UTC"}${profile?.display_name ? ` · User: ${profile.display_name}` : ""}`,
-          `Focus length: ${focusMin} min per pomodoro (${focusSec}s). Short break ${Math.round((settings?.short_break_sec ?? 300) / 60)} min. Long break ${Math.round((settings?.long_break_sec ?? 900) / 60)} min every ${settings?.long_break_every ?? 4} pomos.`,
-          `Estimate rule: estimated_pomodoros = ceil(taskMinutes / ${focusMin}). Max ${MAX_ESTIMATED_POMOS}. Half values (1.5) are allowed.`,
-          `Destructive deletes: ${settings?.ai_destructive ?? opts.destructive}.`,
-          timer
-            ? `Timer: ${timer.status} · mode ${timer.mode} · remaining ${fmtDur(rem)} · pomodoro count ${timer.pomodoroCount}`
-            : "Timer: idle (no snapshot yet).",
-          `Current task: ${currentTask ?? "(none)"}`,
-          settings?.spotify_refresh_token
-            ? "Spotify: connected. Use now_playing, search_music, play_music, pause_music, resume_music, next_track, previous_track, set_volume, set_shuffle."
-            : "Spotify: not connected. The user must connect it in Settings → Music before music tools work.",
-          `After you create a task, ASK the user if they want you to start the timer. Do not auto-start.`,
-        ].join("\n");
+        return formatStatus(state, {
+          timezone: profile?.timezone,
+          destructive: s?.ai_destructive ?? opts.destructive,
+          settings: {
+            focusSec: s?.focus_duration_sec ?? 1500,
+            shortBreakSec: s?.short_break_sec ?? 300,
+            longBreakSec: s?.long_break_sec ?? 900,
+            longBreakEvery: s?.long_break_every ?? 4,
+            autoStartBreaks: s?.auto_start_breaks,
+            autoStartPomodoros: s?.auto_start_pomodoros,
+          },
+          music: music && s?.spotify_refresh_token ? await nowPlaying() : music ? null : undefined,
+        });
       },
     }),
 
     reset_task_progress: tool({
       description:
-        "Start a task over: uncheck ALL its subtasks, set completed pomodoros to 0, and reset the timer cycle if this task is active. Same as the dock Reset button.",
-      inputSchema: z.object({ taskRef: z.string() }),
+        "Start a task over: uncheck ALL its subtasks, set completed pomodoros to 0, and stop the timer if this task is running. Same as the dock Reset button.",
+      inputSchema: z.object({ taskRef: z.string().min(1) }),
       execute: async ({ taskRef }) => {
-        const t = await resolveTask(supabase, taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
+        const t = await resolve.task(taskRef);
+        const timer = await readTimerState(supabase, userId);
+        if (timer?.currentTaskId === t.id && (timer.status === "running" || timer.status === "paused")) {
+          await command(() => runTimerCommand(supabase, userId, "stop"));
+        }
         await supabase.from("subtasks").update({ done: false }).eq("task_id", t.id);
         await supabase.from("tasks").update({ completed_pomodoros: 0 }).eq("id", t.id);
-        const timer = await readTimerState(supabase, userId);
-        if (timer && timer.currentTaskId === t.id) {
-          await writeTimerState(supabase, userId, {
-            ...timer,
-            status: "idle",
-            startedAt: null,
-            pausedAt: null,
-            accumulatedPausedMs: 0,
-            currentSessionId: null,
-            pomodoroCount: 0,
-            source: "mcp",
-          });
-        }
-        return `Reset "${t.title}" — all subtasks unchecked, session timeline cleared.`;
+        return `Reset "${t.title}" (id: ${t.id}) — subtasks unchecked, pomodoros 0.`;
       },
     }),
 
     get_settings: tool({
-      description: "Read timer and app settings (focus length, breaks, auto-start, theme, destructive policy).",
+      description: "Read timer, sound and app settings as compact JSON (durations in seconds).",
       inputSchema: z.object({}),
       execute: async () => {
-        const { data } = await supabase.from("user_settings").select(
-          "focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, theme, ai_destructive, dnd_during_focus, completion_tone",
-        ).eq("user_id", userId).maybeSingle();
+        const cols = [
+          "focus_duration_sec", "short_break_sec", "long_break_sec", "long_break_every", "auto_start_breaks", "auto_start_pomodoros",
+          "theme", "ai_destructive", "dnd_during_focus", "completion_tone", "break_end_tone", "sound_enabled", "sound_volume",
+        ] as const;
+        const { data } = await supabase.from("user_settings").select(cols.join(", ")).maybeSingle();
         if (!data) return "No settings yet.";
-        return JSON.stringify(data, null, 2);
+        // Project explicitly: the local SQLite shim returns every column (incl. secrets like Spotify tokens).
+        const row = data as unknown as Record<string, unknown>;
+        return JSON.stringify(Object.fromEntries(cols.map((c) => [c, row[c]])));
       },
     }),
 
     update_settings: tool({
-      description: "Change timer/app settings. Durations are in SECONDS.",
+      description: "Change timer/app settings: durations (in SECONDS), auto-start, theme, delete confirmation, and notification sounds (on/off, volume, tones).",
       inputSchema: z.object({
         focusDurationSec: z.number().int().min(300).max(7200).optional(),
         shortBreakSec: z.number().int().min(60).max(1800).optional(),
@@ -111,6 +173,11 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
         autoStartPomodoros: z.boolean().optional(),
         theme: z.enum(["dark", "light", "system"]).optional(),
         destructive: z.enum(["allow", "confirm"]).optional(),
+        soundEnabled: z.boolean().optional().describe("Master on/off for notification sounds"),
+        soundVolume: z.number().int().min(0).max(100).optional().describe("Notification volume 0–100"),
+        focusEndTone: z.enum(TONE_IDS).optional().describe("Sound when a focus session ends"),
+        breakEndTone: z.enum(TONE_IDS).optional().describe("Sound when a break ends"),
+        muteDuringFocus: z.boolean().optional().describe("Do-not-disturb: mute tones during focus"),
       }),
       execute: async (input) => {
         const patch: Database["public"]["Tables"]["user_settings"]["Update"] = {};
@@ -122,151 +189,72 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
         if (input.autoStartPomodoros !== undefined) patch.auto_start_pomodoros = input.autoStartPomodoros;
         if (input.theme !== undefined) patch.theme = input.theme;
         if (input.destructive !== undefined) patch.ai_destructive = input.destructive;
-        if (!Object.keys(patch).length) return "Nothing to update.";
-        const { error } = await supabase.from("user_settings").update(patch).eq("user_id", userId);
-        return error ? `Failed: ${error.message}` : `Updated settings: ${Object.keys(patch).join(", ")}.`;
+        if (input.soundEnabled !== undefined) patch.sound_enabled = input.soundEnabled;
+        if (input.soundVolume !== undefined) patch.sound_volume = input.soundVolume;
+        if (input.focusEndTone !== undefined) patch.completion_tone = input.focusEndTone;
+        if (input.breakEndTone !== undefined) patch.break_end_tone = input.breakEndTone;
+        if (input.muteDuringFocus !== undefined) patch.dnd_during_focus = input.muteDuringFocus;
+        if (!Object.keys(patch).length) throw new ToolError("Nothing to update — pass at least one setting.");
+        const { error } = await supabase.from("user_settings").update(patch);
+        if (error) throw new ToolError(`Couldn't update settings: ${error.message}`);
+        return `Updated settings: ${Object.keys(patch).join(", ")}.`;
       },
     }),
 
+    // ─── TIMER ─────────────────────────────────────────────────────────
+    // Writes timer_state; open FocusSpace tabs and the extension follow it.
     start_timer: tool({
-      description: "Start a focus (or break) session. Ask the user first after creating a new task. Uses their configured focus length unless durationSec is passed.",
+      description:
+        "Start a session. mode: pomodoro (default, uses the focus length), custom, short_break, long_break. durationSec overrides the length. " +
+        "taskRef (or projectRef → its first open task) picks the task; omit to keep the selected one. " +
+        "Switching to a different task ends a running session first; otherwise starting while a session runs is an error (pause/stop it). " +
+        "After creating a task, ASK the user before starting.",
       inputSchema: z.object({
-        mode: z.enum(["pomodoro", "custom", "short_break", "long_break"]).optional().default("pomodoro"),
+        mode: TIMER_MODE.optional(),
         taskRef: z.string().optional(),
+        projectRef: z.string().optional(),
         durationSec: z.number().int().min(60).max(14400).optional(),
       }),
-      execute: async ({ mode, taskRef, durationSec }) => {
-        const { data: settings } = await supabase.from("user_settings").select("focus_duration_sec, short_break_sec, long_break_sec").eq("user_id", userId).maybeSingle();
-        const task = taskRef ? await resolveTask(supabase, taskRef) : null;
-        if (taskRef && !task) return `No task matching "${taskRef}".`;
-        const defaults: Record<string, number> = {
-          pomodoro: settings?.focus_duration_sec ?? 1500,
-          custom: durationSec ?? settings?.focus_duration_sec ?? 1500,
-          short_break: settings?.short_break_sec ?? 300,
-          long_break: settings?.long_break_sec ?? 900,
-        };
-        const dur = durationSec ?? defaults[mode];
-        const { data: session, error } = await supabase.from("focus_sessions").insert({
-          user_id: userId,
-          mode,
-          planned_duration_sec: dur,
-          task_id: task?.id ?? null,
-          project_id: task?.project_id ?? null,
-          started_at: new Date().toISOString(),
-        }).select("id").single();
-        if (error) return `Failed to start session: ${error.message}`;
-        const prev = await readTimerState(supabase, userId);
-        await writeTimerState(supabase, userId, {
-          mode,
-          status: "running",
-          plannedDurationSec: dur,
-          startedAt: Date.now(),
-          pausedAt: null,
-          accumulatedPausedMs: 0,
-          currentSessionId: session.id,
-          currentTaskId: task?.id ?? prev?.currentTaskId ?? null,
-          currentProjectId: task?.project_id ?? prev?.currentProjectId ?? null,
-          pomodoroCount: prev?.pomodoroCount ?? 0,
-          source: "mcp",
-        });
-        return `Started ${mode} (${fmtDur(dur)})${task ? ` on "${task.title}"` : ""}.`;
-      },
-    }),
-
-    pause_timer: tool({
-      description: "Pause the running timer.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const timer = await readTimerState(supabase, userId);
-        if (!timer || timer.status !== "running") return "Timer is not running.";
-        await writeTimerState(supabase, userId, { ...timer, status: "paused", pausedAt: Date.now(), source: "mcp" });
-        return "Timer paused.";
-      },
-    }),
-
-    resume_timer: tool({
-      description: "Resume a paused timer.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const timer = await readTimerState(supabase, userId);
-        if (!timer || timer.status !== "paused" || !timer.pausedAt) return "Timer is not paused.";
-        await writeTimerState(supabase, userId, {
-          ...timer,
-          status: "running",
-          accumulatedPausedMs: timer.accumulatedPausedMs + (Date.now() - timer.pausedAt),
-          pausedAt: null,
-          source: "mcp",
-        });
-        return "Timer resumed.";
-      },
-    }),
-
-    skip_timer: tool({
-      description: "Skip the current session (does not count as completed).",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const timer = await readTimerState(supabase, userId);
-        if (!timer) return "No timer.";
-        if (timer.currentSessionId) {
-          await supabase.from("focus_sessions").update({
-            ended_at: new Date().toISOString(),
-            actual_duration_sec: timer.plannedDurationSec - remainingSec(timer),
-            completed: false,
-          }).eq("id", timer.currentSessionId);
+      execute: async ({ mode, taskRef, projectRef, durationSec }) => {
+        const task = await pickTask(taskRef, projectRef);
+        if (task) {
+          const snap = await readTimerState(supabase, userId);
+          if (snap?.currentTaskId !== task.id) {
+            if (snap && (snap.status === "running" || snap.status === "paused")) {
+              await command(() => runTimerCommand(supabase, userId, "stop"));
+            }
+            await command(() => runTaskCommand(supabase, userId, { action: "select", taskId: task.id }));
+          }
         }
-        await writeTimerState(supabase, userId, {
-          ...timer, status: "idle", startedAt: null, pausedAt: null, accumulatedPausedMs: 0,
-          currentSessionId: null, source: "mcp",
-        });
-        return "Session skipped.";
+        await command(() => runTimerCommand(supabase, userId, "start", { mode, durationSec }));
+        return timerAfter("Started.");
       },
     }),
 
-    reset_timer: tool({
-      description: "Reset the current timer cycle without changing the task's completed pomodoros.",
-      inputSchema: z.object({}),
-      execute: async () => {
-        const timer = await readTimerState(supabase, userId);
-        if (!timer) return "No timer.";
-        await writeTimerState(supabase, userId, {
-          ...timer, status: "idle", startedAt: null, pausedAt: null, accumulatedPausedMs: 0,
-          currentSessionId: null, source: "mcp",
-        });
-        return "Timer reset.";
-      },
-    }),
+    pause_timer: simple("pause", "Paused."),
+    resume_timer: simple("resume", "Resumed."),
+    skip_timer: simple("skip", "Skipped."),
+    reset_timer: simple("stop", "Stopped."),
 
     set_active_task: tool({
-      description: "Select which task the focus screen / next start_timer will use.",
-      inputSchema: z.object({ taskRef: z.string() }),
-      execute: async ({ taskRef }) => {
-        const t = await resolveTask(supabase, taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
-        const prev = await readTimerState(supabase, userId);
-        await writeTimerState(supabase, userId, {
-          mode: prev?.mode ?? "pomodoro",
-          status: prev?.status === "running" ? prev.status : "idle",
-          plannedDurationSec: prev?.plannedDurationSec ?? 1500,
-          startedAt: prev?.startedAt ?? null,
-          pausedAt: prev?.pausedAt ?? null,
-          accumulatedPausedMs: prev?.accumulatedPausedMs ?? 0,
-          currentSessionId: prev?.currentSessionId ?? null,
-          currentTaskId: t.id,
-          currentProjectId: t.project_id,
-          pomodoroCount: prev?.currentTaskId === t.id ? (prev?.pomodoroCount ?? 0) : 0,
-          source: "mcp",
-        });
-        return `Active task is now "${t.title}".`;
+      description:
+        "Select which task the focus screen / next start_timer will use. Pass taskRef, or projectRef alone to pick that project's first open task. " +
+        "Not allowed while a session is running or paused (stop it, or use start_timer with taskRef).",
+      inputSchema: z.object({ taskRef: z.string().optional(), projectRef: z.string().optional() })
+        .refine((v) => v.taskRef || v.projectRef, "Pass taskRef or projectRef"),
+      execute: async ({ taskRef, projectRef }) => {
+        const t = (await pickTask(taskRef, projectRef))!;
+        await command(() => runTaskCommand(supabase, userId, { action: "select", taskId: t.id }));
+        return `Selected "${t.title}" (id: ${t.id}).`;
       },
     }),
 
     confirm_action: tool({
-      description: "Execute a destructive action that was deferred (when delete confirmation is on). Pass the action + id from the confirm payload.",
-      inputSchema: z.object({
-        action: z.enum(["delete_project", "delete_task", "delete_subtask", "delete_tag"]),
-        id: z.string(),
-      }),
-      execute: async ({ action, id }) => executeConfirmedAction(supabase, action, id),
+      description:
+        "MCP only: execute a destructive action that a delete tool deferred (when delete confirmation is on). " +
+        "Only call this after the user explicitly confirmed. Pass the action + id from the confirm payload.",
+      inputSchema: z.object({ action: z.enum(DESTRUCTIVE_ACTIONS), id: z.string().regex(UUID_RE, "id must be a uuid") }),
+      execute: async ({ action, id }) => performDelete(supabase, action, id),
     }),
 
     analytics_overview: tool({
@@ -422,7 +410,8 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
         const res = await spotifyUserFetch(auth.token, "/search", { params: { q: query, type, limit: String(limit) } });
         if (!res.ok) return `Search failed (${res.status}).`;
         const data = res.json as Record<string, { items?: { name?: string; uri?: string; artists?: { name: string }[]; owner?: { display_name?: string } }[] }>;
-        const items = data[`${type}s`]?.items ?? [];
+        // Spotify pads playlist search results with null entries.
+        const items = (data[`${type}s`]?.items ?? []).filter(Boolean);
         if (!items.length) return `No ${type}s for "${query}".`;
         return items.map((it) => {
           const extra = it.artists?.map((a) => a.name).join(", ") ?? it.owner?.display_name ?? "";

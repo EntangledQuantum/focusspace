@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>FocusSpace extension options</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="options">
+    <h1><img src="icons/icon48.png" alt="" /> FocusSpace extension</h1>
+
+    <div class="card">
+      <h2>Account</h2>
+      <p id="account-line" class="muted">Not signed in.</p>
+      <div class="field">
+        <button id="login" class="btn primary">Log in with FocusSpace</button>
+        <button id="logout" class="btn" hidden>Log out</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Server</h2>
+      <p class="muted">Where your FocusSpace lives. Use <code>http://localhost:3000</code> while developing.
+        Changing it signs the extension out.</p>
+      <form id="server-form" class="field">
+        <input id="api-base" type="url" placeholder="https://focusspace.live" spellcheck="false" />
+        <button class="btn" type="submit">Save</button>
+        <button class="btn" type="button" id="reset-base">Default</button>
+      </form>
+      <div id="server-status" class="status small"></div>
+    </div>
+
+    <div class="card">
+      <h2>Paste a token</h2>
+      <p class="muted">Only needed if the automatic log in can't reach the extension (e.g. a self-hosted domain).
+        Create one on <code>/extension/connect</code> or under Settings → Agents &amp; MCP.</p>
+      <form id="token-form" class="field">
+        <input id="token" type="password" placeholder="fs_…" autocomplete="off" spellcheck="false" />
+        <button class="btn" type="submit">Use token</button>
+      </form>
+      <div id="token-status" class="status small"></div>
+    </div>
+  </main>
+  <script type="module" src="options.js"></script>
+</body>
+</html>

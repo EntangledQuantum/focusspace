@@ -12,6 +12,12 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
+  // Bearer-token APIs (hosted MCP + Chrome extension) authenticate themselves;
+  // redirecting them to the landing page would break every non-browser client.
+  if (pathname === "/api/mcp" || pathname.startsWith("/api/extension/")) {
+    return NextResponse.next({ request });
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient<Database>(
@@ -47,7 +53,9 @@ export async function updateSession(request: NextRequest) {
   const isLegal =
     pathname.startsWith("/privacy") ||
     pathname.startsWith("/terms") ||
-    pathname.startsWith("/for-agents");
+    pathname.startsWith("/for-agents") ||
+    // Chrome extension connect page shows its own sign-in when logged out
+    pathname.startsWith("/extension/");
 
   if (!user && !isAuthRoute && !isCallbackRoute && !isLanding && !isLegal) {
     const url = request.nextUrl.clone();

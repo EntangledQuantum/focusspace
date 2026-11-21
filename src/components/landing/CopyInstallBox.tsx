@@ -12,7 +12,7 @@ export function CopyInstallBox({ compact = false }: { compact?: boolean }) {
     try {
       await navigator.clipboard.writeText(AGENT_SETUP_LINE);
       setCopied(true);
-      toast.success("Copied — paste it to Hermes or OpenClaw");
+      toast.success("Copied — paste it to your agent (Claude, ChatGPT, Cursor, Hermes, OpenClaw…)");
       window.setTimeout(() => setCopied(false), 1800);
     } catch {
       toast.error("Couldn't copy. Select the line and copy it yourself.");

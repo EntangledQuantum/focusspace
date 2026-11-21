@@ -32,7 +32,7 @@ const fakeDb = {
 describe("MCP protocol", () => {
   it("answers initialize", async () => {
     const res = await handleMcpMessage(
-      { jsonrpc: "2.0", id: 1, method: "initialize", params: {} },
+      { jsonrpc: "2.0", id: 1, method: "initialize", params: { protocolVersion: "2025-03-26" } },
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       { supabase: fakeDb as any, userId: "u", destructive: "allow" },
     );
@@ -44,7 +44,7 @@ describe("MCP protocol", () => {
 
   it("lists the shared tool catalog including workspace + analytics + timer", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = makeTaskTools(fakeDb as any, "u", { destructive: "allow" });
+    const tools = makeTaskTools(fakeDb as any, "u", { destructive: "allow", surface: "mcp" });
     const names = listToolDefs(tools).map((t) => t.name);
     for (const required of [
       "get_workspace_state", "create_task", "start_timer", "reset_task_progress",

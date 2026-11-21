@@ -176,7 +176,7 @@ export default function LandingPage() {
 
               <p style={{ fontSize: 16.5, lineHeight: 1.65, color: "var(--color-on-surface-variant)", marginTop: 18, maxWidth: 480 }}>
                 One task, one timer, your music, and a space that disappears around the work.
-                FocusSpace is a pomodoro workspace — and the same tools are open to Hermes and OpenClaw.
+                FocusSpace is a pomodoro workspace — and the same tools are open to any MCP agent: Claude, ChatGPT, Cursor, Hermes, OpenClaw and more.
                 Fully open source.
               </p>
 
@@ -281,8 +281,8 @@ export default function LandingPage() {
             <div className="flex flex-col" style={{ gap: 24 }}>
               <SectionHead
                 eyebrow="MCP & agents"
-                title="Hermes and OpenClaw. Same hands as you."
-                copy="Paste the one-liner. The agent installs a local, no-login FocusSpace and wires MCP. It can do everything a human can: tasks, timer, music, analytics. After it adds a task, it asks before starting the timer. Individual login on a self-host is coming later. iOS and Android are planned — Hermes and OpenClaw work today."
+                title="Any MCP agent. Same hands as you."
+                copy="Claude, ChatGPT, Cursor, Hermes, OpenClaw — if it speaks MCP, it works. On focusspace.live, create a token in Settings and your agent connects to your account; nothing to install. Or paste the self-host one-liner and the agent installs a local, no-login FocusSpace and wires MCP. Either way it can do everything you can: tasks, timer, music, analytics — and it asks before starting the timer."
               />
               <McpDiagram />
               <CopyInstallBox />
@@ -339,7 +339,7 @@ export default function LandingPage() {
                     Local
                   </p>
                   <p style={{ fontSize: 14, lineHeight: 1.6, color: "var(--color-on-surface-variant)", marginTop: 8 }}>
-                    npm or Docker. SQLite in ~/.focusspace. No account. Point Hermes or OpenClaw at it and work.
+                    npm or Docker. SQLite in ~/.focusspace. No account. Point any MCP agent at it and work.
                   </p>
                   <div className="flex flex-wrap" style={{ gap: 8, marginTop: 16 }}>
                     {["npm", "Docker", "SQLite", "No login"].map((c) => (
@@ -395,12 +395,12 @@ export default function LandingPage() {
               <SectionHead
                 eyebrow="Coming soon"
                 title="What's already here, and what isn't."
-                copy="Hermes and OpenClaw work today. Per-user auth on an individual self-host, plus native iOS and Android apps, are next."
+                copy="Any MCP agent works today — Claude, ChatGPT, Cursor, Hermes, OpenClaw. Per-user auth on an individual self-host, plus native iOS and Android apps, are next."
               />
               <div className="grid grid-cols-1 sm:grid-cols-3" style={{ gap: 12 }}>
                 {[
                   { icon: UserRound, title: "Per-user login on self-host", body: "Local is one implicit user right now. Individual accounts on a personal install are coming later." },
-                  { icon: Smartphone, title: "iOS", body: "A native app is planned. Not shipping yet — Hermes and OpenClaw cover the agent side today." },
+                  { icon: Smartphone, title: "iOS", body: "A native app is planned. Not shipping yet — MCP agents cover the agent side today." },
                   { icon: Smartphone, title: "Android", body: "Same story. Planned. The desktop agents and the web app are the path that exists now." },
                 ].map(({ icon: Icon, title, body }, i) => (
                   <motion.div

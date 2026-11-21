@@ -12,12 +12,24 @@ import type { EffectSettings } from "@/lib/effects";
 import { SpotifyProvider } from "@/lib/context/SpotifyContext";
 import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
 import { MiniPlayer } from "@/components/MiniPlayer";
+import { AILauncher } from "@/components/ai/AILauncher";
 import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
 import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
+import { useTimerSync } from "@/lib/hooks/useTimerSync";
 import { fetchDailyFocus, fetchTagFocus, fetchRecentSessions, fetchStreak, type AnalyticsFilter } from "@/lib/analytics/queries";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
 const THEME_KEY = "focusspace-theme";
+
+/**
+ * Applies timer commands from MCP / Ask AI / the Chrome extension on every app
+ * page (not just /focus), so music-follows-focus in SpotifyProvider reacts to
+ * them wherever the player is running.
+ */
+function TimerSyncHost() {
+  useTimerSync();
+  return null;
+}
 
 function TimerTitle() {
   const status = useTimerStore((s) => s.status);
@@ -199,6 +211,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
     <SpotifyProvider>
       <>
         <TimerTitle />
+        <TimerSyncHost />
         <PrefetchAppData />
         <WallpaperRenderer
           wallpaper={wallpaper ?? null}
@@ -216,6 +229,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
         </main>
         <SpotifyMiniBar />
         <MiniPlayerHost />
+        <AILauncher enabled={settings?.ai_enabled ?? false} />
         <Toaster
           theme="dark"
           position="bottom-right"
