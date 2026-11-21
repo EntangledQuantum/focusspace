@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalMode } from "@/lib/mode";
-import { hashToken, newMcpToken } from "@/lib/mcp/auth";
+import { hashToken, newMcpToken, tokenAuthConfigured, TOKEN_AUTH_MISSING } from "@/lib/mcp/auth";
 import { json, preflight } from "@/lib/extension/http";
 import type { Database } from "@/types/database";
 
@@ -21,6 +21,10 @@ export async function POST(req: NextRequest) {
   if (isLocalMode()) {
     // Local self-host has one implicit user and no tokens; any bearer value is accepted.
     return NextResponse.json({ token: "local", local: true });
+  }
+  if (!tokenAuthConfigured()) {
+    console.error("[extension]", TOKEN_AUTH_MISSING);
+    return NextResponse.json({ error: TOKEN_AUTH_MISSING }, { status: 503 });
   }
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();

@@ -76,10 +76,21 @@ chrome.runtime.onMessageExternal.addListener((msg, sender, sendResponse) => {
       return;
     }
     await chrome.storage.local.set({ token: msg.token });
+    // Verify before telling the site we're connected: a token the server
+    // can't check (e.g. misconfigured host) must not look like a success.
     try {
       const account = await api("/api/extension/me");
       await chrome.storage.local.set({ account });
-    } catch { /* popup fetches it lazily */ }
+    } catch (e) {
+      await chrome.storage.local.remove(["token", "account"]);
+      sendResponse({
+        ok: false,
+        error: e instanceof ApiError && e.status === 401
+          ? "The server rejected the new token, so the extension is not connected. If you run this server, check SUPABASE_SERVICE_ROLE_KEY."
+          : `Couldn't verify the connection: ${e?.message || e}`,
+      });
+      return;
+    }
     sendResponse({ ok: true });
     await ensureTick();
     await refresh();
