@@ -1,4 +1,5 @@
 // Shared by the popup, options page and background service worker.
+import { liveRemaining } from "./optimistic.js";
 
 export const DEFAULT_API_BASE = "https://focusspace.live";
 
@@ -23,48 +24,87 @@ export async function clearSession() {
 }
 
 export class ApiError extends Error {
-  constructor(message, status = 0) {
+  constructor(message, status = 0, { offline = false } = {}) {
     super(message);
     this.status = status;
+    /** Network failure or timeout (no answer from the server at all). */
+    this.offline = offline;
   }
 }
 
-/** Authenticated JSON request to the FocusSpace extension API. A 401 signs the extension out. */
-export async function api(path, { method = "GET", body } = {}) {
-  const { apiBase, token } = await getConfig();
-  if (!token) throw new ApiError("Not signed in.", 401);
-  let res;
+export const REQUEST_TIMEOUT_MS = 8000;
+
+async function once(url, init) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), REQUEST_TIMEOUT_MS);
   try {
-    res = await fetch(`${apiBase}${path}`, {
-      method,
-      cache: "no-store",
-      headers: {
-        Authorization: `Bearer ${token}`,
-        ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
-      },
-      body: body !== undefined ? JSON.stringify(body) : undefined,
-    });
-  } catch {
-    throw new ApiError(`Can't reach ${new URL(apiBase).host}. Check your connection.`);
+    return await fetch(url, { ...init, signal: ctrl.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
+ * Authenticated JSON request to the FocusSpace extension API. A 401 signs the
+ * extension out. Every request times out after 8 s; reads (GET) are retried
+ * once on a network error or timeout, commands are not (the caller decides).
+ */
+export async function api(path, { method = "GET", body, retry = method === "GET" } = {}) {
+  const { apiBase, token } = await getConfig(); // ~1 ms; always the current token
+  if (!token) throw new ApiError("Not signed in.", 401);
+  const host = new URL(apiBase).host;
+  const init = {
+    method,
+    cache: "no-store",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      ...(body !== undefined ? { "Content-Type": "application/json" } : {}),
+    },
+    body: body !== undefined ? JSON.stringify(body) : undefined,
+  };
+  let res;
+  for (let attempt = 0; ; attempt++) {
+    try {
+      res = await once(`${apiBase}${path}`, init);
+      break;
+    } catch (e) {
+      if (retry && attempt === 0) {
+        await new Promise((r) => setTimeout(r, 400));
+        continue;
+      }
+      const timedOut = e?.name === "AbortError";
+      throw new ApiError(
+        timedOut ? `${host} is taking too long to answer.` : `Can't reach ${host}. Check your connection.`,
+        0,
+        { offline: true },
+      );
+    }
   }
   const isJson = (res.headers.get("content-type") || "").includes("application/json");
   const data = isJson ? await res.json().catch(() => ({})) : {};
   if (res.status === 401) {
-    await clearSession();
+    // Only sign out if the rejected token is still the stored one (not one replaced meanwhile).
+    const { token: current } = await chrome.storage.local.get("token");
+    if (current === token) await clearSession();
     throw new ApiError("Your session ended. Log in again.", 401);
   }
-  if (!isJson) throw new ApiError(`Unexpected response from ${new URL(apiBase).host} — is the server URL right?`, res.status);
+  if (!isJson) throw new ApiError(`Unexpected response from ${host} — is the server URL right?`, res.status);
   if (!res.ok) throw new ApiError(data.error || `Request failed (${res.status}).`, res.status);
   return data;
 }
 
-/** Remaining whole seconds of a state snapshot, counting down locally since it was received. */
-export function liveRemaining(state, receivedAt, now = Date.now()) {
-  const t = state?.timer;
-  if (!t) return 0;
-  if (t.status !== "running") return t.remainingSec;
-  return Math.max(0, Math.ceil(t.remainingSec - (now - receivedAt) / 1000));
+/** Query string carrying what the caller already shows, so the server loads it all in one round trip. */
+export function knownQuery(state) {
+  const p = new URLSearchParams();
+  if (state?.task?.id) p.set("task", state.task.id);
+  if (state?.project?.id) p.set("project", state.project.id);
+  const q = p.toString();
+  return q ? `?${q}` : "";
 }
+
+export const known = (state) => ({ taskId: state?.task?.id ?? null, projectId: state?.project?.id ?? null });
+
+export { liveRemaining };
 
 export const MODE_LABEL = {
   pomodoro: "Focus",

@@ -1,8 +1,13 @@
-import { api, getConfig, paintBadge, isBreak, ApiError } from "./lib/api.js";
+import { api, getConfig, paintBadge, isBreak, ApiError, knownQuery } from "./lib/api.js";
 
 // Keeps the toolbar badge in sync without heavy polling: one light state
 // request a minute, plus a one-shot alarm right after the running session is
 // due (the server records sessions that finish while no FocusSpace tab is open).
+//
+// MV3 suspends this worker whenever it is idle, so nothing lives in memory:
+// the token and the last state are in chrome.storage, the schedule is in
+// chrome.alarms (which survive suspension and browser restarts), and every
+// listener is registered at the top level so a wake-up event finds it.
 
 const TICK = "focusspace-tick";
 const DUE = "focusspace-due";
@@ -12,6 +17,17 @@ async function ensureTick() {
   if (!existing) await chrome.alarms.create(TICK, { periodInMinutes: 1 });
 }
 
+/** Store a state, paint the badge from it and (re)arm the due alarm. No network. */
+async function adopt(state, receivedAt) {
+  await chrome.storage.local.set({ lastState: state, lastStateAt: receivedAt });
+  await paintBadge(state, receivedAt);
+  if (state.timer.status === "running") {
+    await chrome.alarms.create(DUE, { when: receivedAt + state.timer.remainingSec * 1000 + 4000 });
+  } else {
+    await chrome.alarms.clear(DUE);
+  }
+}
+
 async function refresh() {
   const { token } = await getConfig();
   if (!token) {
@@ -19,20 +35,18 @@ async function refresh() {
     await chrome.alarms.clear(DUE);
     return;
   }
+  const { lastState, lastStateAt } = await chrome.storage.local.get(["lastState", "lastStateAt"]);
   try {
-    const state = await api("/api/extension/state");
-    const receivedAt = Date.now();
-    await chrome.storage.local.set({ lastState: state, lastStateAt: receivedAt });
-    await paintBadge(state, receivedAt);
-    if (state.timer.status === "running") {
-      await chrome.alarms.create(DUE, { when: receivedAt + state.timer.remainingSec * 1000 + 4000 });
-    } else {
-      await chrome.alarms.clear(DUE);
-    }
+    const state = await api(`/api/extension/state${knownQuery(lastState)}`);
+    await adopt(state, Date.now());
     if (state.justCompleted) notifyComplete(state);
   } catch (e) {
-    if (e instanceof ApiError && e.status === 401) await chrome.action.setBadgeText({ text: "" });
-    // Otherwise keep the last badge; the next tick retries.
+    if (e instanceof ApiError && e.status === 401) {
+      await chrome.action.setBadgeText({ text: "" });
+    } else if (lastState) {
+      // Offline / server hiccup: keep counting down from the last known state; the next tick retries.
+      await paintBadge(lastState, lastStateAt);
+    }
   }
 }
 
@@ -55,8 +69,17 @@ chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TICK || alarm.name === DUE) void refresh();
 });
 
+// A wake-up after suspension (or an extension reload that fires neither
+// onInstalled nor onStartup) must still leave the minute tick armed.
+void ensureTick();
+
 // Popup / options → background.
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
+  if (msg?.type === "state" && msg.state?.timer) {
+    // The popup just got this from the server — reuse it instead of fetching again.
+    void ensureTick().then(() => adopt(msg.state, msg.receivedAt ?? Date.now()));
+    return false;
+  }
   if (msg?.type === "refresh") {
     void ensureTick().then(refresh).then(() => sendResponse({ ok: true }));
     return true;

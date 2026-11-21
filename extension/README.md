@@ -78,6 +78,15 @@ Paste it under **Options → Paste a token**.
   Stopping or skipping within 10 s deletes the session, as on the site.
 - **Polling:** the popup polls about every 5 s while open. The background
   service worker makes one request a minute, plus one when a session is due.
+- **Speed:** clicks update the popup immediately (optimistic) and roll back
+  with a toast if the server refuses. Each command is one request whose
+  response is the new state: one parallel DB round to read (the popup sends
+  the task/project it shows as a hint), one to write. Music clicks are held
+  for ~3 s against Spotify's lagging reads, then reconciled. Requests time
+  out after 8 s; reads retry once. Every `/api/extension/*` response has a
+  `Server-Timing` header (`auth`, `db` with query and round-trip counts,
+  `spotify_*`, `total`). In dev, `FOCUSSPACE_DEV_DB_LATENCY_MS=30` adds
+  per-query latency to local SQLite for realistic measurements.
 
 ## Options / development
 
