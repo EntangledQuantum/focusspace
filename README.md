@@ -66,8 +66,8 @@ Stacked glass project cards with tasks, subtasks, tags, priority and pomodoro es
 - **🔌 MCP / agents** — any MCP agent (Claude, ChatGPT, Cursor, Hermes, OpenClaw, …) can run the same surface
   over MCP (board, timer, music, settings, analytics). Use your focusspace.live account with a token from
   Settings → Agents & MCP, or have the agent self-host it. See [For agents](https://focusspace.live/for-agents).
-- **🧩 Chrome extension** — live timer, task, subtasks and Spotify controls in your toolbar, synced with the
-  site. Load `extension/` unpacked; see [extension/README.md](./extension/README.md).
+- **🧩 Chrome extension** *(beta)* — live timer, task, subtasks and Spotify controls in your toolbar, synced
+  with the site. [Download the latest zip](https://focusspace.live/extension/download) · [install steps](#-chrome-extension-beta).
 - **🎵 Spotify built in** — Web Playback SDK player with search, playlists, your library, volume/shuffle,
   external-device takeover, and a pop-out mini player.
 - **📊 Analytics & streaks** — focus-time KPIs, a last-7-days bar chart, per-tag and per-project
@@ -246,6 +246,26 @@ docker compose build \
 
 Set `FOCUSSPACE_MODE=cloud` (and the same `NEXT_PUBLIC_*` values) at runtime. Apply migrations 0001–0013
 on the Supabase project first.
+
+---
+
+## 🧩 Chrome extension (beta)
+
+Your timer, current task, subtasks and what's playing, one click away in the toolbar. Start, pause, skip,
+tick subtasks, mark the task done or switch project/task without opening a tab. It stays in sync with
+focusspace.live both ways.
+
+**[⬇ Download the latest beta (.zip)](https://focusspace.live/extension/download)** — always redirects to the
+newest `extension-v*` asset on [GitHub Releases](https://github.com/EntangledQuantum/focusspace/releases?q=extension-v&expanded=true).
+
+1. Unzip it.
+2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder.
+3. Click the FocusSpace icon → **Log in**. It uses your existing focusspace.live session; revoke it any time
+   in Settings → Agents & MCP.
+
+Updating: download the new zip, replace the folder, then hit **reload** on the extension card. Details and
+dev notes: [`extension/README.md`](./extension/README.md). Maintainers: bump `version` in
+`extension/manifest.json`, then run **Actions → Chrome extension release**.
 
 ---
 

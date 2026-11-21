@@ -17,6 +17,7 @@ import { DemoRing } from "@/components/landing/DemoRing";
 import { HowItWorksDiagram } from "@/components/landing/HowItWorksDiagram";
 import { AskAIDiagram } from "@/components/landing/AskAIDiagram";
 import { McpDiagram } from "@/components/landing/McpDiagram";
+import { ExtensionShowcase } from "@/components/landing/ExtensionShowcase";
 import { PomodoroVisual } from "@/components/landing/PomodoroVisual";
 import { ProjectsVisual } from "@/components/landing/ProjectsVisual";
 import { AnalyticsVisual } from "@/components/landing/AnalyticsVisual";
@@ -30,6 +31,7 @@ const NAV_LINKS = [
   { href: "#pomodoro", label: "Pomodoro" },
   { href: "#ai", label: "AI" },
   { href: "#agents", label: "Agents" },
+  { href: "#extension", label: "Extension" },
   { href: "#analytics", label: "Analytics" },
   { href: "#open-source", label: "Open source" },
 ] as const;
@@ -287,6 +289,11 @@ export default function LandingPage() {
               <McpDiagram />
               <CopyInstallBox />
             </div>
+          </LandingSection>
+
+          {/* ── Chrome extension ─────────────────────────────────── */}
+          <LandingSection id="extension">
+            <ExtensionShowcase />
           </LandingSection>
 
           {/* ── Analytics ────────────────────────────────────────── */}
