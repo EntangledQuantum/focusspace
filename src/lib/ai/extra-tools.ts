@@ -8,6 +8,7 @@ import { formatStatus, timerLine } from "./status";
 import { readTimerState } from "@/lib/timer/persist";
 import { CommandError, getExtensionState, runTaskCommand, runTimerCommand, type TimerAction } from "@/lib/extension/service";
 import { SOUND_PRESETS, type SoundPresetId } from "@/lib/audio/sound-settings";
+import type { PlaybackCommand } from "@/lib/spotify/playback";
 
 type DB = SupabaseClient<Database>;
 type Resolvers = ReturnType<typeof makeResolvers>;
@@ -79,12 +80,26 @@ export function makeExtraTools(
     try {
       const res = await spotifyUserFetch(auth.token, "/me/player");
       if (res.status === 204 || !res.ok) return "nothing playing";
-      const p = res.json as { is_playing?: boolean; item?: { name?: string; artists?: { name: string }[] } } | null;
+      const p = res.json as { is_playing?: boolean; device?: { name?: string }; item?: { name?: string; artists?: { name: string }[] } } | null;
       if (!p?.item) return "nothing playing";
-      return `${p.is_playing ? "playing" : "paused"} · ${p.item.name} — ${(p.item.artists ?? []).map((a) => a.name).join(", ")}`;
+      const where = p.device?.name ? ` · on ${p.device.name}` : "";
+      return `${p.is_playing ? "playing" : "paused"} · ${p.item.name} — ${(p.item.artists ?? []).map((a) => a.name).join(", ")}${where}`;
     } catch {
       return "unavailable";
     }
+  }
+
+  /**
+   * Run a playback command through the shared device resolution
+   * (lib/spotify/playback.ts — same path as the Chrome extension). Errors the
+   * user has to fix themselves tell the model not to retry.
+   */
+  async function music(cmd: PlaybackCommand): Promise<string> {
+    const { runPlaybackForUser } = await import("@/lib/spotify/playback");
+    const res = await runPlaybackForUser(supabase, userId, cmd);
+    if (res.ok) return res.message;
+    const userMustAct = res.code === "no_device" || res.code === "premium_required" || res.code === "auth";
+    return userMustAct ? `${res.message} (Tell the user; don't retry music tools until they have.)` : res.message;
   }
 
   const simple = (action: TimerAction, done: string) => tool({
@@ -376,23 +391,13 @@ export function makeExtraTools(
     }),
 
     now_playing: tool({
-      description: "Read what Spotify is playing now (track, artist, device, paused/playing). Requires the user to have connected Spotify in Settings.",
+      description:
+        "Read what Spotify is playing now (track, artist, device, paused/playing). When nothing is playing it says which device " +
+        "play_music / resume_music would use (e.g. the FocusSpace web player). Requires Spotify connected in Settings.",
       inputSchema: z.object({}),
       execute: async () => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player");
-        if (res.status === 204) return "Nothing is playing.";
-        if (!res.ok) return `Spotify error (${res.status}).`;
-        const p = res.json as {
-          is_playing?: boolean;
-          device?: { name?: string };
-          item?: { name?: string; artists?: { name: string }[]; album?: { name?: string } };
-        } | null;
-        if (!p?.item) return "Nothing is playing.";
-        const artists = (p.item.artists ?? []).map((a) => a.name).join(", ");
-        return `${p.is_playing ? "Playing" : "Paused"}: ${p.item.name} — ${artists}${p.item.album?.name ? ` (${p.item.album.name})` : ""}${p.device?.name ? ` on ${p.device.name}` : ""}.`;
+        const { describeNowPlayingForUser } = await import("@/lib/spotify/playback");
+        return describeNowPlayingForUser(supabase, userId);
       },
     }),
 
@@ -421,109 +426,67 @@ export function makeExtraTools(
     }),
 
     play_music: tool({
-      description: "Play a Spotify track, album, or playlist. Pass a spotify: uri from search_music, or a search query (plays the first track match).",
+      description:
+        "Play a Spotify track, album, or playlist. Pass a spotify: uri from search_music, or a search query (plays the first track match). " +
+        "Picks a device automatically (the active one, else the FocusSpace web player, else the Spotify app).",
       inputSchema: z.object({
         uri: z.string().optional().describe("spotify:track:... / album / playlist uri"),
         query: z.string().optional().describe("If no uri, search and play the first track"),
       }),
       execute: async ({ uri, query }) => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
         let playUri = uri;
+        let label: string | undefined;
         if (!playUri && query) {
+          const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
+          const auth = await getUserSpotifyAccessToken(supabase, userId);
+          if ("error" in auth) return auth.error;
           const found = await spotifyUserFetch(auth.token, "/search", { params: { q: query, type: "track", limit: "1" } });
           const track = (found.json as { tracks?: { items?: { uri?: string; name?: string; artists?: { name: string }[] }[] } })?.tracks?.items?.[0];
           if (!track?.uri) return `No track for "${query}".`;
           playUri = track.uri;
+          label = `“${track.name ?? query}”${track.artists?.length ? ` — ${track.artists.map((a) => a.name).join(", ")}` : ""}`;
         }
         if (!playUri) return "Pass a uri or a query.";
-        const body = playUri.includes(":track:") ? { uris: [playUri] } : { context_uri: playUri };
-        const res = await spotifyUserFetch(auth.token, "/me/player/play", { method: "PUT", body });
-        if (res.status === 404) return "No active Spotify device. Open Spotify (or the FocusSpace player) first.";
-        if (!res.ok && res.status !== 204) return `Play failed (${res.status}).`;
-        return `Playing ${playUri}.`;
+        return music({ kind: "play", uri: playUri, label });
       },
     }),
 
     pause_music: tool({
       description: "Pause Spotify playback.",
       inputSchema: z.object({}),
-      execute: async () => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/pause", { method: "PUT" });
-        if (res.status === 404) return "No active Spotify device.";
-        if (!res.ok && res.status !== 204) return `Pause failed (${res.status}).`;
-        return "Paused.";
-      },
+      execute: () => music({ kind: "pause" }),
     }),
 
     resume_music: tool({
-      description: "Resume Spotify playback on the current device.",
+      description:
+        "Resume Spotify playback. If nothing is paused it starts what the user played last (or their FocusSpace music pick) " +
+        "on the best available device, including the FocusSpace web player.",
       inputSchema: z.object({}),
-      execute: async () => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/play", { method: "PUT", body: {} });
-        if (res.status === 404) return "No active Spotify device.";
-        if (!res.ok && res.status !== 204) return `Resume failed (${res.status}).`;
-        return "Resumed.";
-      },
+      execute: () => music({ kind: "resume" }),
     }),
 
     next_track: tool({
       description: "Skip to the next Spotify track.",
       inputSchema: z.object({}),
-      execute: async () => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/next", { method: "POST" });
-        if (!res.ok && res.status !== 204) return `Skip failed (${res.status}).`;
-        return "Skipped to next track.";
-      },
+      execute: () => music({ kind: "next" }),
     }),
 
     previous_track: tool({
       description: "Go to the previous Spotify track.",
       inputSchema: z.object({}),
-      execute: async () => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/previous", { method: "POST" });
-        if (!res.ok && res.status !== 204) return `Previous failed (${res.status}).`;
-        return "Went to previous track.";
-      },
+      execute: () => music({ kind: "previous" }),
     }),
 
     set_volume: tool({
       description: "Set Spotify volume (0–100).",
       inputSchema: z.object({ percent: z.number().int().min(0).max(100) }),
-      execute: async ({ percent }) => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/volume", { method: "PUT", params: { volume_percent: String(percent) } });
-        if (!res.ok && res.status !== 204) return `Volume failed (${res.status}).`;
-        return `Volume set to ${percent}%.`;
-      },
+      execute: ({ percent }) => music({ kind: "volume", percent }),
     }),
 
     set_shuffle: tool({
       description: "Turn Spotify shuffle on or off.",
       inputSchema: z.object({ on: z.boolean() }),
-      execute: async ({ on }) => {
-        const { getUserSpotifyAccessToken, spotifyUserFetch } = await import("@/lib/spotify/server");
-        const auth = await getUserSpotifyAccessToken(supabase, userId);
-        if ("error" in auth) return auth.error;
-        const res = await spotifyUserFetch(auth.token, "/me/player/shuffle", { method: "PUT", params: { state: on ? "true" : "false" } });
-        if (!res.ok && res.status !== 204) return `Shuffle failed (${res.status}).`;
-        return `Shuffle ${on ? "on" : "off"}.`;
-      },
+      execute: ({ on }) => music({ kind: "shuffle", on }),
     }),
 
     analytics_compare: tool({

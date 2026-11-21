@@ -1,7 +1,7 @@
 "use client";
 
 import {
-  createContext, useContext, useState, useRef, useEffect, useCallback, type ReactNode,
+  createContext, useContext, useState, useRef, useEffect, useCallback, useMemo, type ReactNode,
 } from "react";
 import { toast } from "sonner";
 import { useSpotify } from "@/lib/hooks/useSpotify";
@@ -14,6 +14,8 @@ import {
   decideMusicAction, focusTransition, isFocusRunning, type FocusTransition,
 } from "@/lib/spotify/focusMusic";
 import { useTimerStore } from "@/lib/stores/timer";
+import { createClient } from "@/lib/supabase/client";
+import { describeSpotifyFailure, uriKind } from "@/lib/spotify/devices";
 
 export interface ExternalTrack {
   name: string;
@@ -74,11 +76,13 @@ const PLAY_RETRY_DELAYS_MS = [0, 400, 1000, 2000];
 /** A focus start seen before the player was ready is replayed this long after. */
 const PENDING_TRANSITION_TTL_MS = 60_000;
 const POLL_MS = 5000;
+/** Re-publish the web player's device id this often while the tab is open. */
+const DEVICE_HEARTBEAT_MS = 10 * 60 * 1000;
 
 function playErrorText(status: number, detail: string | null): string {
-  if (status === 403) return detail ? `Spotify refused playback: ${detail}` : "Spotify refused playback (Premium is required).";
-  if (status === 429) return "Spotify is rate-limiting requests — try again in a few seconds.";
   if (status === 0) return "The Spotify player isn't ready yet — try again in a moment.";
+  // 403 PREMIUM_REQUIRED / 429 read the same here as from the AI, MCP and extension.
+  if (status === 403 || status === 429) return describeSpotifyFailure(status, { error: { message: detail ?? undefined } }, { verb: "Playback" }).message;
   return detail ? `Couldn't start playback: ${detail}` : "Couldn't start playback on Spotify.";
 }
 
@@ -87,9 +91,11 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
   const token = spotifyData?.token ?? null;
   const isConnected = spotifyData?.isConnected ?? false;
 
-  const { prefs, loaded: prefsLoaded } = useMusicPrefs();
+  const { prefs, loaded: prefsLoaded, settings } = useMusicPrefs();
+  const userId = settings?.user_id ?? null;
 
-  const [selectedPlaylist, setSelectedPlaylist] = useState<PlayableContext | null>(null);
+  // null = nothing picked in this tab yet, so the stored pick (if any) applies.
+  const [pick, setPick] = useState<{ value: PlayableContext | null } | null>(null);
   const [externalState, setExternalState] = useState<ExternalPlaybackState | null>(null);
   const [volume, setVolumeState] = useState(60);
   const [extShuffle, setExtShuffle] = useState(false);
@@ -103,11 +109,61 @@ export function SpotifyProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  // Bumped on every SDK `ready` so a reconnect re-publishes the device id
+  // even when Spotify hands back the same one.
+  const [readyTick, setReadyTick] = useState(0);
+  const onReady = useCallback(() => setReadyTick((n) => n + 1), []);
+
   // Keyed on the connection, not the token string: see useSpotifyPlayer.
   const { player, deviceId, state, isReady, error: sdkError } = useSpotifyPlayer({
     enabled: isConnected,
     onAutoplayBlocked,
+    onReady,
   });
+
+  // ── Make this tab's player discoverable server-side ───────────────────────
+  // Focus AI, MCP and the extension control Spotify from the server, where
+  // "no device_id" means "the active device" — and this player is never
+  // active until something transfers playback to it. Publishing its id lets
+  // the server target it directly (lib/spotify/playback.ts). Best effort:
+  // errors (e.g. migration 0015 not applied yet) are ignored.
+  useEffect(() => {
+    if (!deviceId || !userId) return;
+    const supabase = createClient();
+    const publish = () => {
+      void Promise.resolve(
+        supabase.from("user_settings").update({
+          spotify_web_device_id: deviceId,
+          spotify_web_device_seen_at: new Date().toISOString(),
+        }).eq("user_id", userId),
+      ).catch(() => {});
+    };
+    publish();
+    const id = setInterval(publish, DEVICE_HEARTBEAT_MS);
+    return () => clearInterval(id);
+  }, [deviceId, userId, readyTick]);
+
+  // The music pick is stored too: it survives reloads, and server-side
+  // "resume" falls back to it when nothing was playing.
+  const setSelectedPlaylist = useCallback((p: PlayableContext | null) => {
+    setPick({ value: p });
+    if (!p || !userId) return;
+    void Promise.resolve(
+      createClient().from("user_settings").update({
+        spotify_selected_uri: p.uri,
+        spotify_selected_name: p.name,
+      }).eq("user_id", userId),
+    ).catch(() => {});
+  }, [userId]);
+
+  const storedUri = settings?.spotify_selected_uri ?? null;
+  const storedName = settings?.spotify_selected_name ?? null;
+  const storedPick = useMemo<PlayableContext | null>(() => {
+    const kind = storedUri ? uriKind(storedUri) : null;
+    if (!storedUri || !(kind === "playlist" || kind === "album" || kind === "artist" || kind === "track")) return null;
+    return { uri: storedUri, name: storedName ?? "Your music pick", type: kind };
+  }, [storedUri, storedName]);
+  const selectedPlaylist = pick ? pick.value : storedPick;
 
   // SDK is actively playing music
   const sdkActive = !!(state && !state.paused);

@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { getSpotifyToken } from "@/lib/spotify/api";
+import { WEB_PLAYER_NAME } from "@/lib/spotify/devices";
 
 declare global {
   interface Window {
@@ -56,6 +57,11 @@ interface UseSpotifyPlayerOptions {
   enabled: boolean;
   /** Fired when the browser blocked audio that wasn't started by a click. */
   onAutoplayBlocked?: () => void;
+  /**
+   * Fired on every SDK `ready` (first connect and each reconnect) with the
+   * Connect device id, so it can be published for server-side playback.
+   */
+  onReady?: (deviceId: string) => void;
 }
 
 const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
@@ -66,7 +72,7 @@ const SDK_SRC = "https://sdk.scdn.co/spotify-player.js";
  * rotation used to cut playback mid-song and mint a new device id. The SDK
  * pulls fresh tokens itself through getOAuthToken.
  */
-export function useSpotifyPlayer({ enabled, onAutoplayBlocked }: UseSpotifyPlayerOptions) {
+export function useSpotifyPlayer({ enabled, onAutoplayBlocked, onReady }: UseSpotifyPlayerOptions) {
   const [deviceId, setDeviceId] = useState<string | null>(null);
   const [state, setState] = useState<SpotifyPlaybackState | null>(null);
   const [isReady, setIsReady] = useState(false);
@@ -76,6 +82,8 @@ export function useSpotifyPlayer({ enabled, onAutoplayBlocked }: UseSpotifyPlaye
   // Ref so the init effect doesn't depend on the callback identity.
   const autoplayCb = useRef(onAutoplayBlocked);
   useEffect(() => { autoplayCb.current = onAutoplayBlocked; }, [onAutoplayBlocked]);
+  const readyCb = useRef(onReady);
+  useEffect(() => { readyCb.current = onReady; }, [onReady]);
 
   useEffect(() => {
     if (!enabled) return;
@@ -92,7 +100,7 @@ export function useSpotifyPlayer({ enabled, onAutoplayBlocked }: UseSpotifyPlaye
     function initPlayer() {
       if (cancelled || instance) return;
       const p = new window.Spotify.Player({
-        name: "FocusSpace",
+        name: WEB_PLAYER_NAME,
         // Called on connect and whenever the SDK's token expires — always
         // hand it a token with real life left (see getSpotifyToken).
         getOAuthToken: async (cb) => {
@@ -109,6 +117,7 @@ export function useSpotifyPlayer({ enabled, onAutoplayBlocked }: UseSpotifyPlaye
         setDeviceId(device_id);
         setIsReady(true);
         setError(null);
+        readyCb.current?.(device_id);
       });
       p.addListener("not_ready", () => {
         if (cancelled) return;

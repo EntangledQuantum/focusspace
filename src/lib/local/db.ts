@@ -52,6 +52,11 @@ const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
   { table: "ai_conversations", column: "run_state", ddl: "TEXT" },
   { table: "ai_conversations", column: "run_error", ddl: "TEXT" },
   { table: "ai_conversations", column: "run_updated_at", ddl: "TEXT" },
+  // 0015_spotify_device
+  { table: "user_settings", column: "spotify_web_device_id", ddl: "TEXT" },
+  { table: "user_settings", column: "spotify_web_device_seen_at", ddl: "TEXT" },
+  { table: "user_settings", column: "spotify_selected_uri", ddl: "TEXT" },
+  { table: "user_settings", column: "spotify_selected_name", ddl: "TEXT" },
 ];
 
 function addMissingColumns(db: InstanceType<BetterSqlite>) {
