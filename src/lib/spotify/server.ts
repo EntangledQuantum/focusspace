@@ -53,14 +53,32 @@ export async function getUserSpotifyAccessToken(
   return { token: refreshed.access_token };
 }
 
+export interface SpotifyUserResponse {
+  ok: boolean;
+  status: number;
+  json: unknown;
+  text: string;
+  /** Seconds Spotify asked us to wait (429 Retry-After), when it did. */
+  retryAfterSec?: number;
+}
+
+/** A 429 whose Retry-After is at most this long is waited out and retried once. */
+const MAX_RETRY_AFTER_WAIT_MS = 3000;
+
+function retryAfterSeconds(res: Response): number {
+  const raw = res.headers.get("Retry-After");
+  const sec = raw ? Number(raw) : NaN;
+  return Number.isFinite(sec) && sec >= 0 ? sec : 1;
+}
+
 export async function spotifyUserFetch(
   token: string,
   path: string,
   init: { method?: string; body?: unknown; params?: Record<string, string> } = {},
-): Promise<{ ok: boolean; status: number; json: unknown; text: string }> {
+): Promise<SpotifyUserResponse> {
   const url = new URL(`${API}${path}`);
   if (init.params) Object.entries(init.params).forEach(([k, v]) => url.searchParams.set(k, v));
-  const res = await fetch(url.toString(), {
+  const doFetch = () => fetch(url.toString(), {
     method: init.method ?? "GET",
     headers: {
       Authorization: `Bearer ${token}`,
@@ -68,10 +86,23 @@ export async function spotifyUserFetch(
     },
     body: init.body !== undefined ? JSON.stringify(init.body) : undefined,
   });
+
+  let res = await doFetch();
+  let retryAfterSec: number | undefined;
+  if (res.status === 429) {
+    // Honour Retry-After: wait out a short window once; report a long one.
+    retryAfterSec = retryAfterSeconds(res);
+    if (retryAfterSec * 1000 <= MAX_RETRY_AFTER_WAIT_MS) {
+      await new Promise((r) => setTimeout(r, retryAfterSec! * 1000));
+      res = await doFetch();
+      retryAfterSec = res.status === 429 ? retryAfterSeconds(res) : undefined;
+    }
+  }
+
   const text = await res.text();
   let json: unknown = null;
   if (text) {
     try { json = JSON.parse(text); } catch { /* not json */ }
   }
-  return { ok: res.ok, status: res.status, json, text };
+  return { ok: res.ok, status: res.status, json, text, ...(retryAfterSec !== undefined ? { retryAfterSec } : {}) };
 }

@@ -58,7 +58,7 @@ export async function buildSystemPrompt(
     `- Timer: start_timer / pause_timer / resume_timer / skip_timer / reset_timer (= stop) / set_active_task. "Stop" means reset_timer.`,
     `- Keep task titles short and action-oriented. Put longer detail in notes.`,
     `- For any focus-time / productivity / streak / heatmap / by-project question, call analytics_overview, analytics_by_project, analytics_by_tag, analytics_heatmap, analytics_sessions, analytics_compare, or focus_stats — never guess numbers.`,
-    `- Music is the user's Spotify (same dock as the UI). Call now_playing / search_music / play_music / pause_music / resume_music / next_track / previous_track / set_volume / set_shuffle. If Spotify is not connected, tell them to connect it in Settings → Music — do not invent a track.`,
+    `- Music is the user's Spotify (same dock as the UI). Call now_playing / search_music / play_music / pause_music / resume_music / next_track / previous_track / set_volume / set_shuffle. If Spotify is not connected, tell them to connect it in Settings → Music — do not invent a track. The music tools pick a device themselves (the FocusSpace web player counts); if one says no device is available or Premium is required, relay that once instead of retrying.`,
     `- Always write dates and times naturally for the user, e.g. "June 11th, 2026" or "yesterday", never raw ISO like "2026-06-11".`,
     `- After you finish acting, give a brief markdown summary of what changed (bullet list). Do not restate tool outputs verbatim.`,
     opts.destructive === "confirm"
