@@ -16,7 +16,8 @@ export function AskAIDiagram() {
       <div className="hidden sm:block">
         <svg viewBox="0 0 640 168" className="w-full h-auto" role="img" aria-label="Ask AI flow from a typed sentence to board updates">
           <defs>
-            <linearGradient id="ai-line" x1="0" y1="0" x2="1" y2="0">
+            {/* userSpaceOnUse: a horizontal line has a zero-height bbox, so a bbox gradient never paints */}
+            <linearGradient id="ai-line" gradientUnits="userSpaceOnUse" x1="118" y1="84" x2="422" y2="84">
               <stop offset="0%" stopColor="#ff5fa2" />
               <stop offset="55%" stopColor="#b06bf6" />
               <stop offset="100%" stopColor="#8fb6ff" />

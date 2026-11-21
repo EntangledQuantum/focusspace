@@ -14,7 +14,6 @@ import { GithubMark, REPO_URL, SiteFooter } from "@/components/layout/SiteFooter
 import { isLocalMode } from "@/lib/mode";
 import { CopyInstallBox } from "@/components/landing/CopyInstallBox";
 import { DemoRing } from "@/components/landing/DemoRing";
-import { HowItWorksDiagram } from "@/components/landing/HowItWorksDiagram";
 import { AskAIDiagram } from "@/components/landing/AskAIDiagram";
 import { McpDiagram } from "@/components/landing/McpDiagram";
 import { ExtensionShowcase } from "@/components/landing/ExtensionShowcase";
@@ -28,9 +27,9 @@ const ROTATING = ["focus", "flow", "deep work", "momentum"];
 const LOCAL = isLocalMode();
 
 const NAV_LINKS = [
+  { href: "#agents", label: "Agents" },
   { href: "#pomodoro", label: "Pomodoro" },
   { href: "#ai", label: "AI" },
-  { href: "#agents", label: "Agents" },
   { href: "#extension", label: "Extension" },
   { href: "#analytics", label: "Analytics" },
   { href: "#open-source", label: "Open source" },
@@ -213,15 +212,16 @@ export default function LandingPage() {
             </div>
           </section>
 
-          {/* ── How it works ─────────────────────────────────────── */}
-          <LandingSection id="how">
-            <div className="flex flex-col" style={{ gap: 28 }}>
+          {/* ── MCP & agents ─────────────────────────────────────── */}
+          <LandingSection id="agents">
+            <div className="flex flex-col" style={{ gap: 24 }}>
               <SectionHead
-                eyebrow="How it works"
-                title="One core. Two ways in."
-                copy="You, Ask AI, and your agents all hit the same tools and the same data. Nothing forks. The board you see is the board they edit."
+                eyebrow="MCP & agents"
+                title="Any MCP agent. Same hands as you."
+                copy="Claude, ChatGPT, Cursor, Hermes, OpenClaw — if it speaks MCP, it works. On focusspace.live, create a token in Settings and your agent connects to your account; nothing to install. Or paste the self-host one-liner and the agent installs a local, no-login FocusSpace and wires MCP. Either way it can do everything you can: tasks, timer, music, analytics — and it asks before starting the timer."
               />
-              <HowItWorksDiagram />
+              <McpDiagram />
+              <CopyInstallBox />
             </div>
           </LandingSection>
 
@@ -275,19 +275,6 @@ export default function LandingPage() {
               <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", opacity: 0.75 }}>
                 Optional — turn Ask AI off any time in Settings.
               </p>
-            </div>
-          </LandingSection>
-
-          {/* ── MCP & agents ─────────────────────────────────────── */}
-          <LandingSection id="agents">
-            <div className="flex flex-col" style={{ gap: 24 }}>
-              <SectionHead
-                eyebrow="MCP & agents"
-                title="Any MCP agent. Same hands as you."
-                copy="Claude, ChatGPT, Cursor, Hermes, OpenClaw — if it speaks MCP, it works. On focusspace.live, create a token in Settings and your agent connects to your account; nothing to install. Or paste the self-host one-liner and the agent installs a local, no-login FocusSpace and wires MCP. Either way it can do everything you can: tasks, timer, music, analytics — and it asks before starting the timer."
-              />
-              <McpDiagram />
-              <CopyInstallBox />
             </div>
           </LandingSection>
 

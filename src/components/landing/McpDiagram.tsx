@@ -12,7 +12,8 @@ function Desktop() {
           <stop offset="0%" stopColor="#ff5fa2" />
           <stop offset="100%" stopColor="#b06bf6" />
         </linearGradient>
-        <linearGradient id="mcp-bus" x1="0" y1="0" x2="1" y2="0">
+        {/* userSpaceOnUse: the MCP → tools line is horizontal (zero-height bbox) */}
+        <linearGradient id="mcp-bus" gradientUnits="userSpaceOnUse" x1="420" y1="190" x2="508" y2="190">
           <stop offset="0%" stopColor="#8fb6ff" />
           <stop offset="100%" stopColor="#b06bf6" />
         </linearGradient>
