@@ -4,6 +4,7 @@ import { useEffect, useRef, useCallback, useState } from "react";
 import { useTimerStore, getElapsedSec, getRemainingMs, type TimerMode } from "@/lib/stores/timer";
 import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
+import { unlockAudio } from "@/lib/audio/tones";
 
 // Completion listeners shared across all useTimer instances (focus page +
 // pop-out miniplayer both mount the hook). Whichever instance's tick crosses
@@ -65,6 +66,10 @@ export function useTimer() {
       taskId?: string | null;
       projectId?: string | null;
     }) => {
+      // Starting the timer is a user gesture: unlock audio now (synchronously,
+      // before any await) so the end-of-session sound can play later, even
+      // from a background tab.
+      unlockAudio();
       const { data: { user } } = await supabase.auth.getUser();
       const { data: sessionData } = await supabase
         .from("focus_sessions")
@@ -254,6 +259,7 @@ export function useTimer() {
   }, [store, persistUi]);
 
   const resume = useCallback(() => {
+    unlockAudio();
     store.resume();
     void persistUi();
   }, [store, persistUi]);
