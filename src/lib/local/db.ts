@@ -29,9 +29,29 @@ export function getSqlite() {
   _db.pragma("journal_mode = WAL");
   _db.pragma("foreign_keys = ON");
   _db.exec(LOCAL_SCHEMA);
+  addMissingColumns(_db);
   if (firstBoot) bootstrap(_db);
   ensureBootstrap(_db);
   return _db;
+}
+
+/**
+ * CREATE TABLE IF NOT EXISTS doesn't add columns to a database created by an
+ * older version, so columns added after the initial local schema are listed
+ * here and added on boot when missing (SQLite has no ADD COLUMN IF NOT EXISTS).
+ */
+const ADDED_COLUMNS: { table: string; column: string; ddl: string }[] = [
+  { table: "user_settings", column: "spotify_auto_pause", ddl: "INTEGER NOT NULL DEFAULT 1" },
+  { table: "user_settings", column: "spotify_resume_on_focus", ddl: "INTEGER NOT NULL DEFAULT 1" },
+];
+
+function addMissingColumns(db: InstanceType<BetterSqlite>) {
+  for (const { table, column, ddl } of ADDED_COLUMNS) {
+    const cols = db.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[];
+    if (!cols.some((c) => c.name === column)) {
+      db.exec(`ALTER TABLE ${table} ADD COLUMN ${column} ${ddl}`);
+    }
+  }
 }
 
 /** Create the implicit local user + a starter project on first launch. */

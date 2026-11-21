@@ -52,6 +52,8 @@ export type Database = {
           spotify_token_expires_at: string | null;
           spotify_auto_start: boolean;
           spotify_takeover: boolean;
+          spotify_auto_pause: boolean;
+          spotify_resume_on_focus: boolean;
           glass_tint: number;
           glass_blur: number;
           active_effect: string | null;
@@ -84,6 +86,8 @@ export type Database = {
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
           spotify_takeover?: boolean;
+          spotify_auto_pause?: boolean;
+          spotify_resume_on_focus?: boolean;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
@@ -115,6 +119,8 @@ export type Database = {
           spotify_token_expires_at?: string | null;
           spotify_auto_start?: boolean;
           spotify_takeover?: boolean;
+          spotify_auto_pause?: boolean;
+          spotify_resume_on_focus?: boolean;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
