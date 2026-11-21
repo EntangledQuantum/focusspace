@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 import { buildAgentSetup } from "@/lib/agent/setup";
-import { FOR_AGENTS_MD } from "@/lib/agent/for-agents.md";
+import { FOR_AGENTS_MD, FOR_AGENTS_CLOUD_MD } from "@/lib/agent/for-agents.md";
 import { formatStatus, mmss, timerLine } from "@/lib/ai/status";
 import { bearerFrom, hashToken, lookupToken } from "@/lib/mcp/auth";
 import { handleMcpMessage, listToolDefs } from "@/lib/mcp/handle";
@@ -13,7 +13,7 @@ describe("agent setup snippets", () => {
   it("builds the one-liner, Claude Code command and JSON from the origin + token", () => {
     const s = buildAgentSetup("https://focusspace.live/", "fs_abc123");
     expect(s.oneLiner).toBe(
-      "Read https://focusspace.live/for-agents.md and set up the FocusSpace MCP server for me with URL https://focusspace.live/api/mcp and token fs_abc123.",
+      "Read https://focusspace.live/for-agents/cloud.md and connect the FocusSpace MCP server for me (hosted — don't install anything): URL https://focusspace.live/api/mcp, token fs_abc123.",
     );
     expect(s.claudeCode).toBe('claude mcp add --transport http focusspace https://focusspace.live/api/mcp --header "Authorization: Bearer fs_abc123"');
     expect(JSON.parse(s.json)).toEqual({
@@ -21,26 +21,36 @@ describe("agent setup snippets", () => {
     });
   });
 
-  it("omits auth for a local install", () => {
+  it("omits auth for a local install and points at the self-host guide", () => {
     const s = buildAgentSetup("http://127.0.0.1:3000", null);
-    expect(s.oneLiner).toMatch(/URL http:\/\/127\.0\.0\.1:3000\/api\/mcp \(local install, no token needed\)\.$/);
+    expect(s.docUrl).toBe("http://127.0.0.1:3000/for-agents.md");
+    expect(s.oneLiner).toMatch(/skip the install: URL http:\/\/127\.0\.0\.1:3000\/api\/mcp \(local, no token needed\)\.$/);
     expect(s.claudeCode).not.toMatch(/Authorization/);
     expect(JSON.parse(s.json).mcpServers.focusspace.headers).toBeUndefined();
   });
 });
 
 describe("agent guide", () => {
-  it("docs/for-agents.md matches the served guide (run scripts/gen-agent-docs.ts)", () => {
-    const file = readFileSync(path.join(__dirname, "..", "docs", "for-agents.md"), "utf8");
-    expect(file).toBe(FOR_AGENTS_MD);
+  it("docs/*.md match the served guides (run scripts/gen-agent-docs.ts)", () => {
+    const read = (f: string) => readFileSync(path.join(__dirname, "..", "docs", f), "utf8");
+    expect(read("for-agents.md")).toBe(FOR_AGENTS_MD);
+    expect(read("for-agents-cloud.md")).toBe(FOR_AGENTS_CLOUD_MD);
+  });
+
+  it("keeps the cloud guide install-free and the self-host guide token-free", () => {
+    expect(FOR_AGENTS_CLOUD_MD).not.toMatch(/git clone|npm install|docker compose/);
+    expect(FOR_AGENTS_CLOUD_MD).toMatch(/Authorization: Bearer fs_/);
+    expect(FOR_AGENTS_MD).toMatch(/git clone/);
+    expect(FOR_AGENTS_MD).not.toMatch(/claude mcp add[^\n]*Authorization/);
   });
 
   it("documents every MCP tool", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fake = { from: () => ({}) } as any;
     const names = listToolDefs(makeTaskTools(fake, "u", { destructive: "allow", surface: "mcp" })).map((d) => d.name);
-    const missing = names.filter((n) => !FOR_AGENTS_MD.includes(`\`${n}(`));
-    expect(missing).toEqual([]);
+    for (const doc of [FOR_AGENTS_MD, FOR_AGENTS_CLOUD_MD]) {
+      expect(names.filter((n) => !doc.includes(`\`${n}(`))).toEqual([]);
+    }
   });
 });
 

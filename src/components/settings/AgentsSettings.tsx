@@ -187,8 +187,9 @@ export function AgentsSettings() {
             </div>
           )}
           <p style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.8, lineHeight: 1.5 }}>
+            Your agent connects to this hosted account — nothing is installed on your machine and your data stays on FocusSpace.
             Endpoint <code>{setup.mcpUrl}</code> · header <code>Authorization: Bearer fs_…</code> · agent guide{" "}
-            <a href={setup.docUrl} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "var(--color-primary)" }}>for-agents.md</a>
+            <a href={`${origin.replace(/\/+$/, "")}/for-agents/cloud.md`} target="_blank" rel="noreferrer" className="hover:underline" style={{ color: "var(--color-primary)" }}>for-agents/cloud.md</a>
           </p>
         </div>
       )}

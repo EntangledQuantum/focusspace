@@ -1,49 +1,41 @@
-# FocusSpace — agent guide
+# FocusSpace — self-host guide for agents
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. You control all of it through **MCP tools**: the same actions a human has in the app.
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Agents control all of it through **MCP tools**: the same actions a human has in the app.
 
-- Canonical guide: https://focusspace.live/for-agents.md (raw fallback: https://raw.githubusercontent.com/EntangledQuantum/focusspace/master/docs/for-agents.md)
+**This guide = self-host.** You install FocusSpace on the human's own machine. It ships with its own MCP server, so after install you connect to that local server. Nothing goes to focusspace.live; all data stays in a local SQLite file.
+
+> **Wrong guide?** If the human gave you a `fs_…` token and a `focusspace.live` URL, they use the hosted app. Do **not** install anything — follow https://focusspace.live/for-agents/cloud.md instead.
+
+- This guide: https://focusspace.live/for-agents.md (raw fallback: https://raw.githubusercontent.com/EntangledQuantum/focusspace/master/docs/for-agents.md)
 - Repo: https://github.com/EntangledQuantum/focusspace
 
-## 1. Connect
+## 1. Install
 
-Pick the case that matches what the human gave you.
+Local mode = one implicit user, no login, SQLite at `~/.focusspace/focusspace.db`. Reuse an existing checkout if there is one.
 
-### A. Hosted — the human gave you a URL + token (`fs_…`)
-
-- Endpoint: `https://focusspace.live/api/mcp` (or the URL they gave). MCP **Streamable HTTP**, stateless, JSON responses.
-- Auth header on every request: `Authorization: Bearer fs_…`. Tokens are created/revoked in FocusSpace → Settings → Agents & MCP.
-- Treat the token as a password: put it only in the MCP config, never in files you commit or in chat summaries.
-
-Claude Code:
 ```bash
-claude mcp add --transport http focusspace https://focusspace.live/api/mcp --header "Authorization: Bearer fs_…"
+git clone https://github.com/EntangledQuantum/focusspace.git && cd focusspace
+node skills/focusspace/scripts/setup-local.mjs   # creates ~/.focusspace and .env.local (local mode)
+npm install && npm run dev                       # Node 20+ — or: docker compose up --build -d
 ```
 
-JSON config — Cursor (`~/.cursor/mcp.json`), Claude Code (`.mcp.json`), Windsurf, Hermes, OpenClaw and most clients:
-```json
-{ "mcpServers": { "focusspace": { "type": "http", "url": "https://focusspace.live/api/mcp", "headers": { "Authorization": "Bearer fs_…" } } } }
-```
+If `.env.local` already existed, make sure it contains `FOCUSSPACE_MODE=local` and `NEXT_PUBLIC_FOCUSSPACE_MODE=local`. Never ask the human for Supabase or cloud credentials — local mode needs none. The app is at http://127.0.0.1:3000.
 
-Claude Desktop (stdio-only config → bridge with mcp-remote):
-```json
-{ "mcpServers": { "focusspace": { "command": "npx", "args": ["-y", "mcp-remote", "https://focusspace.live/api/mcp", "--header", "Authorization:${AUTH}"], "env": { "AUTH": "Bearer fs_…" } } } }
-```
+## 2. Connect the local MCP server
 
-Then call `get_workspace_state`. A 401 means the token is wrong or revoked — ask the human for a new one.
+The local install exposes MCP on the machine itself. **No token is needed** — the server only serves its single local user, and access is internal to this machine (127.0.0.1). Pick one:
 
-### B. Self-hosted local (no token)
+- **HTTP** (app must be running): `http://127.0.0.1:3000/api/mcp`
+  ```bash
+  claude mcp add --transport http focusspace http://127.0.0.1:3000/api/mcp
+  ```
+  JSON: `{ "mcpServers": { "focusspace": { "type": "http", "url": "http://127.0.0.1:3000/api/mcp" } } }`
+- **stdio** (works without the web app running; run from the repo root): command `npm run mcp` (= `npx tsx scripts/mcp-stdio.ts`)
+  JSON: `{ "mcpServers": { "focusspace": { "command": "npm", "args": ["run", "mcp"], "cwd": "<repo path>" } } }`
 
-Local mode is one implicit user on SQLite (`~/.focusspace/focusspace.db`), no login.
+Then call `get_workspace_state`: you should see an idle timer and a starter board. Hermes / OpenClaw / Docker specifics: `skills/focusspace/` in the repo.
 
-1. `git clone https://github.com/EntangledQuantum/focusspace.git && cd focusspace`
-2. Node 20+: `node skills/focusspace/scripts/setup-local.mjs && npm install && npm run dev` — or Docker: `docker compose up --build -d`
-3. Register MCP: HTTP `http://127.0.0.1:3000/api/mcp` (no auth header), or stdio `npm run mcp` (= `npx tsx scripts/mcp-stdio.ts`) from the repo root.
-4. Call `get_workspace_state`.
-
-Details: `skills/focusspace/` in the repo (Hermes, OpenClaw, Docker notes).
-
-## 2. Rules
+## Rules
 
 1. Call `get_workspace_state` first, and again whenever you need fresh timer/task state. It is cheap.
 2. Find things with `search_tasks` / `list_projects` / `list_tasks`, then act **by id**. Names also work, but an ambiguous name returns an error listing candidates — ask the human or retry with the id. Never invent ids.
@@ -51,7 +43,7 @@ Details: `skills/focusspace/` in the repo (Hermes, OpenClaw, Docker notes).
 4. Estimate pomodoros from the real focus length in `get_workspace_state`: `ceil(minutes / focus)`, max 24, halves allowed.
 5. Durations are **seconds**. Times are ISO UTC; `get_workspace_state` also shows the user's local clock and timezone.
 
-## 3. Tools
+## Tools
 
 `?` = optional. `*Ref` args accept an id or a name.
 
@@ -85,9 +77,9 @@ Details: `skills/focusspace/` in the repo (Hermes, OpenClaw, Docker notes).
 - `now_playing()` · `search_music(query, type?, limit?)` · `play_music(uri? | query?)` · `pause_music()` · `resume_music()` · `next_track()` · `previous_track()` · `set_volume(percent)` · `set_shuffle(on)`
 
 **Confirmation**
-- `confirm_action(action, id)` — only after the human confirmed a deferred delete (see §5)
+- `confirm_action(action, id)` — only after the human confirmed a deferred delete (see "Results & errors")
 
-## 4. Workflows
+## Workflows
 
 - **"What's running / how long is left?"** → `get_workspace_state` → read the `timer:` line.
 - **"Start a 25-min focus on X"** → `search_tasks(query:"X")` → `start_timer(taskRef:<id>, durationSec:1500)` (omit durationSec to use their focus length).
@@ -109,7 +101,7 @@ music: playing · Weightless — Marconi Union
 tz: Europe/Berlin · deletes: confirm
 ```
 
-## 5. Results & errors
+## Results & errors
 
 - Results are terse text: one fact per line, ids inline as `(id: <uuid>)`. Chain calls with those ids.
 - Failures come back as a tool error (`isError: true`) with one readable line, e.g. `No task matching "x"`, `"write" matches several tasks — …`, `Timer is not running.`, `A session is already in progress.`, `Invalid arguments — title: …`. Fix the call or ask the human; don't repeat it unchanged.

@@ -34,7 +34,7 @@ export const MCP_INSTRUCTIONS =
   "Find items with search_tasks / list_projects / list_tasks, then act by id (names work, but an ambiguous name returns a list instead of guessing). " +
   "Timer: start_timer / pause_timer / resume_timer / skip_timer / reset_timer (= stop) / set_active_task. " +
   "After creating a task, ask before starting the timer. analytics_* for focus-time questions; now_playing / play_music for Spotify. " +
-  "A delete may return {__confirm,...}: ask the user, then call confirm_action. Guide: https://focusspace.live/for-agents.md";
+  "A delete may return {__confirm,...}: ask the user, then call confirm_action. Guide: https://focusspace.live/for-agents/cloud.md (hosted) or /for-agents.md (self-host)";
 
 type ToolRecord = { description?: string; inputSchema?: unknown; execute?: (a: unknown, opts: unknown) => Promise<unknown> };
 const isZod = (s: unknown): s is z.ZodType => !!s && typeof (s as z.ZodType).safeParse === "function";

@@ -24,15 +24,17 @@ FocusSpace is a Pomodoro + task board. Agents can do everything a human can on t
 
 **Setup mode today:** individual self-host only. Local SQLite at `~/.focusspace/focusspace.db`, no login, one implicit user. Per-user auth for this mode is coming later.
 
-Do **not** offer or mention a hosted/Supabase setup. Do **not** ask “local vs cloud”. This skill is local-only.
+This skill is the **self-host** path: do not offer a hosted/Supabase setup and do not ask “local vs cloud”.
 
-Humans paste this line to start you:
+**Exception — hosted account:** if the human gave you an `fs_…` token and a `focusspace.live/api/mcp` URL, they already use the hosted app. Do **not** install anything; follow https://focusspace.live/for-agents/cloud.md and only register the remote MCP server with their token.
+
+Humans paste this line to start a self-host:
 
 ```
-read this and setup focusspace for me https://focusspace.live/for-agents
+Read https://focusspace.live/for-agents.md and self-host FocusSpace for me on this machine.
 ```
 
-The machine-readable twin of that page is https://focusspace.live/for-agents.md.
+Self-host guide: https://focusspace.live/for-agents.md · hosted-account guide: https://focusspace.live/for-agents/cloud.md.
 
 ## When to use
 

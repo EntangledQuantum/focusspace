@@ -53,7 +53,10 @@ export async function GET(req: NextRequest) {
     protocol: "mcp",
     transport: "streamable-http (stateless, JSON responses)",
     auth: "Authorization: Bearer <token from Settings → Agents & MCP> (not needed for a local install)",
-    guide: "https://focusspace.live/for-agents.md",
+    guide: {
+      cloud: "https://focusspace.live/for-agents/cloud.md",
+      self_host: "https://focusspace.live/for-agents.md",
+    },
   });
 }
 

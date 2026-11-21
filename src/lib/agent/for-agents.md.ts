@@ -1,54 +1,24 @@
 /**
- * Agent guide served at /for-agents.md (canonical: https://focusspace.live/for-agents.md).
- * docs/for-agents.md is a generated copy for the raw GitHub fallback — after
- * editing, run `npx tsx scripts/gen-agent-docs.ts` (a test checks they match).
+ * Agent guides. Two audiences, one shared tool reference:
+ *
+ * - /for-agents.md        SELF-HOST: the agent installs FocusSpace on the
+ *                         human's machine and wires up its built-in local MCP.
+ * - /for-agents/cloud.md  CLOUD: the human uses focusspace.live and generated
+ *                         a token; the agent installs nothing and just
+ *                         registers the remote MCP server with that token.
+ *
+ * docs/*.md are generated copies for the raw GitHub fallback — after editing,
+ * run `npx tsx scripts/gen-agent-docs.ts` (a test checks they match).
  */
-export const FOR_AGENTS_MD = `# FocusSpace — agent guide
 
-FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. You control all of it through **MCP tools**: the same actions a human has in the app.
+export const SITE = "https://focusspace.live";
+export const SELF_HOST_GUIDE_URL = `${SITE}/for-agents.md`;
+export const CLOUD_GUIDE_URL = `${SITE}/for-agents/cloud.md`;
+const RAW = "https://raw.githubusercontent.com/EntangledQuantum/focusspace/master/docs";
+const REPO = "https://github.com/EntangledQuantum/focusspace";
 
-- Canonical guide: https://focusspace.live/for-agents.md (raw fallback: https://raw.githubusercontent.com/EntangledQuantum/focusspace/master/docs/for-agents.md)
-- Repo: https://github.com/EntangledQuantum/focusspace
-
-## 1. Connect
-
-Pick the case that matches what the human gave you.
-
-### A. Hosted — the human gave you a URL + token (\`fs_…\`)
-
-- Endpoint: \`https://focusspace.live/api/mcp\` (or the URL they gave). MCP **Streamable HTTP**, stateless, JSON responses.
-- Auth header on every request: \`Authorization: Bearer fs_…\`. Tokens are created/revoked in FocusSpace → Settings → Agents & MCP.
-- Treat the token as a password: put it only in the MCP config, never in files you commit or in chat summaries.
-
-Claude Code:
-\`\`\`bash
-claude mcp add --transport http focusspace https://focusspace.live/api/mcp --header "Authorization: Bearer fs_…"
-\`\`\`
-
-JSON config — Cursor (\`~/.cursor/mcp.json\`), Claude Code (\`.mcp.json\`), Windsurf, Hermes, OpenClaw and most clients:
-\`\`\`json
-{ "mcpServers": { "focusspace": { "type": "http", "url": "https://focusspace.live/api/mcp", "headers": { "Authorization": "Bearer fs_…" } } } }
-\`\`\`
-
-Claude Desktop (stdio-only config → bridge with mcp-remote):
-\`\`\`json
-{ "mcpServers": { "focusspace": { "command": "npx", "args": ["-y", "mcp-remote", "https://focusspace.live/api/mcp", "--header", "Authorization:\${AUTH}"], "env": { "AUTH": "Bearer fs_…" } } } }
-\`\`\`
-
-Then call \`get_workspace_state\`. A 401 means the token is wrong or revoked — ask the human for a new one.
-
-### B. Self-hosted local (no token)
-
-Local mode is one implicit user on SQLite (\`~/.focusspace/focusspace.db\`), no login.
-
-1. \`git clone https://github.com/EntangledQuantum/focusspace.git && cd focusspace\`
-2. Node 20+: \`node skills/focusspace/scripts/setup-local.mjs && npm install && npm run dev\` — or Docker: \`docker compose up --build -d\`
-3. Register MCP: HTTP \`http://127.0.0.1:3000/api/mcp\` (no auth header), or stdio \`npm run mcp\` (= \`npx tsx scripts/mcp-stdio.ts\`) from the repo root.
-4. Call \`get_workspace_state\`.
-
-Details: \`skills/focusspace/\` in the repo (Hermes, OpenClaw, Docker notes).
-
-## 2. Rules
+/** Rules, tools, workflows and errors — identical for cloud and self-host. */
+export const TOOL_REFERENCE_MD = `## Rules
 
 1. Call \`get_workspace_state\` first, and again whenever you need fresh timer/task state. It is cheap.
 2. Find things with \`search_tasks\` / \`list_projects\` / \`list_tasks\`, then act **by id**. Names also work, but an ambiguous name returns an error listing candidates — ask the human or retry with the id. Never invent ids.
@@ -56,7 +26,7 @@ Details: \`skills/focusspace/\` in the repo (Hermes, OpenClaw, Docker notes).
 4. Estimate pomodoros from the real focus length in \`get_workspace_state\`: \`ceil(minutes / focus)\`, max 24, halves allowed.
 5. Durations are **seconds**. Times are ISO UTC; \`get_workspace_state\` also shows the user's local clock and timezone.
 
-## 3. Tools
+## Tools
 
 \`?\` = optional. \`*Ref\` args accept an id or a name.
 
@@ -90,9 +60,9 @@ Details: \`skills/focusspace/\` in the repo (Hermes, OpenClaw, Docker notes).
 - \`now_playing()\` · \`search_music(query, type?, limit?)\` · \`play_music(uri? | query?)\` · \`pause_music()\` · \`resume_music()\` · \`next_track()\` · \`previous_track()\` · \`set_volume(percent)\` · \`set_shuffle(on)\`
 
 **Confirmation**
-- \`confirm_action(action, id)\` — only after the human confirmed a deferred delete (see §5)
+- \`confirm_action(action, id)\` — only after the human confirmed a deferred delete (see "Results & errors")
 
-## 4. Workflows
+## Workflows
 
 - **"What's running / how long is left?"** → \`get_workspace_state\` → read the \`timer:\` line.
 - **"Start a 25-min focus on X"** → \`search_tasks(query:"X")\` → \`start_timer(taskRef:<id>, durationSec:1500)\` (omit durationSec to use their focus length).
@@ -114,10 +84,83 @@ music: playing · Weightless — Marconi Union
 tz: Europe/Berlin · deletes: confirm
 \`\`\`
 
-## 5. Results & errors
+## Results & errors
 
 - Results are terse text: one fact per line, ids inline as \`(id: <uuid>)\`. Chain calls with those ids.
 - Failures come back as a tool error (\`isError: true\`) with one readable line, e.g. \`No task matching "x"\`, \`"write" matches several tasks — …\`, \`Timer is not running.\`, \`A session is already in progress.\`, \`Invalid arguments — title: …\`. Fix the call or ask the human; don't repeat it unchanged.
 - **Deletes:** if the human enabled confirmation, a delete returns \`{"__confirm":true,"action":…,"id":…,"summary":…}\` and nothing is deleted yet. Ask the human with the summary; only on "yes" call \`confirm_action(action, id)\`.
 - HTTP 401 = bad/revoked token. JSON-RPC \`-32602\` = unknown tool.
 `;
+
+export const FOR_AGENTS_MD = `# FocusSpace — self-host guide for agents
+
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. Agents control all of it through **MCP tools**: the same actions a human has in the app.
+
+**This guide = self-host.** You install FocusSpace on the human's own machine. It ships with its own MCP server, so after install you connect to that local server. Nothing goes to focusspace.live; all data stays in a local SQLite file.
+
+> **Wrong guide?** If the human gave you a \`fs_…\` token and a \`focusspace.live\` URL, they use the hosted app. Do **not** install anything — follow ${CLOUD_GUIDE_URL} instead.
+
+- This guide: ${SELF_HOST_GUIDE_URL} (raw fallback: ${RAW}/for-agents.md)
+- Repo: ${REPO}
+
+## 1. Install
+
+Local mode = one implicit user, no login, SQLite at \`~/.focusspace/focusspace.db\`. Reuse an existing checkout if there is one.
+
+\`\`\`bash
+git clone ${REPO}.git && cd focusspace
+node skills/focusspace/scripts/setup-local.mjs   # creates ~/.focusspace and .env.local (local mode)
+npm install && npm run dev                       # Node 20+ — or: docker compose up --build -d
+\`\`\`
+
+If \`.env.local\` already existed, make sure it contains \`FOCUSSPACE_MODE=local\` and \`NEXT_PUBLIC_FOCUSSPACE_MODE=local\`. Never ask the human for Supabase or cloud credentials — local mode needs none. The app is at http://127.0.0.1:3000.
+
+## 2. Connect the local MCP server
+
+The local install exposes MCP on the machine itself. **No token is needed** — the server only serves its single local user, and access is internal to this machine (127.0.0.1). Pick one:
+
+- **HTTP** (app must be running): \`http://127.0.0.1:3000/api/mcp\`
+  \`\`\`bash
+  claude mcp add --transport http focusspace http://127.0.0.1:3000/api/mcp
+  \`\`\`
+  JSON: \`{ "mcpServers": { "focusspace": { "type": "http", "url": "http://127.0.0.1:3000/api/mcp" } } }\`
+- **stdio** (works without the web app running; run from the repo root): command \`npm run mcp\` (= \`npx tsx scripts/mcp-stdio.ts\`)
+  JSON: \`{ "mcpServers": { "focusspace": { "command": "npm", "args": ["run", "mcp"], "cwd": "<repo path>" } } }\`
+
+Then call \`get_workspace_state\`: you should see an idle timer and a starter board. Hermes / OpenClaw / Docker specifics: \`skills/focusspace/\` in the repo.
+
+${TOOL_REFERENCE_MD}`;
+
+export const FOR_AGENTS_CLOUD_MD = `# FocusSpace — cloud (focusspace.live) guide for agents
+
+FocusSpace is a Pomodoro timer + task board (projects → tasks → subtasks) with focus analytics and Spotify. You control the human's account through **MCP tools**: the same actions they have in the app.
+
+**This guide = hosted.** The human's FocusSpace runs on focusspace.live and their data lives there. **Do not clone, install or run anything.** Your only job is to register a remote MCP server using the token the human gave you, then act on their behalf.
+
+- This guide: ${CLOUD_GUIDE_URL} (raw fallback: ${RAW}/for-agents-cloud.md)
+- Want to install FocusSpace locally instead? → ${SELF_HOST_GUIDE_URL}
+
+## 1. Connect
+
+- Endpoint: \`${SITE}/api/mcp\` (or the URL the human gave). MCP **Streamable HTTP**, stateless, JSON responses.
+- Auth on every request: \`Authorization: Bearer fs_…\` — the token the human generated in FocusSpace → Settings → Agents & MCP → **New token**. No token? Ask them to create one there and paste you the line it shows.
+- The token is a password for their account: put it only in the MCP config. Never commit it, echo it back, or include it in summaries.
+
+Claude Code:
+\`\`\`bash
+claude mcp add --transport http focusspace ${SITE}/api/mcp --header "Authorization: Bearer fs_…"
+\`\`\`
+
+JSON config — Cursor (\`~/.cursor/mcp.json\`), Claude Code (\`.mcp.json\`), Windsurf, Hermes, OpenClaw and most clients:
+\`\`\`json
+{ "mcpServers": { "focusspace": { "type": "http", "url": "${SITE}/api/mcp", "headers": { "Authorization": "Bearer fs_…" } } } }
+\`\`\`
+
+Claude Desktop (stdio-only config → bridge with mcp-remote):
+\`\`\`json
+{ "mcpServers": { "focusspace": { "command": "npx", "args": ["-y", "mcp-remote", "${SITE}/api/mcp", "--header", "Authorization:\${AUTH}"], "env": { "AUTH": "Bearer fs_…" } } } }
+\`\`\`
+
+Verify by calling \`get_workspace_state\`. HTTP 401 = token wrong or revoked → ask the human for a new one. The human can revoke your access any time from the same settings page.
+
+${TOOL_REFERENCE_MD}`;
