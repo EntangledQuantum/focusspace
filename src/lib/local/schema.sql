@@ -150,7 +150,10 @@ CREATE TABLE IF NOT EXISTS ai_conversations (
   user_id    TEXT NOT NULL,
   title      TEXT NOT NULL DEFAULT 'New chat',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  run_state  TEXT,
+  run_error  TEXT,
+  run_updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ai_messages (

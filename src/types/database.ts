@@ -157,9 +157,15 @@ export type Database = {
         Relationships: [];
       };
       ai_conversations: {
-        Row: { id: string; user_id: string; title: string; created_at: string; updated_at: string };
+        Row: {
+          id: string; user_id: string; title: string; created_at: string; updated_at: string;
+          run_state: "running" | "done" | "error" | "cancelled" | null; run_error: string | null; run_updated_at: string | null;
+        };
         Insert: { id?: string; user_id: string; title?: string; created_at?: string; updated_at?: string };
-        Update: { title?: string; updated_at?: string };
+        Update: {
+          title?: string; updated_at?: string;
+          run_state?: "running" | "done" | "error" | "cancelled" | null; run_error?: string | null; run_updated_at?: string | null;
+        };
         Relationships: [];
       };
       ai_messages: {
