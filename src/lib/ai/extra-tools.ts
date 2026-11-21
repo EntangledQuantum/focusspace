@@ -6,6 +6,7 @@ import { performDelete, DESTRUCTIVE_ACTIONS } from "./confirm";
 import { UUID_RE, ToolError, type makeResolvers } from "./resolve";
 import { remainingSec, writeTimerState, readTimerState, type TimerSnapshot } from "@/lib/timer/persist";
 import { MAX_ESTIMATED_POMOS } from "@/lib/mode";
+import { SOUND_PRESETS, type SoundPresetId } from "@/lib/audio/sound-settings";
 
 type DB = SupabaseClient<Database>;
 type Resolvers = ReturnType<typeof makeResolvers>;
@@ -19,6 +20,8 @@ function fmtDur(sec: number) {
 
 // Same threshold as the UI (useTimer): shorter sessions are accidental.
 const MIN_RECORDED_SEC = 10;
+const TONE_IDS = SOUND_PRESETS.map((p) => p.id) as [SoundPresetId, ...SoundPresetId[]];
+
 const isActive = (t: TimerSnapshot | null): t is TimerSnapshot => !!t && (t.status === "running" || t.status === "paused");
 
 /**
@@ -124,11 +127,11 @@ export function makeExtraTools(
     }),
 
     get_settings: tool({
-      description: "Read timer and app settings (focus length, breaks, auto-start, theme, destructive policy).",
+      description: "Read timer and app settings (focus length, breaks, auto-start, theme, sounds, destructive policy).",
       inputSchema: z.object({}),
       execute: async () => {
         const { data } = await supabase.from("user_settings").select(
-          "focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, theme, ai_destructive, dnd_during_focus, completion_tone",
+          "focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros, theme, ai_destructive, dnd_during_focus, completion_tone, break_end_tone, sound_enabled, sound_volume",
         ).maybeSingle();
         if (!data) return "No settings yet.";
         return JSON.stringify(data, null, 2);
@@ -136,7 +139,7 @@ export function makeExtraTools(
     }),
 
     update_settings: tool({
-      description: "Change timer/app settings. Durations are in SECONDS.",
+      description: "Change timer/app settings: durations (in SECONDS), auto-start, theme, delete confirmation, and notification sounds (on/off, volume, tones).",
       inputSchema: z.object({
         focusDurationSec: z.number().int().min(300).max(7200).optional(),
         shortBreakSec: z.number().int().min(60).max(1800).optional(),
@@ -146,6 +149,11 @@ export function makeExtraTools(
         autoStartPomodoros: z.boolean().optional(),
         theme: z.enum(["dark", "light", "system"]).optional(),
         destructive: z.enum(["allow", "confirm"]).optional(),
+        soundEnabled: z.boolean().optional().describe("Master on/off for notification sounds"),
+        soundVolume: z.number().int().min(0).max(100).optional().describe("Notification volume 0–100"),
+        focusEndTone: z.enum(TONE_IDS).optional().describe("Sound when a focus session ends"),
+        breakEndTone: z.enum(TONE_IDS).optional().describe("Sound when a break ends"),
+        muteDuringFocus: z.boolean().optional().describe("Do-not-disturb: mute tones during focus"),
       }),
       execute: async (input) => {
         const patch: Database["public"]["Tables"]["user_settings"]["Update"] = {};
@@ -157,6 +165,11 @@ export function makeExtraTools(
         if (input.autoStartPomodoros !== undefined) patch.auto_start_pomodoros = input.autoStartPomodoros;
         if (input.theme !== undefined) patch.theme = input.theme;
         if (input.destructive !== undefined) patch.ai_destructive = input.destructive;
+        if (input.soundEnabled !== undefined) patch.sound_enabled = input.soundEnabled;
+        if (input.soundVolume !== undefined) patch.sound_volume = input.soundVolume;
+        if (input.focusEndTone !== undefined) patch.completion_tone = input.focusEndTone;
+        if (input.breakEndTone !== undefined) patch.break_end_tone = input.breakEndTone;
+        if (input.muteDuringFocus !== undefined) patch.dnd_during_focus = input.muteDuringFocus;
         if (!Object.keys(patch).length) throw new ToolError("Nothing to update — pass at least one setting.");
         const { error } = await supabase.from("user_settings").update(patch);
         if (error) throw new ToolError(`Couldn't update settings: ${error.message}`);
