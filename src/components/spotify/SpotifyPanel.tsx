@@ -79,8 +79,8 @@ export function SpotifyPanel() {
 
   return (
     <div className="flex flex-col h-full min-w-0 overflow-hidden" style={{ gap: 9 }}>
-      {/* Header — the pop-out button lives in the dock corner, not here */}
-      <div className="flex items-center" style={{ gap: 7, paddingRight: 104 }}>
+      {/* Header — dock controls live in their own rail now, so no reserved padding */}
+      <div className="flex items-center min-w-0" style={{ gap: 7 }}>
         <SpotifyLogo size={13} />
         <span
           className="uppercase truncate"
@@ -91,7 +91,7 @@ export function SpotifyPanel() {
         >
           Now playing
         </span>
-        <FocusSyncMenu />
+        <span className="ml-auto shrink-0"><FocusSyncMenu /></span>
       </div>
 
       {/* Music chooser — opens the big browse/search modal */}

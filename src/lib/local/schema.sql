@@ -34,6 +34,10 @@ CREATE TABLE IF NOT EXISTS user_settings (
   spotify_takeover        INTEGER NOT NULL DEFAULT 1,
   spotify_auto_pause      INTEGER NOT NULL DEFAULT 1,
   spotify_resume_on_focus INTEGER NOT NULL DEFAULT 1,
+  spotify_web_device_id   TEXT,
+  spotify_web_device_seen_at TEXT,
+  spotify_selected_uri    TEXT,
+  spotify_selected_name   TEXT,
   glass_tint              REAL NOT NULL DEFAULT 0.5,
   glass_blur              INTEGER NOT NULL DEFAULT 22,
   active_effect           TEXT,
@@ -150,7 +154,10 @@ CREATE TABLE IF NOT EXISTS ai_conversations (
   user_id    TEXT NOT NULL,
   title      TEXT NOT NULL DEFAULT 'New chat',
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+  updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+  run_state  TEXT,
+  run_error  TEXT,
+  run_updated_at TEXT
 );
 
 CREATE TABLE IF NOT EXISTS ai_messages (

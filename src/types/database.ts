@@ -57,6 +57,12 @@ export type Database = {
           spotify_takeover: boolean;
           spotify_auto_pause: boolean;
           spotify_resume_on_focus: boolean;
+          /** Web Playback SDK device id of the user's FocusSpace tab (0015). */
+          spotify_web_device_id: string | null;
+          spotify_web_device_seen_at: string | null;
+          /** Music picked in FocusSpace's picker (0015). */
+          spotify_selected_uri: string | null;
+          spotify_selected_name: string | null;
           glass_tint: number;
           glass_blur: number;
           active_effect: string | null;
@@ -94,6 +100,10 @@ export type Database = {
           spotify_takeover?: boolean;
           spotify_auto_pause?: boolean;
           spotify_resume_on_focus?: boolean;
+          spotify_web_device_id?: string | null;
+          spotify_web_device_seen_at?: string | null;
+          spotify_selected_uri?: string | null;
+          spotify_selected_name?: string | null;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
@@ -130,6 +140,10 @@ export type Database = {
           spotify_takeover?: boolean;
           spotify_auto_pause?: boolean;
           spotify_resume_on_focus?: boolean;
+          spotify_web_device_id?: string | null;
+          spotify_web_device_seen_at?: string | null;
+          spotify_selected_uri?: string | null;
+          spotify_selected_name?: string | null;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
@@ -157,9 +171,15 @@ export type Database = {
         Relationships: [];
       };
       ai_conversations: {
-        Row: { id: string; user_id: string; title: string; created_at: string; updated_at: string };
+        Row: {
+          id: string; user_id: string; title: string; created_at: string; updated_at: string;
+          run_state: "running" | "done" | "error" | "cancelled" | null; run_error: string | null; run_updated_at: string | null;
+        };
         Insert: { id?: string; user_id: string; title?: string; created_at?: string; updated_at?: string };
-        Update: { title?: string; updated_at?: string };
+        Update: {
+          title?: string; updated_at?: string;
+          run_state?: "running" | "done" | "error" | "cancelled" | null; run_error?: string | null; run_updated_at?: string | null;
+        };
         Relationships: [];
       };
       ai_messages: {

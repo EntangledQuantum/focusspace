@@ -170,16 +170,16 @@ function SessionCol({
           <button
             onClick={onFinishTask}
             className="pill hover-lift chip-accent justify-center flex-1"
-            style={{ padding: "8px 12px", fontSize: 12.5 }}
+            style={{ padding: "8px 12px", fontSize: 12.5, whiteSpace: "nowrap", minWidth: 0 }}
           >
-            <Check size={14} /> Mark task done
+            <Check size={14} className="shrink-0" /> Mark done
           </button>
           <button
             onClick={onResetTask}
             className="pill hover-lift justify-center"
             title="Reset this task — uncheck every subtask and clear the session timeline"
             style={{
-              padding: "8px 12px", fontSize: 12.5,
+              padding: "8px 12px", fontSize: 12.5, whiteSpace: "nowrap",
               color: "var(--color-on-surface-variant)",
               background: "rgba(255,255,255,0.05)",
               border: "1px solid rgba(255,255,255,0.08)",
@@ -251,7 +251,7 @@ export function FocusDock(props: Props) {
     if (!ok) toast.error("Mini player needs Chrome 116+ (Document Picture-in-Picture).");
   }
 
-  const divider = <div style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.06)" }} />;
+  const divider = <div className="dock-divider" style={{ width: 1, alignSelf: "stretch", background: "rgba(255,255,255,0.06)" }} />;
 
   return (
     <>
@@ -273,39 +273,16 @@ export function FocusDock(props: Props) {
             pointerEvents: focusMode ? "none" : "auto",
           }}
         >
-          {/* Corner controls: fullscreen · pop-out · focus mode */}
-          <div className="absolute flex items-center" style={{ top: 12, right: 12, gap: 6, zIndex: 2 }}>
-            <button
-              onClick={onToggleFullscreen}
-              className="icon-btn"
-              title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
-              style={{ width: 30, height: 30 }}
-            >
-              {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
-            </button>
-            <button
-              onClick={openMiniPlayer}
-              className="icon-btn"
-              title="Pop out mini player"
-              style={{ width: 30, height: 30 }}
-            >
-              <PictureInPicture2 size={14} />
-            </button>
-            <button
-              onClick={() => setFocusMode(true)}
-              className="icon-btn"
-              title="Enter focus mode — hide the dock"
-              style={{ width: 30, height: 30 }}
-            >
-              <Shrink size={15} />
-            </button>
-          </div>
           <div
-            className="grid"
+            className="grid focus-dock-grid"
             style={{
-              gridTemplateColumns: isConnected ? "1.1fr 1px 1fr 1px 1.05fr" : "1.2fr 1px 1fr",
+              // minmax(0, …) so long subtask titles can't steal width; music keeps a usable minimum.
+              // Narrow screens stack the columns (globals.css .focus-dock-grid).
+              ["--dock-cols" as string]: isConnected
+                ? "minmax(0, 1fr) 1px minmax(0, 0.8fr) 1px minmax(250px, 1.2fr) auto"
+                : "minmax(0, 1.2fr) 1px minmax(0, 1fr) auto",
               gap: 18, minHeight: 108,
-            }}
+            } as React.CSSProperties}
           >
             <SubtasksCol activeTask={props.activeTask} subtasks={props.subtasks} onToggleSubtask={props.onToggleSubtask} />
             {divider}
@@ -326,6 +303,34 @@ export function FocusDock(props: Props) {
                 <SpotifyPanel />
               </>
             )}
+            {/* Control rail: fullscreen · pop-out · focus mode (own column, so it never crowds the music header) */}
+            <div className="dock-rail flex flex-col items-center" style={{ gap: 6, marginRight: -4 }}>
+              <button
+                onClick={onToggleFullscreen}
+                className="icon-btn"
+                title={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"}
+                style={{ width: 30, height: 30 }}
+              >
+                {isFullscreen ? <Minimize2 size={14} /> : <Maximize2 size={14} />}
+              </button>
+              <button
+                onClick={openMiniPlayer}
+                className="icon-btn"
+                title="Pop out mini player"
+                style={{ width: 30, height: 30 }}
+              >
+                <PictureInPicture2 size={14} />
+              </button>
+              <button
+                onClick={() => setFocusMode(true)}
+                className="icon-btn"
+                title="Enter focus mode — hide the dock"
+                style={{ width: 30, height: 30 }}
+              >
+                <Shrink size={15} />
+              </button>
+            </div>
+
           </div>
         </div>
       </div>

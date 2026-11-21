@@ -1,6 +1,8 @@
 "use client";
 
+import { useState } from "react";
 import type { UIMessage } from "ai";
+import { Brain, ChevronRight } from "lucide-react";
 import { Markdown } from "./Markdown";
 import { ToolCard, type ToolState } from "./ToolCard";
 
@@ -42,6 +44,11 @@ export function ChatMessage({
           return <Markdown key={i}>{part.text}</Markdown>;
         }
 
+        if (part.type === "reasoning" && !isUser) {
+          if (!part.text?.trim()) return null;
+          return <Reasoning key={i} text={part.text} streaming={part.state === "streaming"} />;
+        }
+
         if (part.type === "dynamic-tool" || (typeof part.type === "string" && part.type.startsWith("tool-"))) {
           const name = part.type === "dynamic-tool" ? part.toolName : part.type.slice(5);
           return (
@@ -58,6 +65,40 @@ export function ChatMessage({
 
         return null;
       })}
+    </div>
+  );
+}
+
+/**
+ * The model's streamed "thinking". Live (last few lines, dimmed) while it
+ * streams so the user sees the agent is working; collapsed once done.
+ */
+function Reasoning({ text, streaming }: { text: string; streaming: boolean }) {
+  const [open, setOpen] = useState(false);
+  const tail = text.trim().split("\n").slice(-3).join("\n");
+  return (
+    <div style={{ borderRadius: 12, padding: "7px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center w-full text-left"
+        style={{ gap: 6, fontSize: 12, color: "var(--color-on-surface-variant)" }}
+        aria-expanded={open}
+      >
+        <Brain size={12} className={streaming ? "animate-pulse" : undefined} />
+        <span style={{ fontWeight: 600 }}>{streaming ? "Thinking…" : "Thought process"}</span>
+        <ChevronRight size={12} style={{ marginLeft: "auto", transform: open ? "rotate(90deg)" : "none", transition: "transform .15s" }} />
+      </button>
+      {(open || streaming) && (
+        <p
+          style={{
+            marginTop: 5, fontSize: 12, lineHeight: 1.5, whiteSpace: "pre-wrap", color: "var(--color-on-surface-variant)", opacity: 0.75,
+            ...(open ? { maxHeight: 260, overflowY: "auto" } : { maxHeight: 56, overflow: "hidden" }),
+          }}
+        >
+          {open ? text.trim() : tail}
+        </p>
+      )}
     </div>
   );
 }
