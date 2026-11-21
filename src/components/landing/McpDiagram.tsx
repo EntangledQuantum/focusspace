@@ -53,12 +53,12 @@ function Desktop() {
       <text x={360} y={206} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>one protocol</text>
 
       {/* FocusSpace tools */}
-      <rect x={508} y={78} width={184} height={224} rx={22} fill="rgba(19,16,23,0.55)" stroke="rgba(255,255,255,0.12)" />
+      <rect x={508} y={78} width={184} height={224} rx={22} fill="rgba(19,16,23,0.55)" stroke="rgba(var(--ink), 0.12)" />
       <text x={600} y={112} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 14, fontWeight: 800 }}>FocusSpace</text>
       <text x={600} y={130} textAnchor="middle" fill="var(--color-on-surface-variant)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>hosted or local</text>
       {["tasks & subtasks", "timer + music", "analytics", "asks before the ring"].map((label, i) => (
         <g key={label}>
-          <rect x={528} y={148 + i * 34} width={144} height={26} rx={13} fill="rgba(255,255,255,0.05)" stroke="rgba(255,255,255,0.10)" />
+          <rect x={528} y={148 + i * 34} width={144} height={26} rx={13} fill="rgba(var(--ink), 0.05)" stroke="rgba(var(--ink), 0.10)" />
           <text x={600} y={165 + i * 34} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-sans)", fontSize: 11 }}>
             {label}
           </text>

@@ -77,14 +77,14 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
               background: "color-mix(in srgb, var(--color-surface-container) 92%, transparent)",
               backdropFilter: "blur(28px) saturate(140%)",
               WebkitBackdropFilter: "blur(28px) saturate(140%)",
-              border: "1px solid rgba(255,255,255,0.10)",
-              boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
+              border: "1px solid rgba(var(--ink), 0.10)",
+              boxShadow: "inset 0 1px 0 rgba(var(--ink), 0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
             }}
           >
             {/* Header */}
             <div
               className="flex items-center"
-              style={{ gap: 10, padding: "16px 18px", borderBottom: "1px solid rgba(255,255,255,0.06)" }}
+              style={{ gap: 10, padding: "16px 18px", borderBottom: "1px solid rgba(var(--ink), 0.06)" }}
             >
               <Search size={17} style={{ color: "var(--color-on-surface-variant)", opacity: 0.7 }} />
               <input
@@ -142,7 +142,7 @@ export function TaskPicker({ open, onClose, onSelect }: Props) {
                               key={tag.id}
                               style={{
                                 fontSize: 10.5, fontWeight: 600, padding: "3px 8px", borderRadius: 99,
-                                color: tag.color,
+                                color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                                 background: `color-mix(in srgb, ${tag.color} 16%, transparent)`,
                               }}
                             >

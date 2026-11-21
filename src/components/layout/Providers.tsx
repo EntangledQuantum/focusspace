@@ -236,7 +236,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
           toastOptions={{
             style: {
               background: "var(--color-surface-container-high)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              border: "1px solid rgba(var(--ink), 0.08)",
               color: "var(--color-on-surface)",
               backdropFilter: "blur(20px)",
             },

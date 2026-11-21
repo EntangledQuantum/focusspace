@@ -39,7 +39,7 @@ export function DemoRing({ size = 220 }: { size?: number }) {
             <stop offset="100%" stopColor="var(--color-secondary)" />
           </linearGradient>
         </defs>
-        <circle cx={cx} cy={cx} r={R} fill="none" stroke="rgba(255,255,255,0.13)" strokeWidth="6" />
+        <circle cx={cx} cy={cx} r={R} fill="none" stroke="rgba(var(--ink), 0.13)" strokeWidth="6" />
         <circle
           cx={cx}
           cy={cx}

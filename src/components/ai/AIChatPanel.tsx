@@ -323,7 +323,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
       )}
 
       {/* Header */}
-      <div className="relative flex items-center" style={{ gap: 10, padding: "12px 14px 12px 16px", borderBottom: "1px solid rgba(255,255,255,0.06)", zIndex: 3 }}>
+      <div className="relative flex items-center" style={{ gap: 10, padding: "12px 14px 12px 16px", borderBottom: "1px solid rgba(var(--ink), 0.06)", zIndex: 3 }}>
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img src="/focus-ai.png" alt="" className="shrink-0" style={{ width: 30, height: 30, objectFit: "contain" }} />
         <div className="flex-1 min-w-0">
@@ -363,13 +363,13 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
           {history.isLoading ? (
             <div className="flex flex-col" style={{ gap: 6 }} aria-busy="true" aria-label="Loading chats">
               {[0, 1, 2, 3, 4].map((i) => (
-                <div key={i} className="animate-pulse" style={{ height: 46, borderRadius: 12, background: "rgba(255,255,255,0.06)", opacity: 1 - i * 0.15 }} />
+                <div key={i} className="animate-pulse" style={{ height: 46, borderRadius: 12, background: "rgba(var(--ink), 0.06)", opacity: 1 - i * 0.15 }} />
               ))}
             </div>
           ) : history.isError ? (
             <div className="flex flex-col items-center" style={{ gap: 8, padding: 24, color: "var(--color-on-surface-variant)", fontSize: 12.5 }}>
               Couldn&apos;t load your chats.
-              <button onClick={() => history.refetch()} className="pill btn-hover-surface" style={{ padding: "5px 12px", fontSize: 12, background: "rgba(255,255,255,0.06)" }}>Retry</button>
+              <button onClick={() => history.refetch()} className="pill btn-hover-surface" style={{ padding: "5px 12px", fontSize: 12, background: "rgba(var(--ink), 0.06)" }}>Retry</button>
             </div>
           ) : !history.data?.length ? (
             <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", padding: "20px 8px", textAlign: "center" }}>
@@ -401,7 +401,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
                     {confirming ? (
                       <div className="flex items-center" style={{ gap: 4 }} onClick={(e) => e.stopPropagation()}>
                         <button onClick={() => deleteConversation(c.id)} className="pill" style={{ padding: "4px 10px", fontSize: 11, fontWeight: 600, color: "#fff", background: "var(--color-error)" }}>Delete</button>
-                        <button onClick={() => setPendingDelete(null)} className="pill" style={{ padding: "4px 8px", fontSize: 11, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}>Keep</button>
+                        <button onClick={() => setPendingDelete(null)} className="pill" style={{ padding: "4px 8px", fontSize: 11, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}>Keep</button>
                       </div>
                     ) : (
                       <button
@@ -429,7 +429,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
               {[70, 85, 55, 78].map((w, i) => (
                 <div key={i} className="animate-pulse" style={{
                   alignSelf: i % 2 ? "stretch" : "flex-end", width: `${w}%`, height: i % 2 ? 54 : 34,
-                  borderRadius: 14, background: "rgba(255,255,255,0.07)",
+                  borderRadius: 14, background: "rgba(var(--ink), 0.07)",
                 }} />
               ))}
             </div>
@@ -449,7 +449,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
                     key={s}
                     onClick={() => send(s)}
                     className="text-left btn-hover-surface"
-                    style={{ padding: "10px 13px", borderRadius: 12, fontSize: 13.5, color: "var(--color-on-surface)", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                    style={{ padding: "10px 13px", borderRadius: 12, fontSize: 13.5, color: "var(--color-on-surface)", background: "rgba(var(--ink), 0.05)", border: "1px solid rgba(var(--ink), 0.08)" }}
                   >
                     {s}
                   </button>
@@ -467,7 +467,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
             </div>
           )}
           {recovering && (
-            <div className="flex items-start" role="status" style={{ gap: 8, padding: "9px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45, color: "var(--color-on-surface)", background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.10)" }}>
+            <div className="flex items-start" role="status" style={{ gap: 8, padding: "9px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45, color: "var(--color-on-surface)", background: "rgba(var(--ink), 0.06)", border: "1px solid rgba(var(--ink), 0.10)" }}>
               <WifiOff size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--color-on-surface-variant)" }} />
               <span className="flex-1">Connection lost — the reply is still being written on the server and will appear here.</span>
               <Loader2 size={13} className="animate-spin shrink-0" style={{ marginTop: 2 }} />
@@ -477,7 +477,7 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
             <div className="flex items-start" style={{ gap: 8, padding: "9px 11px", borderRadius: 12, fontSize: 12.5, lineHeight: 1.45, color: "var(--color-on-surface)", background: "color-mix(in srgb, var(--color-error) 22%, transparent)", border: "1px solid color-mix(in srgb, var(--color-error) 40%, transparent)" }}>
               <AlertTriangle size={14} style={{ flexShrink: 0, marginTop: 1, color: "var(--color-error)" }} />
               <span className="flex-1">{error.message || "Something went wrong."}</span>
-              <button onClick={() => { clearError(); setNow(clock()); regenerate({ body: { focusProjectId: projectId, page: pathname, chatId } }); }} className="pill btn-hover-surface" style={{ padding: "3px 9px", fontSize: 11.5, background: "rgba(255,255,255,0.08)" }}>
+              <button onClick={() => { clearError(); setNow(clock()); regenerate({ body: { focusProjectId: projectId, page: pathname, chatId } }); }} className="pill btn-hover-surface" style={{ padding: "3px 9px", fontSize: 11.5, background: "rgba(var(--ink), 0.08)" }}>
                 <RotateCcw size={11} /> Retry
               </button>
             </div>
@@ -485,8 +485,8 @@ export function AIChatPanel({ open, onClose }: { open: boolean; onClose: () => v
         </div>
       )}
 
-      <div className="relative" style={{ padding: 14, borderTop: "1px solid rgba(255,255,255,0.06)", zIndex: 1 }}>
-        <div className="flex items-center" style={{ gap: 8, padding: "6px 8px", borderRadius: 22, background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.10)" }}>
+      <div className="relative" style={{ padding: 14, borderTop: "1px solid rgba(var(--ink), 0.06)", zIndex: 1 }}>
+        <div className="flex items-center" style={{ gap: 8, padding: "6px 8px", borderRadius: 22, background: "rgba(var(--ink), 0.05)", border: "1px solid rgba(var(--ink), 0.10)" }}>
           <textarea
             ref={taRef}
             value={input}

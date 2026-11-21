@@ -56,7 +56,7 @@ export function ExtensionShowcase() {
             target="_blank"
             rel="noreferrer"
             className="pill nav-link-hover"
-            style={{ padding: "11px 16px", fontSize: 13.5, color: "var(--color-on-surface-variant)", border: "1px solid rgba(255,255,255,0.10)" }}
+            style={{ padding: "11px 16px", fontSize: 13.5, color: "var(--color-on-surface-variant)", border: "1px solid rgba(var(--ink), 0.10)" }}
           >
             Install guide
           </a>
@@ -108,7 +108,7 @@ function PopupMock() {
           18:42
         </span>
         <span style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)" }}>Writing · pomodoro 2 of 4</span>
-        <div style={{ width: "100%", height: 4, borderRadius: 4, background: "rgba(255,255,255,0.08)", marginTop: 10, overflow: "hidden" }}>
+        <div style={{ width: "100%", height: 4, borderRadius: 4, background: "rgba(var(--ink), 0.08)", marginTop: 10, overflow: "hidden" }}>
           <div className="grad-primary" style={{ width: "25%", height: "100%" }} />
         </div>
       </div>
@@ -117,11 +117,11 @@ function PopupMock() {
         <span className="flex items-center justify-center grad-primary" style={{ width: 40, height: 40, borderRadius: 999, color: "var(--color-on-primary)" }}>
           <Pause size={17} />
         </span>
-        <span className="pill" style={{ padding: "7px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}>Skip</span>
-        <span className="pill" style={{ padding: "7px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}>Stop</span>
+        <span className="pill" style={{ padding: "7px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}>Skip</span>
+        <span className="pill" style={{ padding: "7px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}>Stop</span>
       </div>
 
-      <div style={{ borderTop: "1px solid rgba(255,255,255,0.07)", paddingTop: 12 }}>
+      <div style={{ borderTop: "1px solid rgba(var(--ink), 0.07)", paddingTop: 12 }}>
         <p style={{ fontSize: 13, fontWeight: 700, color: "var(--color-on-surface)" }}>Ship the launch blog post</p>
         <div className="flex flex-col" style={{ gap: 6, marginTop: 8 }}>
           {subtasks.map((s) => (
@@ -130,7 +130,7 @@ function PopupMock() {
                 className="flex items-center justify-center shrink-0"
                 style={{
                   width: 15, height: 15, borderRadius: 5,
-                  border: s.done ? "none" : "1px solid rgba(255,255,255,0.25)",
+                  border: s.done ? "none" : "1px solid rgba(var(--ink), 0.25)",
                   background: s.done ? "var(--color-primary)" : "transparent",
                   color: "var(--color-on-primary)",
                 }}
@@ -143,7 +143,7 @@ function PopupMock() {
         </div>
       </div>
 
-      <div className="flex items-center" style={{ gap: 10, marginTop: 14, padding: 10, borderRadius: 14, background: "rgba(255,255,255,0.05)" }}>
+      <div className="flex items-center" style={{ gap: 10, marginTop: 14, padding: 10, borderRadius: 14, background: "rgba(var(--ink), 0.05)" }}>
         <span className="shrink-0 grad-primary" style={{ width: 34, height: 34, borderRadius: 9, opacity: 0.85 }} />
         <div className="min-w-0 flex-1">
           <p style={{ fontSize: 12, fontWeight: 700, color: "var(--color-on-surface)" }}>Weightless</p>

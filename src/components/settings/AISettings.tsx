@@ -192,7 +192,7 @@ export function AISettings({
           </Row>
 
           {useOwnKey && (
-            <div className="flex flex-col" style={{ gap: 9, padding: "12px 0 4px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="flex flex-col" style={{ gap: 9, padding: "12px 0 4px", borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
               <div className="flex flex-wrap items-center" style={{ gap: 6 }}>
                 {PRESETS.filter((p) => !p.localOnly || local).map((p) => (
                   <button
@@ -202,8 +202,8 @@ export function AISettings({
                     style={{
                       padding: "4px 10px", fontSize: 11.5,
                       color: baseUrl === p.url ? "var(--color-primary)" : "var(--color-on-surface-variant)",
-                      background: baseUrl === p.url ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: baseUrl === p.url ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(var(--ink), 0.05)",
+                      border: "1px solid rgba(var(--ink), 0.08)",
                     }}
                   >
                     {p.label}
@@ -312,7 +312,7 @@ function Shell({ children }: { children: React.ReactNode }) {
 
 function Row({ label, description, children }: { label: string; description?: string; children: React.ReactNode }) {
   return (
-    <div className="flex items-center justify-between gap-4" style={{ padding: "11px 0", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+    <div className="flex items-center justify-between gap-4" style={{ padding: "11px 0", borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
       <div className="min-w-0">
         <p style={{ fontSize: 13.5, fontWeight: 600, color: "var(--color-on-surface)" }}>{label}</p>
         {description && <p style={{ fontSize: 12, color: "var(--color-on-surface-variant)", opacity: 0.8, marginTop: 2 }}>{description}</p>}
@@ -329,7 +329,7 @@ function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean
       aria-checked={checked}
       onClick={() => onChange(!checked)}
       className={`flex shrink-0 ${checked ? "grad-primary justify-end" : "justify-start"}`}
-      style={{ width: 46, height: 27, borderRadius: 99, padding: 3, background: checked ? undefined : "rgba(255,255,255,0.13)", transition: "background .2s" }}
+      style={{ width: 46, height: 27, borderRadius: 99, padding: 3, background: checked ? undefined : "rgba(var(--ink), 0.13)", transition: "background .2s" }}
     >
       <span style={{ width: 21, height: 21, borderRadius: "50%", background: "#fff", boxShadow: "0 1px 4px rgba(0,0,0,0.3)", transition: "all .2s" }} />
     </button>

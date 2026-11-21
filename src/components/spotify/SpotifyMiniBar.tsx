@@ -35,7 +35,7 @@ export function SpotifyMiniBar() {
       className="fixed bottom-5 left-1/2 -translate-x-1/2 flex items-center gap-3 px-4 py-2.5 rounded-2xl z-50"
       style={{
         background: "var(--color-surface-container-high)",
-        border: "1px solid rgba(255,255,255,0.1)",
+        border: "1px solid rgba(var(--ink), 0.1)",
         backdropFilter: "blur(20px)",
         boxShadow: "0 4px 24px rgba(0,0,0,0.4)",
       }}

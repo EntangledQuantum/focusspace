@@ -14,9 +14,9 @@ const URL_ERROR_MESSAGES: Record<string, string> = {
 };
 
 const INPUT_STYLE: React.CSSProperties = {
-  background: "rgba(255,255,255,0.06)",
+  background: "rgba(var(--ink), 0.06)",
   color: "var(--color-on-surface)",
-  border: "1px solid rgba(255,255,255,0.10)",
+  border: "1px solid rgba(var(--ink), 0.10)",
 };
 
 interface Props {
@@ -152,8 +152,8 @@ export function AuthModal({ open, onClose, urlError, redirectTo = "/focus" }: Pr
                 background: "color-mix(in srgb, var(--color-surface-container) 92%, transparent)",
                 backdropFilter: "blur(28px) saturate(140%)",
                 WebkitBackdropFilter: "blur(28px) saturate(140%)",
-                border: "1px solid rgba(255,255,255,0.10)",
-                boxShadow: "inset 0 1px 0 rgba(255,255,255,0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
+                border: "1px solid rgba(var(--ink), 0.10)",
+                boxShadow: "inset 0 1px 0 rgba(var(--ink), 0.08), 0 40px 90px -24px rgba(0,0,0,0.7)",
                 padding: 28,
               }}
             >
@@ -246,9 +246,9 @@ export function AuthModal({ open, onClose, urlError, redirectTo = "/focus" }: Pr
                   </button>
 
                   <div className="flex items-center gap-3 my-5">
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+                    <div className="flex-1 h-px" style={{ background: "rgba(var(--ink), 0.10)" }} />
                     <span className="text-xs" style={{ color: "var(--color-on-surface-variant)" }}>or use email</span>
-                    <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.10)" }} />
+                    <div className="flex-1 h-px" style={{ background: "rgba(var(--ink), 0.10)" }} />
                   </div>
 
                   <form onSubmit={handleSubmit} className="flex flex-col gap-3">

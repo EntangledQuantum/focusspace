@@ -43,12 +43,12 @@ function CopyBlock({ label, text, primary }: { label: string; text: string; prim
         <button
           onClick={copy}
           className={`pill ${primary ? "grad-primary" : "btn-hover-surface"}`}
-          style={{ padding: "3px 10px", fontSize: 11.5, fontWeight: 600, color: primary ? "var(--color-on-primary)" : "var(--color-on-surface)", background: primary ? undefined : "rgba(255,255,255,0.07)" }}
+          style={{ padding: "3px 10px", fontSize: 11.5, fontWeight: 600, color: primary ? "var(--color-on-primary)" : "var(--color-on-surface)", background: primary ? undefined : "rgba(var(--ink), 0.07)" }}
         >
           {copied ? <Check size={11} /> : <Copy size={11} />} {copied ? "Copied" : "Copy"}
         </button>
       </div>
-      <div style={{ ...MONO, padding: "9px 11px", borderRadius: 11, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(255,255,255,0.08)" }}>{text}</div>
+      <div style={{ ...MONO, padding: "9px 11px", borderRadius: 11, background: "rgba(0,0,0,0.22)", border: "1px solid rgba(var(--ink), 0.08)" }}>{text}</div>
     </div>
   );
 }
@@ -115,7 +115,7 @@ export function AgentsSettings() {
       </div>
 
       {local ? (
-        <div className="flex flex-col" style={{ gap: 12, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex flex-col" style={{ gap: 12, paddingTop: 10, borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
           <p style={{ fontSize: 12.5, color: "var(--color-on-surface-variant)", lineHeight: 1.5 }}>
             Local install — no token needed. Paste this into your agent (the app must be running), or use stdio: <code>npm run mcp</code>.
           </p>
@@ -123,7 +123,7 @@ export function AgentsSettings() {
           <CopyBlock label="Claude Code" text={setup.claudeCode} />
         </div>
       ) : (
-        <div className="flex flex-col" style={{ gap: 10, paddingTop: 10, borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex flex-col" style={{ gap: 10, paddingTop: 10, borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
           <div className="flex items-center" style={{ gap: 8 }}>
             <input
               value={name}
@@ -147,7 +147,7 @@ export function AgentsSettings() {
               <CopyBlock label="Tell your agent (any MCP client)" text={setup.oneLiner} primary />
               <CopyBlock label="Claude Code" text={setup.claudeCode} />
               <CopyBlock label="JSON config (Cursor, .mcp.json, …)" text={setup.json} />
-              <button onClick={() => setFresh(null)} className="self-end pill btn-hover-surface" style={{ padding: "5px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}>
+              <button onClick={() => setFresh(null)} className="self-end pill btn-hover-surface" style={{ padding: "5px 12px", fontSize: 12, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}>
                 Done, I&apos;ve copied it
               </button>
             </div>
@@ -164,7 +164,7 @@ export function AgentsSettings() {
           ) : (
             <div className="flex flex-col">
               {tokens.data.map((t) => (
-                <div key={t.id} className="flex items-center" style={{ gap: 10, padding: "9px 2px", borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                <div key={t.id} className="flex items-center" style={{ gap: 10, padding: "9px 2px", borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
                   <KeyRound size={14} style={{ color: "var(--color-on-surface-variant)", flexShrink: 0 }} />
                   <div className="min-w-0 flex-1">
                     <p style={{ fontSize: 13, fontWeight: 600, color: "var(--color-on-surface)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{t.name}</p>
@@ -175,7 +175,7 @@ export function AgentsSettings() {
                   {confirmRevoke === t.id ? (
                     <div className="flex items-center" style={{ gap: 4 }}>
                       <button onClick={() => revoke(t.id)} className="pill" style={{ padding: "4px 10px", fontSize: 11.5, fontWeight: 600, color: "#fff", background: "var(--color-error)" }}>Revoke</button>
-                      <button onClick={() => setConfirmRevoke(null)} className="pill" style={{ padding: "4px 9px", fontSize: 11.5, color: "var(--color-on-surface-variant)", background: "rgba(255,255,255,0.06)" }}>Keep</button>
+                      <button onClick={() => setConfirmRevoke(null)} className="pill" style={{ padding: "4px 9px", fontSize: 11.5, color: "var(--color-on-surface-variant)", background: "rgba(var(--ink), 0.06)" }}>Keep</button>
                     </div>
                   ) : (
                     <button onClick={() => setConfirmRevoke(t.id)} className="icon-btn" title="Revoke token" style={{ width: 28, height: 28, color: "var(--color-error)" }}>

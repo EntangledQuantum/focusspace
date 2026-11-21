@@ -54,7 +54,7 @@ export function AskAIDiagram() {
 
           <rect x={424} y={28} width={200} height={112} rx={20} fill="rgba(143,182,255,0.10)" stroke="rgba(143,182,255,0.35)" />
           <text x={524} y={68} textAnchor="middle" fill="var(--color-on-surface)" style={{ fontFamily: "var(--font-display)", fontSize: 13, fontWeight: 800 }}>Board updates</text>
-          <rect x={448} y={82} width={152} height={8} rx={4} fill="rgba(255,255,255,0.14)" />
+          <rect x={448} y={82} width={152} height={8} rx={4} fill="rgba(var(--ink), 0.14)" />
           <rect x={448} y={96} width={118} height={8} rx={4} fill="rgba(255,95,162,0.45)" />
           <rect x={448} y={110} width={136} height={8} rx={4} fill="rgba(176,107,246,0.40)" />
         </svg>

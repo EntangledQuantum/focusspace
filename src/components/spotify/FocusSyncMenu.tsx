@@ -77,8 +77,8 @@ export function FocusSyncMenu() {
         style={{
           gap: 4, padding: "2px 7px", fontSize: 10, fontWeight: 600,
           color: anyOn ? "#1DB954" : "var(--color-on-surface-variant)",
-          background: anyOn ? "rgba(29,185,84,0.12)" : "rgba(255,255,255,0.05)",
-          border: `1px solid ${anyOn ? "rgba(29,185,84,0.25)" : "rgba(255,255,255,0.07)"}`,
+          background: anyOn ? "rgba(29,185,84,0.12)" : "rgba(var(--ink), 0.05)",
+          border: `1px solid ${anyOn ? "rgba(29,185,84,0.25)" : "rgba(var(--ink), 0.07)"}`,
         }}
       >
         <Timer size={10} />
@@ -96,7 +96,7 @@ export function FocusSyncMenu() {
             background: "color-mix(in srgb, var(--color-surface-container) 94%, transparent)",
             backdropFilter: "blur(24px) saturate(140%)",
             WebkitBackdropFilter: "blur(24px) saturate(140%)",
-            border: "1px solid rgba(255,255,255,0.10)",
+            border: "1px solid rgba(var(--ink), 0.10)",
             boxShadow: "0 20px 50px -16px rgba(0,0,0,0.6)",
           }}
         >
@@ -126,7 +126,7 @@ export function FocusSyncMenu() {
                   style={{
                     width: 30, height: 18, borderRadius: 99, padding: 2,
                     justifyContent: on ? "flex-end" : "flex-start",
-                    background: on ? "#1DB954" : "rgba(255,255,255,0.13)",
+                    background: on ? "#1DB954" : "rgba(var(--ink), 0.13)",
                     transition: "background .2s",
                   }}
                 >

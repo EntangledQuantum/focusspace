@@ -30,7 +30,7 @@ function randomTagColor() {
   return TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
 }
 
-const HAIRLINE = "1px solid rgba(255,255,255,0.06)";
+const HAIRLINE = "1px solid rgba(var(--ink), 0.06)";
 
 /* ─── One-tap Run pill ─────────────────────────────────────────── */
 function RunButton({ taskId, onRun }: { taskId: string; onRun: () => void }) {
@@ -100,10 +100,10 @@ function TaskRow({
         borderRadius: 16, overflow: "hidden",
         border: isActive
           ? "1px solid color-mix(in srgb, var(--color-primary) 32%, transparent)"
-          : "1px solid rgba(255,255,255,0.06)",
+          : "1px solid rgba(var(--ink), 0.06)",
         background: isActive
           ? "color-mix(in srgb, var(--color-primary) 7%, transparent)"
-          : "rgba(255,255,255,0.03)",
+          : "rgba(var(--ink), 0.03)",
         opacity: done ? 0.55 : 1,
       }}
     >
@@ -162,7 +162,7 @@ function TaskRow({
                   key={tag.id}
                   style={{
                     fontSize: 10.5, fontWeight: 600, padding: "2px 8px", borderRadius: 99,
-                    color: tag.color,
+                    color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                     background: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
                   }}
                 >
@@ -182,7 +182,7 @@ function TaskRow({
                 className={i < (task.completed_pomodoros ?? 0) ? "grad-primary" : ""}
                 style={{
                   width: 7, height: 7, borderRadius: 99,
-                  background: i < (task.completed_pomodoros ?? 0) ? undefined : "rgba(255,255,255,0.13)",
+                  background: i < (task.completed_pomodoros ?? 0) ? undefined : "rgba(var(--ink), 0.13)",
                 }}
               />
             ))}
@@ -405,7 +405,7 @@ function TaskForm({
       className="rounded-2xl flex flex-col"
       style={{
         gap: 10, padding: "13px 15px",
-        background: "rgba(255,255,255,0.04)",
+        background: "rgba(var(--ink), 0.04)",
         border: "1px solid color-mix(in srgb, var(--color-primary) 40%, transparent)",
       }}
     >
@@ -478,7 +478,7 @@ function TaskForm({
               className="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
               style={{
                 background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                color: tag.color,
+                color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                 border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
               }}
             >
@@ -876,7 +876,7 @@ function ProjectCard({
             style={{
               gap: 12, padding: "11px 15px", fontSize: 13,
               color: "var(--color-on-surface-variant)",
-              border: "1px dashed rgba(255,255,255,0.14)",
+              border: "1px dashed rgba(var(--ink), 0.14)",
               background: "transparent",
             }}
           >
@@ -1094,8 +1094,8 @@ export default function ProjectsPage() {
               style={{
                 padding: "6px 13px", fontSize: 12.5,
                 color: showAll ? "var(--color-primary)" : "var(--color-on-surface-variant)",
-                background: showAll ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(255,255,255,0.04)",
-                border: showAll ? "1px solid color-mix(in srgb, var(--color-primary) 26%, transparent)" : "1px solid rgba(255,255,255,0.08)",
+                background: showAll ? "color-mix(in srgb, var(--color-primary) 14%, transparent)" : "rgba(var(--ink), 0.04)",
+                border: showAll ? "1px solid color-mix(in srgb, var(--color-primary) 26%, transparent)" : "1px solid rgba(var(--ink), 0.08)",
               }}
             >
               {showAll ? <Eye size={13} /> : <EyeOff size={13} />} Show all
@@ -1110,8 +1110,8 @@ export default function ProjectsPage() {
                   style={{
                     padding: "6px 12px", fontSize: 12,
                     color: on ? "var(--color-on-surface)" : "var(--color-on-surface-variant)",
-                    background: on ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.03)",
-                    border: `1px solid ${on ? "rgba(255,255,255,0.14)" : "rgba(255,255,255,0.06)"}`,
+                    background: on ? "rgba(var(--ink), 0.08)" : "rgba(var(--ink), 0.03)",
+                    border: `1px solid ${on ? "rgba(var(--ink), 0.14)" : "rgba(var(--ink), 0.06)"}`,
                     opacity: on ? 1 : 0.7,
                   }}
                 >
@@ -1164,7 +1164,7 @@ export default function ProjectsPage() {
                   className="group flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium"
                   style={{
                     background: `color-mix(in srgb, ${tag.color} 18%, transparent)`,
-                    color: tag.color,
+                    color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                     border: `1px solid color-mix(in srgb, ${tag.color} 30%, transparent)`,
                   }}
                 >
@@ -1172,7 +1172,7 @@ export default function ProjectsPage() {
                   <button
                     onClick={() => setDeleteTagConfirm(tag)}
                     className="opacity-0 group-hover:opacity-80 transition-opacity ml-0.5"
-                    style={{ color: tag.color }}
+                    style={{ color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))` }}
                     title="Delete tag"
                   >
                     <X size={10} />

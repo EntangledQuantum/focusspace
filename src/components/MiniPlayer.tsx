@@ -44,11 +44,11 @@ export function MiniPlayer() {
   const card: React.CSSProperties = {
     borderRadius: 16,
     background: "color-mix(in srgb, var(--color-surface-container) 80%, transparent)",
-    border: "1px solid rgba(255,255,255,0.07)",
+    border: "1px solid rgba(var(--ink), 0.07)",
   };
   const ghostBtn: React.CSSProperties = {
     width: 34, height: 34, borderRadius: 999, border: "none",
-    background: "rgba(255,255,255,0.06)",
+    background: "rgba(var(--ink), 0.06)",
     color: "var(--color-on-surface-variant)",
     display: "flex", alignItems: "center", justifyContent: "center", cursor: "pointer",
   };
@@ -108,7 +108,7 @@ export function MiniPlayer() {
             ) : (
               <div style={{
                 width: 40, height: 40, borderRadius: 9, flexShrink: 0,
-                background: "rgba(255,255,255,0.06)",
+                background: "rgba(var(--ink), 0.06)",
                 display: "flex", alignItems: "center", justifyContent: "center",
               }}>
                 <Music size={17} style={{ opacity: 0.6 }} />

@@ -77,7 +77,7 @@ function Reasoning({ text, streaming }: { text: string; streaming: boolean }) {
   const [open, setOpen] = useState(false);
   const tail = text.trim().split("\n").slice(-3).join("\n");
   return (
-    <div style={{ borderRadius: 12, padding: "7px 10px", background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.07)" }}>
+    <div style={{ borderRadius: 12, padding: "7px 10px", background: "rgba(var(--ink), 0.04)", border: "1px solid rgba(var(--ink), 0.07)" }}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}

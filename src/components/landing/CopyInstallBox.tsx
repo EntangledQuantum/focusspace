@@ -64,8 +64,8 @@ export function CopyInstallBox({ compact = false }: { compact?: boolean }) {
             color: copied ? "var(--color-primary)" : "var(--color-on-surface)",
             background: copied
               ? "color-mix(in srgb, var(--color-primary) 14%, transparent)"
-              : "rgba(255,255,255,0.06)",
-            border: "1px solid rgba(255,255,255,0.10)",
+              : "rgba(var(--ink), 0.06)",
+            border: "1px solid rgba(var(--ink), 0.10)",
           }}
         >
           {copied ? <Check size={14} /> : <Copy size={14} />}

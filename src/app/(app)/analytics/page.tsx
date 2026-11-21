@@ -214,7 +214,7 @@ export default function AnalyticsPage() {
                         height: Math.max((b.hours / maxDayHours) * 130, b.hours > 0 ? 6 : 2),
                         background: b.hours > 0
                           ? "linear-gradient(to top, var(--color-primary), var(--color-secondary))"
-                          : "rgba(255,255,255,0.08)",
+                          : "rgba(var(--ink), 0.08)",
                         boxShadow: b.hours > 0 ? "0 4px 14px -4px color-mix(in srgb, var(--color-primary) 50%, transparent)" : "none",
                       }}
                     />
@@ -240,7 +240,7 @@ export default function AnalyticsPage() {
                       <span className="truncate" style={{ fontSize: 13, fontWeight: 600, color: "var(--color-on-surface)" }}>{b.name}</span>
                       <span className="tabular-nums" style={{ fontSize: 12.5, fontWeight: 700, color: b.color }}>{b.pct}%</span>
                     </div>
-                    <div className="rounded-full overflow-hidden" style={{ height: 7, background: "rgba(255,255,255,0.13)" }}>
+                    <div className="rounded-full overflow-hidden" style={{ height: 7, background: "rgba(var(--ink), 0.13)" }}>
                       <div className="h-full rounded-full" style={{ width: `${b.pct}%`, background: b.color }} />
                     </div>
                   </div>
@@ -293,7 +293,7 @@ export default function AnalyticsPage() {
             <div>
               {sessions.slice(0, 15).map((s) => (
                 <div key={s.id} className="flex items-center gap-4 py-2.5 text-sm"
-                  style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+                  style={{ borderTop: "1px solid rgba(var(--ink), 0.06)" }}>
                   <div className="w-1 self-stretch rounded-full shrink-0"
                     style={{ background: s.completed ? "var(--color-primary)" : "var(--color-outline)" }} />
                   <div className="flex-1 min-w-0">
@@ -308,7 +308,7 @@ export default function AnalyticsPage() {
                     <span key={tag.id} className="px-2 py-0.5 rounded-full text-xs shrink-0"
                       style={{
                         background: `color-mix(in srgb, ${tag.color} 15%, transparent)`,
-                        color: tag.color,
+                        color: `color-mix(in srgb, ${tag.color} var(--tag-mix), var(--color-on-surface))`,
                       }}>
                       #{tag.name}
                     </span>

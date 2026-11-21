@@ -38,8 +38,8 @@ export function ProjectsVisual() {
             style={{
               borderRadius: 16,
               padding: "11px 12px",
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.07)",
+              background: "rgba(var(--ink), 0.04)",
+              border: "1px solid rgba(var(--ink), 0.07)",
               opacity: t.done ? 0.62 : 1,
             }}
           >
@@ -81,8 +81,8 @@ export function ProjectsVisual() {
                     padding: "2px 8px",
                     fontSize: 10.5,
                     color: "var(--color-on-surface-variant)",
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "rgba(var(--ink), 0.05)",
+                    border: "1px solid rgba(var(--ink), 0.08)",
                   }}
                 >
                   {tag}
