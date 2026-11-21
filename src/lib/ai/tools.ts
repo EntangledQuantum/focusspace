@@ -4,6 +4,11 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { makeExtraTools } from "./extra-tools";
 import { MAX_ESTIMATED_POMOS } from "@/lib/mode";
+import { performDelete, type ConfirmRequest, type DestructiveAction } from "./confirm";
+import { makeResolvers, ToolError } from "./resolve";
+import { scopeToUser } from "./scoped";
+
+export type { ConfirmRequest } from "./confirm";
 
 type DB = SupabaseClient<Database>;
 type TaskUpdate = Database["public"]["Tables"]["tasks"]["Update"];
@@ -11,44 +16,30 @@ type SubtaskUpdate = Database["public"]["Tables"]["subtasks"]["Update"];
 
 const TAG_COLORS = ["#ff5fa2", "#b06bf6", "#5fb0ff", "#46c98b", "#f2a341", "#ff8fbe", "#8fb6ff", "#c89bff"];
 const randTagColor = () => TAG_COLORS[Math.floor(Math.random() * TAG_COLORS.length)];
-const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
-/** Signals a destructive action that needs the user's confirmation in the UI. */
-export interface ConfirmRequest {
-  __confirm: true;
-  action: "delete_project" | "delete_task" | "delete_subtask" | "delete_tag";
-  id: string;
-  summary: string;
-}
+const HEX = z.string().regex(/^#[0-9a-f]{6}$/i, "Use a 6-digit hex color like #ff5fa2");
+const PRIORITY = z.enum(["low", "med", "high", "urgent"]);
+const ESTIMATE = z.number().min(0.5).max(MAX_ESTIMATED_POMOS);
 
 export interface MakeToolsOpts {
   /** "allow" runs deletes immediately; "confirm" defers them to a UI card. */
   destructive: "allow" | "confirm";
+  /**
+   * "chat" = in-app assistant: confirmations happen via the UI card, so the
+   * model must NOT be able to self-confirm. "mcp" = external agents, which
+   * confirm through the `confirm_action` tool after asking their user.
+   */
+  surface?: "chat" | "mcp";
 }
 
-export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts): ToolSet {
-  // ── resolvers (accept id OR fuzzy name) ──────────────────────────────
-  async function resolveProject(ref: string) {
-    if (UUID_RE.test(ref)) {
-      const { data } = await supabase.from("projects").select("*").eq("id", ref).maybeSingle();
-      if (data) return data;
-    }
-    const { data: exact } = await supabase.from("projects").select("*").is("archived_at", null).ilike("name", ref).limit(1);
-    if (exact?.[0]) return exact[0];
-    const { data: fuzzy } = await supabase.from("projects").select("*").is("archived_at", null).ilike("name", `%${ref}%`).limit(1);
-    return fuzzy?.[0] ?? null;
-  }
-
-  async function resolveTask(ref: string, projectId?: string) {
-    if (UUID_RE.test(ref)) {
-      const { data } = await supabase.from("tasks").select("*").eq("id", ref).maybeSingle();
-      if (data) return data;
-    }
-    let q = supabase.from("tasks").select("*").ilike("title", `%${ref}%`).order("created_at", { ascending: false }).limit(1);
-    if (projectId) q = q.eq("project_id", projectId);
-    const { data } = await q;
-    return data?.[0] ?? null;
-  }
+/**
+ * The single tool catalog shared by the in-app assistant (/api/ai/chat) and
+ * the MCP server (/api/mcp, scripts/mcp-stdio.ts). Tools throw ToolError for
+ * user-facing failures → the AI SDK reports a tool error the model can react
+ * to, and MCP returns `isError: true`.
+ */
+export function makeTaskTools(db: DB, userId: string, opts: MakeToolsOpts): ToolSet {
+  const supabase = scopeToUser(db, userId);
+  const resolve = makeResolvers(supabase);
 
   async function resolveTagIds(names: string[]): Promise<string[]> {
     const ids: string[] = [];
@@ -64,50 +55,54 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
     return ids;
   }
 
-  const deferOrRun = async (
-    action: ConfirmRequest["action"], id: string, summary: string, run: () => Promise<string>,
-  ): Promise<string | ConfirmRequest> => {
-    if (opts.destructive === "confirm") return { __confirm: true, action, id, summary };
-    return run();
+  const destroy = async (action: DestructiveAction, id: string, summary: string): Promise<string | ConfirmRequest> =>
+    opts.destructive === "confirm" ? { __confirm: true, action, id, summary } : performDelete(supabase, action, id);
+
+  const must = (error: { message: string } | null, what: string) => {
+    if (error) throw new ToolError(`Couldn't ${what}: ${error.message}`);
   };
 
-  return {
+  async function projectCounts(): Promise<Map<string, { open: number; done: number }>> {
+    const { data: tasks } = await supabase.from("tasks").select("project_id, status");
+    const m = new Map<string, { open: number; done: number }>();
+    for (const t of tasks ?? []) {
+      if (!t.project_id) continue;
+      const c = m.get(t.project_id) ?? { open: 0, done: 0 };
+      if (t.status === "done") c.done++; else c.open++;
+      m.set(t.project_id, c);
+    }
+    return m;
+  }
+
+  const tools: ToolSet = {
     // ─── READ / CONTEXT ────────────────────────────────────────────────
     list_projects: tool({
       description: "List the user's projects with open/done task counts. Use to find the right project id before mutating.",
       inputSchema: z.object({}),
       execute: async () => {
-        const { data: projects } = await supabase.from("projects").select("id, name, color").eq("user_id", userId).is("archived_at", null).order("sort_order");
+        const { data: projects } = await supabase.from("projects").select("id, name, color").is("archived_at", null).order("sort_order");
         if (!projects?.length) return "No projects yet.";
-        const { data: tasks } = await supabase.from("tasks").select("project_id, status").eq("user_id", userId);
-        const lines = projects.map((p) => {
-          const t = (tasks ?? []).filter((x) => x.project_id === p.id);
-          const open = t.filter((x) => x.status === "todo").length;
-          const done = t.filter((x) => x.status === "done").length;
-          return `- ${p.name} (id: ${p.id}) — ${open} open, ${done} done`;
-        });
-        return lines.join("\n");
+        const counts = await projectCounts();
+        return projects.map((p) => {
+          const c = counts.get(p.id) ?? { open: 0, done: 0 };
+          return `- ${p.name} (id: ${p.id}) — ${c.open} open, ${c.done} done`;
+        }).join("\n");
       },
     }),
 
     list_tasks: tool({
-      description: "List tasks, optionally filtered by project and status. Returns ids, titles, priority, pomodoro estimate, tags.",
+      description: "List tasks in board order, optionally filtered by project and status. Returns ids, titles, priority, pomodoro progress.",
       inputSchema: z.object({
         projectRef: z.string().optional().describe("Project id or name to filter by"),
         status: z.enum(["todo", "done", "all"]).optional().default("todo"),
         limit: z.number().int().min(1).max(50).optional().default(25),
       }),
       execute: async ({ projectRef, status, limit }) => {
-        let projectId: string | undefined;
-        if (projectRef) {
-          const p = await resolveProject(projectRef);
-          if (!p) return `No project matching "${projectRef}".`;
-          projectId = p.id;
-        }
-        let q = supabase.from("tasks").select("id, title, status, priority, estimated_pomodoros, completed_pomodoros, project_id").eq("user_id", userId).order("sort_order").limit(limit);
+        const projectId = projectRef ? (await resolve.project(projectRef)).id : undefined;
+        let q = supabase.from("tasks").select("id, title, status, priority, estimated_pomodoros, completed_pomodoros, project_id");
         if (projectId) q = q.eq("project_id", projectId);
         if (status !== "all") q = q.eq("status", status);
-        const { data } = await q;
+        const { data } = await q.order("sort_order").limit(limit);
         if (!data?.length) return "No matching tasks.";
         return data.map((t) => `- ${t.title} (id: ${t.id}) [${t.status}, ${t.priority}, ${t.completed_pomodoros}/${t.estimated_pomodoros} pomos]`).join("\n");
       },
@@ -125,11 +120,11 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       }),
       execute: async ({ query, status, limit }) => {
         const base = () => {
-          let q = supabase.from("tasks").select("id, title, status, project_id").eq("user_id", userId);
+          let q = supabase.from("tasks").select("id, title, status, project_id");
           if (status !== "all") q = q.eq("status", status);
           return q.order("created_at", { ascending: false }).limit(limit);
         };
-        // Try Postgres case-insensitive regex; fall back to substring if the
+        // Postgres case-insensitive regex; fall back to substring if the
         // pattern is invalid (PostgREST rejects bad regex with an error).
         const regexResult = await base().filter("title", "imatch", query);
         let data = regexResult.data;
@@ -141,15 +136,15 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
 
     get_task: tool({
       description:
-        "Get full detail for a single task by id or name: notes, priority, pomodoro progress, tags, and ALL its subtasks (with done state). " +
+        "Get full detail for a single task by id or name: notes, priority, pomodoro progress, tags, and ALL its subtasks (with ids and done state). " +
         "Use after search_tasks/list_tasks to inspect a task before editing its subtasks or notes.",
-      inputSchema: z.object({ taskRef: z.string() }),
+      inputSchema: z.object({ taskRef: z.string().min(1) }),
       execute: async ({ taskRef }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
-        const [{ data: subs }, { data: tt }] = await Promise.all([
-          supabase.from("subtasks").select("title, done").eq("task_id", t.id).order("sort_order"),
+        const t = await resolve.task(taskRef);
+        const [{ data: subs }, { data: tt }, { data: project }] = await Promise.all([
+          supabase.from("subtasks").select("id, title, done").eq("task_id", t.id).order("sort_order"),
           supabase.from("task_tags").select("tag_id").eq("task_id", t.id),
+          supabase.from("projects").select("name").eq("id", t.project_id ?? "").maybeSingle(),
         ]);
         const tagIds = (tt ?? []).map((r) => r.tag_id);
         let tagNames: string[] = [];
@@ -157,16 +152,15 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
           const { data: tg } = await supabase.from("tags").select("name").in("id", tagIds);
           tagNames = (tg ?? []).map((r) => r.name);
         }
-        const lines = [
-          `${t.title} (id: ${t.id})`,
+        return [
+          `${t.title} (id: ${t.id})${project ? ` in ${project.name}` : ""}`,
           `Status: ${t.status} · Priority: ${t.priority} · ${t.completed_pomodoros}/${t.estimated_pomodoros} pomos`,
           tagNames.length ? `Tags: ${tagNames.map((n) => `#${n}`).join(", ")}` : null,
           t.notes ? `Notes: ${t.notes}` : null,
           subs?.length
-            ? `Subtasks:\n${subs.map((s) => `  - [${s.done ? "x" : " "}] ${s.title}`).join("\n")}`
+            ? `Subtasks:\n${subs.map((s) => `  - [${s.done ? "x" : " "}] ${s.title} (id: ${s.id})`).join("\n")}`
             : "Subtasks: (none)",
-        ].filter(Boolean);
-        return lines.join("\n");
+        ].filter(Boolean).join("\n");
       },
     }),
 
@@ -174,7 +168,7 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
       description: "List the most recently completed tasks (what the user has finished lately).",
       inputSchema: z.object({ limit: z.number().int().min(1).max(20).optional().default(8) }),
       execute: async ({ limit }) => {
-        const { data } = await supabase.from("tasks").select("title, completed_at, project_id").eq("user_id", userId).eq("status", "done").not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(limit);
+        const { data } = await supabase.from("tasks").select("title, completed_at, project_id").eq("status", "done").not("completed_at", "is", null).order("completed_at", { ascending: false }).limit(limit);
         if (!data?.length) return "No completed tasks yet.";
         return data.map((t) => `- ${t.title} (done ${t.completed_at?.slice(0, 10)})`).join("\n");
       },
@@ -185,14 +179,9 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
         "Read the user's actual focus/productivity time (real pomodoro + custom sessions). Returns focus time and session counts for today, yesterday, the last 7 days, the last 30 days, and all-time. Use this for ANY 'how long/much did I focus' question — never estimate.",
       inputSchema: z.object({}),
       execute: async () => {
-        const { data } = await supabase
-          .from("v_daily_focus")
-          .select("day, total_seconds, sessions")
-          .order("day", { ascending: false })
-          .limit(400);
+        const { data } = await supabase.from("v_daily_focus").select("day, total_seconds, sessions").order("day", { ascending: false }).limit(400);
         const rows = data ?? [];
         if (!rows.length) return "No focus sessions recorded yet.";
-
         const dayOf = (delta: number) => {
           const d = new Date();
           d.setUTCDate(d.getUTCDate() + delta);
@@ -203,21 +192,14 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
           const h = Math.floor(m / 60);
           return h ? `${h}h ${m % 60}m` : `${m}m`;
         };
+        const sum = (rs: typeof rows) => rs.reduce((a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }), { sec: 0, sess: 0 });
         const rowFor = (iso: string) => rows.find((r) => r.day.slice(0, 10) === iso);
-        const sumSince = (iso: string) =>
-          rows.filter((r) => r.day.slice(0, 10) >= iso).reduce(
-            (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
-            { sec: 0, sess: 0 },
-          );
-        const all = rows.reduce(
-          (a, r) => ({ sec: a.sec + (r.total_seconds ?? 0), sess: a.sess + (r.sessions ?? 0) }),
-          { sec: 0, sess: 0 },
-        );
+        const since = (iso: string) => sum(rows.filter((r) => r.day.slice(0, 10) >= iso));
         const today = rowFor(dayOf(0));
         const yest = rowFor(dayOf(-1));
-        const last7 = sumSince(dayOf(-6));
-        const last30 = sumSince(dayOf(-29));
-
+        const last7 = since(dayOf(-6));
+        const last30 = since(dayOf(-29));
+        const all = sum(rows);
         return [
           `Today: ${fmt(today?.total_seconds ?? 0)} (${today?.sessions ?? 0} sessions)`,
           `Yesterday: ${fmt(yest?.total_seconds ?? 0)} (${yest?.sessions ?? 0} sessions)`,
@@ -231,48 +213,43 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
     // ─── PROJECTS ──────────────────────────────────────────────────────
     create_project: tool({
       description: "Create a new project.",
-      inputSchema: z.object({ name: z.string().min(1), color: z.string().optional() }),
+      inputSchema: z.object({ name: z.string().trim().min(1), color: HEX.optional() }),
       execute: async ({ name, color }) => {
         const { count } = await supabase.from("projects").select("id", { count: "exact", head: true });
         const { data, error } = await supabase.from("projects").insert({ user_id: userId, name, color: color || "#ff5fa2", sort_order: count ?? 0 }).select("id, name").single();
-        if (error) return `Failed to create project: ${error.message}`;
-        return `Created project "${data.name}" (id: ${data.id}).`;
+        must(error, "create the project");
+        return `Created project "${data!.name}" (id: ${data!.id}).`;
       },
     }),
 
     rename_project: tool({
       description: "Rename a project.",
-      inputSchema: z.object({ projectRef: z.string(), newName: z.string().min(1) }),
+      inputSchema: z.object({ projectRef: z.string().min(1), newName: z.string().trim().min(1) }),
       execute: async ({ projectRef, newName }) => {
-        const p = await resolveProject(projectRef);
-        if (!p) return `No project matching "${projectRef}".`;
+        const p = await resolve.project(projectRef);
         const { error } = await supabase.from("projects").update({ name: newName }).eq("id", p.id);
-        return error ? `Failed: ${error.message}` : `Renamed "${p.name}" → "${newName}".`;
+        must(error, "rename the project");
+        return `Renamed "${p.name}" → "${newName}".`;
       },
     }),
 
     recolor_project: tool({
-      description: "Change a project's color (hex).",
-      inputSchema: z.object({ projectRef: z.string(), color: z.string() }),
+      description: "Change a project's color (6-digit hex like #5fb0ff).",
+      inputSchema: z.object({ projectRef: z.string().min(1), color: HEX }),
       execute: async ({ projectRef, color }) => {
-        const p = await resolveProject(projectRef);
-        if (!p) return `No project matching "${projectRef}".`;
+        const p = await resolve.project(projectRef);
         const { error } = await supabase.from("projects").update({ color }).eq("id", p.id);
-        return error ? `Failed: ${error.message}` : `Recolored "${p.name}".`;
+        must(error, "recolor the project");
+        return `Recolored "${p.name}".`;
       },
     }),
 
     delete_project: tool({
-      description: "Delete a project AND all its tasks. Destructive.",
-      inputSchema: z.object({ projectRef: z.string() }),
+      description: "Delete a project AND all its tasks. Destructive — only when the user clearly asked.",
+      inputSchema: z.object({ projectRef: z.string().min(1) }),
       execute: async ({ projectRef }) => {
-        const p = await resolveProject(projectRef);
-        if (!p) return `No project matching "${projectRef}".`;
-        return deferOrRun("delete_project", p.id, `Delete project "${p.name}" and all its tasks?`, async () => {
-          await supabase.from("tasks").delete().eq("project_id", p.id);
-          const { error } = await supabase.from("projects").delete().eq("id", p.id);
-          return error ? `Failed: ${error.message}` : `Deleted project "${p.name}".`;
-        });
+        const p = await resolve.project(projectRef);
+        return destroy("delete_project", p.id, `Delete project "${p.name}" and all its tasks?`);
       },
     }),
 
@@ -280,21 +257,21 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
     create_task: tool({
       description: "Create a task in a project, optionally with notes, priority, pomodoro estimate, tags, and subtasks. If the user describes a large piece of work and did not give subtasks, invent a sensible subtask breakdown. After creating, ASK before start_timer. Estimate pomodoros from get_workspace_state focus length, not 25 minutes.",
       inputSchema: z.object({
-        title: z.string().min(1),
+        title: z.string().trim().min(1),
         projectRef: z.string().optional().describe("Project id or name; defaults to the first project"),
         notes: z.string().optional(),
-        priority: z.enum(["low", "med", "high", "urgent"]).optional(),
-        estimatedPomodoros: z.number().min(0.5).max(MAX_ESTIMATED_POMOS).optional(),
+        priority: PRIORITY.optional(),
+        estimatedPomodoros: ESTIMATE.optional(),
         tags: z.array(z.string()).optional(),
-        subtasks: z.array(z.string()).optional(),
+        subtasks: z.array(z.string().trim().min(1)).optional(),
       }),
       execute: async ({ title, projectRef, notes, priority, estimatedPomodoros, tags, subtasks }) => {
-        let project = projectRef ? await resolveProject(projectRef) : null;
+        let project = projectRef ? await resolve.project(projectRef) : null;
         if (!project) {
           const { data } = await supabase.from("projects").select("*").is("archived_at", null).order("sort_order").limit(1);
           project = data?.[0] ?? null;
         }
-        if (!project) return "No project to add the task to — create one first.";
+        if (!project) throw new ToolError("There are no projects yet — create one first (create_project).");
         const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", project.id);
         const { data: task, error } = await supabase.from("tasks").insert({
           user_id: userId, project_id: project.id, title,
@@ -303,154 +280,196 @@ export function makeTaskTools(supabase: DB, userId: string, opts: MakeToolsOpts)
           estimated_pomodoros: estimatedPomodoros ?? 1,
           sort_order: count ?? 0,
         }).select("id").single();
-        if (error || !task) return `Failed to create task: ${error?.message}`;
+        must(error, "create the task");
         if (subtasks?.length) {
-          await supabase.from("subtasks").insert(subtasks.map((t, i) => ({ task_id: task.id, user_id: userId, title: t, sort_order: i })));
+          const { error: subErr } = await supabase.from("subtasks").insert(subtasks.map((t, i) => ({ task_id: task!.id, user_id: userId, title: t, sort_order: i })));
+          must(subErr, "add the subtasks");
         }
         if (tags?.length) {
           const ids = await resolveTagIds(tags);
-          if (ids.length) await supabase.from("task_tags").insert(ids.map((tag_id) => ({ task_id: task.id, tag_id })));
+          if (ids.length) await supabase.from("task_tags").insert(ids.map((tag_id) => ({ task_id: task!.id, tag_id })));
         }
         const extra = [subtasks?.length ? `${subtasks.length} subtasks` : "", tags?.length ? `tags ${tags.join(", ")}` : ""].filter(Boolean).join(", ");
-        return `Created task "${title}" in ${project.name}${extra ? ` · ${extra}` : ""}.`;
+        return `Created task "${title}" (id: ${task!.id}) in ${project.name}${extra ? ` · ${extra}` : ""}.`;
       },
     }),
 
     update_task: tool({
       description: "Edit a task: title, notes, priority, pomodoro estimate, move to another project, or change tags.",
       inputSchema: z.object({
-        taskRef: z.string(),
-        title: z.string().optional(),
+        taskRef: z.string().min(1),
+        title: z.string().trim().min(1).optional(),
         notes: z.string().optional(),
-        priority: z.enum(["low", "med", "high", "urgent"]).optional(),
-        estimatedPomodoros: z.number().min(0.5).max(MAX_ESTIMATED_POMOS).optional(),
+        priority: PRIORITY.optional(),
+        estimatedPomodoros: ESTIMATE.optional(),
         moveToProjectRef: z.string().optional(),
         setTags: z.array(z.string()).optional().describe("Replace all tags with this set"),
       }),
       execute: async ({ taskRef, title, notes, priority, estimatedPomodoros, moveToProjectRef, setTags }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
+        const t = await resolve.task(taskRef);
         const patch: TaskUpdate = {};
         if (title !== undefined) patch.title = title;
         if (notes !== undefined) patch.notes = notes.trim() || null;
         if (priority !== undefined) patch.priority = priority;
         if (estimatedPomodoros !== undefined) patch.estimated_pomodoros = estimatedPomodoros;
+        let moved = "";
         if (moveToProjectRef) {
-          const p = await resolveProject(moveToProjectRef);
-          if (!p) return `No project matching "${moveToProjectRef}".`;
-          patch.project_id = p.id;
+          const p = await resolve.project(moveToProjectRef);
+          if (p.id !== t.project_id) {
+            const { count } = await supabase.from("tasks").select("id", { count: "exact", head: true }).eq("project_id", p.id);
+            patch.project_id = p.id;
+            patch.sort_order = count ?? 0;
+            moved = ` and moved it to ${p.name}`;
+          }
         }
+        if (!Object.keys(patch).length && !setTags) throw new ToolError("Nothing to change — pass at least one field.");
         if (Object.keys(patch).length) {
           const { error } = await supabase.from("tasks").update(patch).eq("id", t.id);
-          if (error) return `Failed: ${error.message}`;
+          must(error, "update the task");
         }
         if (setTags) {
           await supabase.from("task_tags").delete().eq("task_id", t.id);
           const ids = await resolveTagIds(setTags);
           if (ids.length) await supabase.from("task_tags").insert(ids.map((tag_id) => ({ task_id: t.id, tag_id })));
         }
-        return `Updated task "${title ?? t.title}".`;
+        return `Updated task "${title ?? t.title}"${moved}.`;
       },
     }),
 
     set_task_status: tool({
-      description: "Mark a task done or todo.",
-      inputSchema: z.object({ taskRef: z.string(), status: z.enum(["todo", "done"]) }),
+      description: "Mark a task done (complete it) or reopen it (todo).",
+      inputSchema: z.object({ taskRef: z.string().min(1), status: z.enum(["todo", "done"]) }),
       execute: async ({ taskRef, status }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
+        const t = await resolve.task(taskRef);
         const { error } = await supabase.from("tasks").update({ status, completed_at: status === "done" ? new Date().toISOString() : null }).eq("id", t.id);
-        return error ? `Failed: ${error.message}` : `Marked "${t.title}" as ${status}.`;
+        must(error, "change the status");
+        return `Marked "${t.title}" as ${status}.`;
+      },
+    }),
+
+    reorder_tasks: tool({
+      description:
+        "Reorder tasks inside one project. Pass the task ids/titles in the desired order (top first); tasks you omit keep their relative order after them.",
+      inputSchema: z.object({
+        projectRef: z.string().min(1),
+        orderedTaskRefs: z.array(z.string().min(1)).min(1),
+      }),
+      execute: async ({ projectRef, orderedTaskRefs }) => {
+        const p = await resolve.project(projectRef);
+        const first: string[] = [];
+        for (const ref of orderedTaskRefs) {
+          const t = await resolve.task(ref, p.id);
+          if (!first.includes(t.id)) first.push(t.id);
+        }
+        const { data: all } = await supabase.from("tasks").select("id").eq("project_id", p.id).order("sort_order");
+        const order = [...first, ...(all ?? []).map((r) => r.id).filter((id) => !first.includes(id))];
+        for (let i = 0; i < order.length; i++) {
+          const { error } = await supabase.from("tasks").update({ sort_order: i }).eq("id", order[i]);
+          must(error, "reorder tasks");
+        }
+        return `Reordered ${first.length} task(s) to the top of ${p.name}.`;
       },
     }),
 
     delete_task: tool({
-      description: "Delete a task and its subtasks. Destructive.",
-      inputSchema: z.object({ taskRef: z.string() }),
+      description: "Delete a task and its subtasks. Destructive — only when the user clearly asked.",
+      inputSchema: z.object({ taskRef: z.string().min(1) }),
       execute: async ({ taskRef }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
-        return deferOrRun("delete_task", t.id, `Delete task "${t.title}"?`, async () => {
-          const { error } = await supabase.from("tasks").delete().eq("id", t.id);
-          return error ? `Failed: ${error.message}` : `Deleted task "${t.title}".`;
-        });
+        const t = await resolve.task(taskRef);
+        return destroy("delete_task", t.id, `Delete task "${t.title}"?`);
       },
     }),
 
     // ─── SUBTASKS ──────────────────────────────────────────────────────
     add_subtasks: tool({
-      description: "Add one or more subtasks to a task.",
-      inputSchema: z.object({ taskRef: z.string(), titles: z.array(z.string().min(1)).min(1) }),
+      description: "Add one or more subtasks to a task (appended at the end).",
+      inputSchema: z.object({ taskRef: z.string().min(1), titles: z.array(z.string().trim().min(1)).min(1) }),
       execute: async ({ taskRef, titles }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
+        const t = await resolve.task(taskRef);
         const { count } = await supabase.from("subtasks").select("id", { count: "exact", head: true }).eq("task_id", t.id);
         const base = count ?? 0;
         const { error } = await supabase.from("subtasks").insert(titles.map((title, i) => ({ task_id: t.id, user_id: userId, title, sort_order: base + i })));
-        return error ? `Failed: ${error.message}` : `Added ${titles.length} subtask(s) to "${t.title}".`;
+        must(error, "add subtasks");
+        return `Added ${titles.length} subtask(s) to "${t.title}".`;
       },
     }),
 
     update_subtask: tool({
-      description: "Toggle a subtask done/undone or rename it (matched by its text within a task).",
-      inputSchema: z.object({ taskRef: z.string(), subtaskTitle: z.string(), done: z.boolean().optional(), newTitle: z.string().optional() }),
-      execute: async ({ taskRef, subtaskTitle, done, newTitle }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
-        const { data: subs } = await supabase.from("subtasks").select("id, title").eq("task_id", t.id).ilike("title", `%${subtaskTitle}%`).limit(1);
-        const sub = subs?.[0];
-        if (!sub) return `No subtask matching "${subtaskTitle}" in "${t.title}".`;
+      description: "Check/uncheck (complete) a subtask or rename it. subtaskRef is the subtask id from get_task or its title.",
+      inputSchema: z.object({
+        taskRef: z.string().min(1),
+        subtaskRef: z.string().min(1).describe("Subtask id or title"),
+        done: z.boolean().optional(),
+        newTitle: z.string().trim().min(1).optional(),
+      }),
+      execute: async ({ taskRef, subtaskRef, done, newTitle }) => {
+        const t = await resolve.task(taskRef);
+        const sub = await resolve.subtask(t.id, subtaskRef);
         const patch: SubtaskUpdate = {};
         if (done !== undefined) patch.done = done;
         if (newTitle !== undefined) patch.title = newTitle;
+        if (!Object.keys(patch).length) throw new ToolError("Nothing to change — pass done and/or newTitle.");
         const { error } = await supabase.from("subtasks").update(patch).eq("id", sub.id);
-        return error ? `Failed: ${error.message}` : `Updated subtask "${sub.title}".`;
+        must(error, "update the subtask");
+        const what = done === undefined ? "Updated" : done ? "Checked off" : "Unchecked";
+        return `${what} subtask "${newTitle ?? sub.title}".`;
+      },
+    }),
+
+    reorder_subtasks: tool({
+      description: "Reorder a task's subtasks. Pass subtask ids/titles in the desired order; omitted ones follow in their current order.",
+      inputSchema: z.object({ taskRef: z.string().min(1), orderedSubtaskRefs: z.array(z.string().min(1)).min(1) }),
+      execute: async ({ taskRef, orderedSubtaskRefs }) => {
+        const t = await resolve.task(taskRef);
+        const first: string[] = [];
+        for (const ref of orderedSubtaskRefs) {
+          const s = await resolve.subtask(t.id, ref);
+          if (!first.includes(s.id)) first.push(s.id);
+        }
+        const { data: all } = await supabase.from("subtasks").select("id").eq("task_id", t.id).order("sort_order");
+        const order = [...first, ...(all ?? []).map((r) => r.id).filter((id) => !first.includes(id))];
+        for (let i = 0; i < order.length; i++) {
+          const { error } = await supabase.from("subtasks").update({ sort_order: i }).eq("id", order[i]);
+          must(error, "reorder subtasks");
+        }
+        return `Reordered subtasks of "${t.title}".`;
       },
     }),
 
     delete_subtask: tool({
-      description: "Delete a subtask of a task (matched by text). Destructive.",
-      inputSchema: z.object({ taskRef: z.string(), subtaskTitle: z.string() }),
-      execute: async ({ taskRef, subtaskTitle }) => {
-        const t = await resolveTask(taskRef);
-        if (!t) return `No task matching "${taskRef}".`;
-        const { data: subs } = await supabase.from("subtasks").select("id, title").eq("task_id", t.id).ilike("title", `%${subtaskTitle}%`).limit(1);
-        const sub = subs?.[0];
-        if (!sub) return `No subtask matching "${subtaskTitle}".`;
-        return deferOrRun("delete_subtask", sub.id, `Delete subtask "${sub.title}"?`, async () => {
-          const { error } = await supabase.from("subtasks").delete().eq("id", sub.id);
-          return error ? `Failed: ${error.message}` : `Deleted subtask "${sub.title}".`;
-        });
+      description: "Delete a subtask of a task (by id or title). Destructive.",
+      inputSchema: z.object({ taskRef: z.string().min(1), subtaskRef: z.string().min(1).describe("Subtask id or title") }),
+      execute: async ({ taskRef, subtaskRef }) => {
+        const t = await resolve.task(taskRef);
+        const sub = await resolve.subtask(t.id, subtaskRef);
+        return destroy("delete_subtask", sub.id, `Delete subtask "${sub.title}"?`);
       },
     }),
 
     // ─── TAGS ──────────────────────────────────────────────────────────
     create_tag: tool({
       description: "Create a tag.",
-      inputSchema: z.object({ name: z.string().min(1), color: z.string().optional() }),
+      inputSchema: z.object({ name: z.string().trim().min(1), color: HEX.optional() }),
       execute: async ({ name, color }) => {
         const clean = name.replace(/^#/, "").trim().toLowerCase();
         const { data, error } = await supabase.from("tags").insert({ user_id: userId, name: clean, color: color || randTagColor() }).select("name").single();
-        return error ? `Failed: ${error.message}` : `Created tag #${data.name}.`;
+        must(error, "create the tag");
+        return `Created tag #${data!.name}.`;
       },
     }),
 
     delete_tag: tool({
       description: "Delete a tag (removes it from all tasks). Destructive.",
-      inputSchema: z.object({ tagName: z.string() }),
+      inputSchema: z.object({ tagName: z.string().min(1) }),
       execute: async ({ tagName }) => {
-        const clean = tagName.replace(/^#/, "").trim().toLowerCase();
-        const { data: tags } = await supabase.from("tags").select("id, name").ilike("name", clean).limit(1);
-        const tg = tags?.[0];
-        if (!tg) return `No tag matching "${tagName}".`;
-        return deferOrRun("delete_tag", tg.id, `Delete tag #${tg.name} from all tasks?`, async () => {
-          await supabase.from("task_tags").delete().eq("tag_id", tg.id);
-          const { error } = await supabase.from("tags").delete().eq("id", tg.id);
-          return error ? `Failed: ${error.message}` : `Deleted tag #${tg.name}.`;
-        });
+        const tg = await resolve.tag(tagName);
+        return destroy("delete_tag", tg.id, `Delete tag #${tg.name} from all tasks?`);
       },
     }),
 
-    ...makeExtraTools(supabase, userId, opts),
+    ...makeExtraTools(supabase, userId, opts, resolve),
   };
+
+  if (opts.surface !== "mcp") delete tools.confirm_action;
+  return tools;
 }

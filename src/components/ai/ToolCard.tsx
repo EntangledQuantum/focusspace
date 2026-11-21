@@ -5,14 +5,16 @@ import {
   FolderKanban, ListChecks, CheckCheck, FolderPlus, Pencil, Palette, Trash2,
   Plus, CheckCircle2, ListPlus, Tag, Sparkles, Loader2, AlertTriangle,
   Search, FileText, ChevronRight, BarChart3, Play, Pause, SkipForward, SkipBack,
-  Disc3, Volume2, Shuffle, type LucideIcon,
+  Disc3, Volume2, Shuffle, Radar, Settings, SlidersHorizontal, RotateCcw, Target, Check,
+  Calendar, List, GitCompare, ArrowUpDown, type LucideIcon,
 } from "lucide-react";
 import { toolMetaFor } from "@/lib/ai/toolMeta";
 
 const ICONS: Record<string, LucideIcon> = {
   FolderKanban, ListChecks, CheckCheck, FolderPlus, Pencil, Palette, Trash2,
   Plus, CheckCircle2, ListPlus, Tag, Sparkles, Search, FileText, BarChart3,
-  Play, Pause, SkipForward, SkipBack, Disc3, Volume2, Shuffle,
+  Play, Pause, SkipForward, SkipBack, Disc3, Volume2, Shuffle, Radar, Settings, SlidersHorizontal,
+  RotateCcw, Target, Check, Calendar, List, GitCompare, ArrowUpDown,
 };
 
 export type ToolState = "running" | "done" | "error";
@@ -131,7 +133,12 @@ export function ToolCard({
         <div className="flex items-center" style={{ gap: 8, paddingLeft: 33 }}>
           <button
             disabled={confirming}
-            onClick={async () => { setConfirming(true); await onConfirm(confirmReq.action, confirmReq.id); setResolved("confirmed"); }}
+            onClick={async () => {
+              setConfirming(true);
+              try { await onConfirm(confirmReq.action, confirmReq.id); setResolved("confirmed"); }
+              catch { /* toast already shown; leave the card actionable */ }
+              finally { setConfirming(false); }
+            }}
             className="pill"
             style={{ padding: "5px 12px", fontSize: 11.5, fontWeight: 600, color: "#fff", background: "var(--color-error)", opacity: confirming ? 0.6 : 1 }}
           >

@@ -108,10 +108,12 @@ export default function FocusPage() {
     qc.invalidateQueries({ queryKey: ["tasks"] });
   }
 
-  // On mount: restore task/project that were active when the browser was closed
+  // On mount: restore task/project that were active when the browser was closed.
+  // Also re-runs when Focus AI / MCP selects a different task (synced store).
+  const storeTaskId = useTimerStore((s) => s.currentTaskId);
   useEffect(() => {
     const { currentTaskId, currentProjectId } = useTimerStore.getState();
-    if (!currentTaskId) return;
+    if (!currentTaskId || currentTaskId === activeTask?.id) return;
     (async () => {
       const { data: task } = await supabase
         .from("tasks")
@@ -134,7 +136,7 @@ export default function FocusPage() {
       }
     })();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [storeTaskId]);
 
   // On settings load: if timer was completed when browser closed and auto_start_breaks
   // is enabled, kick off the break that never fired (settings weren't loaded at the time).

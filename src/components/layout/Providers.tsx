@@ -12,6 +12,7 @@ import type { EffectSettings } from "@/lib/effects";
 import { SpotifyProvider } from "@/lib/context/SpotifyContext";
 import { SpotifyMiniBar } from "@/components/spotify/SpotifyMiniBar";
 import { MiniPlayer } from "@/components/MiniPlayer";
+import { AILauncher } from "@/components/ai/AILauncher";
 import { useMiniPlayerStore } from "@/lib/stores/miniplayer";
 import { useTimerStore, getRemainingMs } from "@/lib/stores/timer";
 import { fetchDailyFocus, fetchTagFocus, fetchRecentSessions, fetchStreak, type AnalyticsFilter } from "@/lib/analytics/queries";
@@ -216,6 +217,7 @@ function AppShell({ supabaseUrl, children }: { supabaseUrl: string; children: Re
         </main>
         <SpotifyMiniBar />
         <MiniPlayerHost />
+        <AILauncher enabled={settings?.ai_enabled ?? false} />
         <Toaster
           theme="dark"
           position="bottom-right"

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { makeTaskTools } from "@/lib/ai/tools";
+import { TOOL_META } from "@/lib/ai/toolMeta";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 
@@ -26,23 +27,48 @@ function err(id: RpcId, code: number, message: string): JsonRpcResponse {
   return { jsonrpc: "2.0", id: id ?? null, error: { code, message } };
 }
 
+type ToolRecord = { description?: string; inputSchema?: unknown; execute?: (a: unknown, opts: unknown) => Promise<unknown> };
+const isZod = (s: unknown): s is z.ZodType => !!s && typeof (s as z.ZodType).safeParse === "function";
+
 function jsonSchemaOf(schema: unknown): Record<string, unknown> {
   try {
-    const toJson = (z as unknown as { toJSONSchema?: (s: unknown) => Record<string, unknown> }).toJSONSchema;
-    if (typeof toJson === "function") return toJson(schema);
+    // io:"input" → fields with .default() are optional for the caller (the
+    // default "output" view wrongly marks them required).
+    if (isZod(schema)) {
+      const json = z.toJSONSchema(schema, { io: "input" }) as Record<string, unknown>;
+      delete json.$schema;
+      return json;
+    }
   } catch { /* fall through */ }
   return { type: "object", additionalProperties: true };
 }
 
 export function listToolDefs(tools: ReturnType<typeof makeTaskTools>) {
   return Object.entries(tools).map(([name, t]) => {
-    const rec = t as { description?: string; inputSchema?: unknown };
+    const rec = t as ToolRecord;
+    const meta = TOOL_META[name];
     return {
       name,
       description: rec.description ?? name,
       inputSchema: jsonSchemaOf(rec.inputSchema),
+      annotations: {
+        title: meta?.verb ?? name,
+        readOnlyHint: !!meta?.readOnly,
+        destructiveHint: !!meta?.destructive,
+      },
     };
   });
+}
+
+/** Validate raw MCP arguments against a tool's zod schema (applies defaults). */
+export function validateToolArgs(schema: unknown, args: unknown): { ok: true; value: unknown } | { ok: false; message: string } {
+  if (!isZod(schema)) return { ok: true, value: args ?? {} };
+  const parsed = schema.safeParse(args ?? {});
+  if (parsed.success) return { ok: true, value: parsed.data };
+  const issues = parsed.error.issues
+    .map((i) => `${i.path.length ? i.path.join(".") : "arguments"}: ${i.message}`)
+    .join("; ");
+  return { ok: false, message: `Invalid arguments — ${issues}` };
 }
 
 export async function handleMcpMessage(
@@ -52,21 +78,23 @@ export async function handleMcpMessage(
   const id = message.id ?? null;
   const method = message.method ?? "";
 
-  if (method === "notifications/initialized" || method.startsWith("notifications/")) return null;
+  if (method.startsWith("notifications/")) return null;
 
   if (method === "initialize") {
     return ok(id, {
       protocolVersion: "2025-03-26",
       capabilities: { tools: {} },
-      serverInfo: { name: "focusspace", version: "0.1.0" },
+      serverInfo: { name: "focusspace", version: "0.2.0" },
       instructions:
-        "Call get_workspace_state first. After creating a task, ask before start_timer. Use analytics_* for any focus-time question. Use now_playing / play_music / pause_music for Spotify.",
+        "Call get_workspace_state first. Use search_tasks → get_task to find items by name; if a tool says a name is ambiguous, ask the user or pass the id. " +
+        "After creating a task, ask before start_timer. Use analytics_* for any focus-time question. Use now_playing / play_music / pause_music for Spotify. " +
+        "When a delete returns a __confirm payload, ask the user and only then call confirm_action.",
     });
   }
 
   if (method === "ping") return ok(id, {});
 
-  const tools = makeTaskTools(ctx.supabase, ctx.userId, { destructive: ctx.destructive });
+  const tools = makeTaskTools(ctx.supabase, ctx.userId, { destructive: ctx.destructive, surface: "mcp" });
 
   if (method === "tools/list") {
     return ok(id, { tools: listToolDefs(tools) });
@@ -74,11 +102,12 @@ export async function handleMcpMessage(
 
   if (method === "tools/call") {
     const name = String(message.params?.name ?? "");
-    const args = (message.params?.arguments ?? {}) as Record<string, unknown>;
-    const t = tools[name] as { execute?: (a: unknown, opts: unknown) => Promise<unknown> } | undefined;
-    if (!t?.execute) return err(id, -32601, `Unknown tool: ${name}`);
+    const t = tools[name] as ToolRecord | undefined;
+    if (!t?.execute) return err(id, -32602, `Unknown tool: ${name}`);
+    const args = validateToolArgs(t.inputSchema, message.params?.arguments);
+    if (!args.ok) return ok(id, { content: [{ type: "text", text: args.message }], isError: true });
     try {
-      const output = await t.execute(args, { messages: [], abortSignal: undefined });
+      const output = await t.execute(args.value, { toolCallId: `mcp-${id ?? "call"}`, messages: [], abortSignal: undefined });
       const text = typeof output === "string" ? output : JSON.stringify(output, null, 2);
       return ok(id, { content: [{ type: "text", text }], isError: false });
     } catch (e) {
