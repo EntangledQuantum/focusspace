@@ -48,6 +48,25 @@ export function isProxyLike(baseUrl: string): boolean {
   }
 }
 
+const isOpenCode = (baseUrl: string) => /(^|\.)opencode\.ai$/i.test(safeHost(baseUrl));
+
+function safeHost(url: string): string {
+  try { return new URL(normalizeBaseUrl(url)).hostname; } catch { return ""; }
+}
+
+/**
+ * Extra request headers some gateways need. OpenCode (Zen / Go) routes and
+ * caches by a stable per-conversation `x-opencode-session` and asks clients to
+ * identify themselves with their own User-Agent.
+ */
+export function providerHeaders(baseUrl: string, sessionId?: string | null): Record<string, string> | undefined {
+  if (!isOpenCode(baseUrl)) return undefined;
+  return {
+    "User-Agent": "FocusSpace/1.0 (+https://focusspace.live)",
+    ...(sessionId ? { "x-opencode-session": sessionId } : {}),
+  };
+}
+
 function isPrivateHost(hostRaw: string): boolean {
   const host = hostRaw.replace(/^\[|\]$/g, "").toLowerCase();
   if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local") || host.endsWith(".internal")) return true;

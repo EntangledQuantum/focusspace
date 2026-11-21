@@ -6,12 +6,12 @@ import { AGENT_SETUP_LINE, AGENT_SETUP_MD_URL } from "@/lib/mode";
 export const metadata: Metadata = {
   title: "FocusSpace for agents",
   description:
-    "Install FocusSpace for Hermes or OpenClaw. Individual local setup, MCP tools, no login.",
+    "Connect Claude, Cursor, Hermes or any MCP agent to FocusSpace: timer, tasks, projects, analytics and music over MCP.",
 };
 
 export default function ForAgentsPage() {
   return (
-    <LegalShell title="FocusSpace for agents" updated="August 17, 2026">
+    <LegalShell title="FocusSpace for agents" updated="November 21, 2026">
       <p>
         FocusSpace is a Pomodoro timer, task board, and focus analytics app.
         Agents can do everything a human can — board CRUD, timer control,
@@ -33,26 +33,29 @@ export default function ForAgentsPage() {
         under <code>skills/focusspace/</code>.
       </p>
 
-      <h2>Supported agents</h2>
+      <h2>Connect an agent to your FocusSpace account</h2>
       <p>
-        <strong>Today: Hermes and OpenClaw only.</strong> iOS and Android apps
-        are planned. Other agents are not supported yet.
+        Any MCP client works — Claude Code, Claude Desktop, Cursor, Hermes,
+        OpenClaw and others. In FocusSpace open <strong>Settings → Agents &amp; MCP</strong>,
+        press <strong>New token</strong> and paste the one-liner it shows into your
+        agent. It looks like:
+      </p>
+      <pre>
+        <code>Read https://focusspace.live/for-agents.md and set up the FocusSpace MCP server for me with URL https://focusspace.live/api/mcp and token fs_…</code>
+      </pre>
+      <p>
+        The endpoint is <code>https://focusspace.live/api/mcp</code> (MCP Streamable
+        HTTP) with the header <code>Authorization: Bearer fs_…</code>. Tokens can be
+        revoked any time from the same settings page.
       </p>
 
-      <h2>Local-only setup</h2>
+      <h2>Or self-host locally</h2>
       <p>
-        Agent setup is individual self-host: a SQLite file at{" "}
-        <code>~/.focusspace/focusspace.db</code>, no login, one implicit user.
-        Per-user auth for this mode is coming later.
-      </p>
-      <p>
-        Run the app with <code>npm run dev</code> / <code>npm start</code> or
-        with Docker — both are the same local SQLite mode. Prefer npm when
-        Node 20+ is installed; otherwise use Docker. There is nothing to
-        configure beyond local mode.
+        Individual self-host: a SQLite file at <code>~/.focusspace/focusspace.db</code>,
+        no login, one implicit user, no token. Run with <code>npm run dev</code> /{" "}
+        <code>npm start</code> (Node 20+) or Docker.
       </p>
       <ol>
-        <li>Create <code>~/.focusspace</code> (the app also creates the database on first boot).</li>
         <li>Clone <a href={REPO_URL} target="_blank" rel="noreferrer">EntangledQuantum/focusspace</a> or reuse an existing checkout.</li>
         <li>
           Set <code>FOCUSSPACE_MODE=local</code> and{" "}
@@ -61,29 +64,17 @@ export default function ForAgentsPage() {
         <li>Start the app and open http://127.0.0.1:3000 — click <strong>Open FocusSpace</strong>.</li>
         <li>
           Register MCP: HTTP <code>http://127.0.0.1:3000/api/mcp</code> or stdio{" "}
-          <code>npx tsx scripts/mcp-stdio.ts</code>.
+          <code>npm run mcp</code>.
         </li>
-        <li>Call <code>get_workspace_state</code> before any other tool.</li>
       </ol>
 
-      <h2>How agents should behave</h2>
+      <h2>What agents can do</h2>
       <ul>
-        <li>Always call <code>get_workspace_state</code> first.</li>
-        <li>After creating a task, <strong>ask</strong> if you want the timer started. Never auto-start.</li>
-        <li>Auto-decompose large tasks into subtasks when you did not give any.</li>
-        <li>
-          Tools: <code>get_workspace_state</code>, <code>board</code>,{" "}
-          <code>timer</code>, <code>music</code>, <code>settings</code>,{" "}
-          <code>analytics_*</code>, <code>confirm_action</code>,{" "}
-          <code>reset_task_progress</code>.
-        </li>
-      </ul>
-
-      <h2>Coming soon</h2>
-      <ul>
-        <li>Per-user auth for this local mode</li>
-        <li>iOS and Android apps</li>
-        <li>Support for more agents</li>
+        <li>Read live status: timer mode, running/paused, time left, current task and project.</li>
+        <li>Start, pause, resume, skip and stop pomodoros, breaks and custom sessions.</li>
+        <li>Create, edit, complete, reorder and delete projects, tasks and subtasks.</li>
+        <li>Change settings, read analytics, control Spotify.</li>
+        <li>Agents call <code>get_workspace_state</code> first and ask before starting the timer.</li>
       </ul>
 
       <h2>Links</h2>

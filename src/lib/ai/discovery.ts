@@ -1,6 +1,6 @@
 import { aiServerConfig } from "./config";
 import {
-  isProxyLike, litellmRoot, mergeModels, normalizeBaseUrl, parseLiteLLMInfo, parseModelList,
+  isProxyLike, litellmRoot, mergeModels, normalizeBaseUrl, parseLiteLLMInfo, parseModelList, providerHeaders,
   type ModelOption,
 } from "./models";
 
@@ -19,7 +19,7 @@ export interface DiscoveryResult {
 const TIMEOUT_MS = 8000;
 
 function authHeaders(baseUrl: string, apiKey: string): Record<string, string> {
-  const h: Record<string, string> = { Authorization: `Bearer ${apiKey}`, Accept: "application/json" };
+  const h: Record<string, string> = { Authorization: `Bearer ${apiKey}`, Accept: "application/json", ...providerHeaders(baseUrl) };
   // Anthropic's native /v1/models wants x-api-key + a version header.
   if (/api\.anthropic\.com/i.test(baseUrl)) {
     h["x-api-key"] = apiKey;

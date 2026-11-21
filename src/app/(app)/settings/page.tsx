@@ -12,10 +12,11 @@ import { SliderRow } from "@/components/layout/TopNav";
 import { EFFECTS, effectSettingsFor, type EffectSettings } from "@/lib/effects";
 import { SoundSettings } from "@/components/settings/SoundSettings";
 import { AISettings } from "@/components/settings/AISettings";
+import { AgentsSettings } from "@/components/settings/AgentsSettings";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { MusicSettings } from "@/components/settings/MusicSettings";
 import { toast } from "sonner";
-import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, LogOut, Sparkles, Ban, Bot } from "lucide-react";
+import { Bell, Paintbrush, Timer, Upload, Loader2, Trash2, Sliders, LogOut, Sparkles, Ban } from "lucide-react";
 import { isLocalMode } from "@/lib/mode";
 import type { UserSettings, Wallpaper } from "@/types/database";
 
@@ -522,7 +523,7 @@ export default function SettingsPage() {
 
         {/* AI assistant */}
         <AISettings settings={settings} onSave={(patch) => save.mutate(patch)} />
-        <McpSection />
+        <AgentsSettings />
 
         {/* Music */}
         <MusicSettings />
@@ -713,68 +714,6 @@ function Field({ label, description, children }: { label: string; description?: 
       </div>
       <div className="flex items-center gap-2 shrink-0">{children}</div>
     </div>
-  );
-}
-
-function McpSection() {
-  const [tokens, setTokens] = useState<{ id: string; name: string; prefix: string; created_at: string }[]>([]);
-  const [fresh, setFresh] = useState<string | null>(null);
-  const [name, setName] = useState("Hermes");
-  const local = isLocalMode();
-
-  useEffect(() => {
-    if (local) return;
-    fetch("/api/mcp/tokens").then((r) => r.json()).then((d) => setTokens(d.tokens ?? [])).catch(() => {});
-  }, [local]);
-
-  async function createToken() {
-    const res = await fetch("/api/mcp/tokens", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
-    const data = await res.json();
-    if (data.token) {
-      setFresh(data.token);
-      setTokens((t) => [{ id: "new", name, prefix: data.prefix, created_at: new Date().toISOString() }, ...t]);
-    } else {
-      toast.error(data.error ?? "Could not create token");
-    }
-  }
-
-  async function revoke(id: string) {
-    await fetch(`/api/mcp/tokens?id=${id}`, { method: "DELETE" });
-    setTokens((t) => t.filter((x) => x.id !== id));
-  }
-
-  return (
-    <Section icon={<Bot size={18} />} title="Agents & MCP">
-      <p style={{ fontSize: 13, color: "var(--color-on-surface-variant)", lineHeight: 1.55, padding: "8px 0" }}>
-        Hermes and OpenClaw talk to FocusSpace through the same tools as Ask AI.
-        {local
-          ? " This install is local — point the agent at http://127.0.0.1:3000/api/mcp or run npx tsx scripts/mcp-stdio.ts. No token needed."
-          : " Create a personal token and send it as Authorization: Bearer … to /api/mcp."}
-      </p>
-      {!local && (
-        <>
-          <Field label="New token">
-            <input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="px-2 py-1 rounded-lg text-sm outline-none"
-              style={{ background: "rgba(255,255,255,0.06)", color: "var(--color-on-surface)", width: 120 }}
-            />
-            <button onClick={createToken} className="pill chip-primary" style={{ padding: "6px 12px", fontSize: 12 }}>Create</button>
-          </Field>
-          {fresh && (
-            <p className="text-xs break-all" style={{ color: "var(--color-primary)", padding: "6px 0" }}>
-              Copy now: {fresh}
-            </p>
-          )}
-          {tokens.map((t) => (
-            <Field key={t.id} label={t.name} description={`${t.prefix}…`}>
-              <button onClick={() => revoke(t.id)} className="text-xs" style={{ color: "var(--color-error)" }}>Revoke</button>
-            </Field>
-          ))}
-        </>
-      )}
-    </Section>
   );
 }
 

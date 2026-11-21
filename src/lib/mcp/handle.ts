@@ -27,6 +27,15 @@ function err(id: RpcId, code: number, message: string): JsonRpcResponse {
   return { jsonrpc: "2.0", id: id ?? null, error: { code, message } };
 }
 
+export const SUPPORTED_PROTOCOL_VERSIONS = ["2025-06-18", "2025-11-25", "2025-03-26", "2024-11-05"];
+
+export const MCP_INSTRUCTIONS =
+  "FocusSpace = Pomodoro timer + task board. Call get_workspace_state first (timer, time left, task, project). " +
+  "Find items with search_tasks / list_projects / list_tasks, then act by id (names work, but an ambiguous name returns a list instead of guessing). " +
+  "Timer: start_timer / pause_timer / resume_timer / skip_timer / reset_timer (= stop) / set_active_task. " +
+  "After creating a task, ask before starting the timer. analytics_* for focus-time questions; now_playing / play_music for Spotify. " +
+  "A delete may return {__confirm,...}: ask the user, then call confirm_action. Guide: https://focusspace.live/for-agents.md";
+
 type ToolRecord = { description?: string; inputSchema?: unknown; execute?: (a: unknown, opts: unknown) => Promise<unknown> };
 const isZod = (s: unknown): s is z.ZodType => !!s && typeof (s as z.ZodType).safeParse === "function";
 
@@ -81,14 +90,13 @@ export async function handleMcpMessage(
   if (method.startsWith("notifications/")) return null;
 
   if (method === "initialize") {
+    const requested = String(message.params?.protocolVersion ?? "");
     return ok(id, {
-      protocolVersion: "2025-03-26",
+      // Echo the client's version when we speak it (the feature set is identical across these).
+      protocolVersion: SUPPORTED_PROTOCOL_VERSIONS.includes(requested) ? requested : SUPPORTED_PROTOCOL_VERSIONS[0],
       capabilities: { tools: {} },
-      serverInfo: { name: "focusspace", version: "0.2.0" },
-      instructions:
-        "Call get_workspace_state first. Use search_tasks → get_task to find items by name; if a tool says a name is ambiguous, ask the user or pass the id. " +
-        "After creating a task, ask before start_timer. Use analytics_* for any focus-time question. Use now_playing / play_music / pause_music for Spotify. " +
-        "When a delete returns a __confirm payload, ask the user and only then call confirm_action.",
+      serverInfo: { name: "focusspace", version: "0.3.0" },
+      instructions: MCP_INSTRUCTIONS,
     });
   }
 
