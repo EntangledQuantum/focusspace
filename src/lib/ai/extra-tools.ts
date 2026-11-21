@@ -422,7 +422,8 @@ export function makeExtraTools(supabase: DB, userId: string, opts: { destructive
         const res = await spotifyUserFetch(auth.token, "/search", { params: { q: query, type, limit: String(limit) } });
         if (!res.ok) return `Search failed (${res.status}).`;
         const data = res.json as Record<string, { items?: { name?: string; uri?: string; artists?: { name: string }[]; owner?: { display_name?: string } }[] }>;
-        const items = data[`${type}s`]?.items ?? [];
+        // Spotify pads playlist search results with null entries.
+        const items = (data[`${type}s`]?.items ?? []).filter(Boolean);
         if (!items.length) return `No ${type}s for "${query}".`;
         return items.map((it) => {
           const extra = it.artists?.map((a) => a.name).join(", ") ?? it.owner?.display_name ?? "";
