@@ -44,7 +44,7 @@ describe("MCP protocol", () => {
 
   it("lists the shared tool catalog including workspace + analytics + timer", () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const tools = makeTaskTools(fakeDb as any, "u", { destructive: "allow" });
+    const tools = makeTaskTools(fakeDb as any, "u", { destructive: "allow", surface: "mcp" });
     const names = listToolDefs(tools).map((t) => t.name);
     for (const required of [
       "get_workspace_state", "create_task", "start_timer", "reset_task_progress",

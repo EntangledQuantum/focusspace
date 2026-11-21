@@ -12,7 +12,7 @@ import {
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { AIChatPanel } from "@/components/ai/AIChatPanel";
+import { useAIPanel } from "@/lib/stores/ai";
 import type { Project, Subtask, Task, Tag as TagType, TaskWithTags, UserSettings } from "@/types/database";
 import { PomodoroRating } from "@/components/timer/PomodoroRating";
 
@@ -929,7 +929,6 @@ export default function ProjectsPage() {
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectColor, setNewProjectColor] = useState(PROJECT_COLORS[0]);
   const [deleteTagConfirm, setDeleteTagConfirm] = useState<TagType | null>(null);
-  const [aiOpen, setAiOpen] = useState(false);
 
   const { data: settings } = useQuery<UserSettings | null>({
     queryKey: ["settings"],
@@ -1029,6 +1028,13 @@ export default function ProjectsPage() {
   const visibleIds = settings?.projects_visible_ids ?? [];
   const visibleProjects = showAll ? projects : projects.filter((p) => visibleIds.includes(p.id));
   const aiAvailable = process.env.NEXT_PUBLIC_AI_ENABLED === "true" && (settings?.ai_enabled ?? false);
+  // Page context for the global Focus AI panel: the project in view when the
+  // board is narrowed to exactly one.
+  const focusProjectId = visibleProjects.length === 1 ? visibleProjects[0].id : null;
+  useEffect(() => {
+    useAIPanel.setState({ projectId: focusProjectId });
+    return () => useAIPanel.setState({ projectId: null });
+  }, [focusProjectId]);
 
   async function saveView(patch: Partial<Pick<UserSettings, "projects_show_all" | "projects_visible_ids">>) {
     if (!settings) return;
@@ -1061,7 +1067,7 @@ export default function ProjectsPage() {
           <div className="flex items-center" style={{ gap: 8 }}>
             {aiAvailable && (
               <button
-                onClick={() => setAiOpen(true)}
+                onClick={() => useAIPanel.getState().openPanel()}
                 className="pill glass-soft hover-lift"
                 style={{ padding: "8px 16px 8px 11px", fontSize: 13.5, color: "var(--color-on-surface)" }}
               >
@@ -1269,13 +1275,6 @@ export default function ProjectsPage() {
         )}
       </div>
 
-      {aiAvailable && (
-        <AIChatPanel
-          open={aiOpen}
-          onClose={() => setAiOpen(false)}
-          focusProjectId={visibleProjects[0]?.id ?? projects[0]?.id ?? null}
-        />
-      )}
     </div>
   );
 }

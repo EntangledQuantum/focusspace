@@ -1,22 +1,25 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { executeConfirmedAction } from "@/lib/ai/confirm";
-import type { ConfirmRequest } from "@/lib/ai/tools";
+import { DESTRUCTIVE_ACTIONS, performDelete, type DestructiveAction } from "@/lib/ai/confirm";
+import { scopeToUser } from "@/lib/ai/scoped";
+import { UUID_RE } from "@/lib/ai/resolve";
 
-const ACTIONS = new Set(["delete_project", "delete_task", "delete_subtask", "delete_tag"]);
-
-// Performs a destructive action the agent deferred (confirm mode). RLS scopes
-// the delete to the user's own rows.
+// Performs a destructive action the agent deferred (confirm mode) after the
+// user pressed Confirm on the tool card. Scoped to the user's own rows.
 export async function POST(req: NextRequest) {
   const supabase = await createClient();
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { action, id } = await req.json();
-  if (!ACTIONS.has(action) || typeof id !== "string") {
+  if (!(DESTRUCTIVE_ACTIONS as readonly string[]).includes(action) || typeof id !== "string" || !UUID_RE.test(id)) {
     return NextResponse.json({ error: "Invalid action." }, { status: 400 });
   }
 
-  const result = await executeConfirmedAction(supabase, action as ConfirmRequest["action"], id);
-  return NextResponse.json({ ok: true, result });
+  try {
+    const result = await performDelete(scopeToUser(supabase, user.id), action as DestructiveAction, id);
+    return NextResponse.json({ ok: true, result });
+  } catch (e) {
+    return NextResponse.json({ ok: false, error: e instanceof Error ? e.message : "Delete failed" }, { status: 500 });
+  }
 }

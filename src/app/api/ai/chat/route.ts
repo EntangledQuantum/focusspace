@@ -6,6 +6,8 @@ import { resolveModel } from "@/lib/ai/gateway";
 import { makeTaskTools } from "@/lib/ai/tools";
 import { buildSystemPrompt } from "@/lib/ai/system-prompt";
 import { getUsage, recordUsage } from "@/lib/ai/usage";
+import { friendlyAiError } from "@/lib/ai/errors";
+import { UUID_RE } from "@/lib/ai/resolve";
 
 export const maxDuration = 60;
 
@@ -18,7 +20,9 @@ export async function POST(req: NextRequest) {
 
   const body = await req.json();
   const messages = (body.messages ?? []) as UIMessage[];
-  const focusProjectId = (body.focusProjectId ?? null) as string | null;
+  // Page context from the global launcher (cheap hints, never trusted for auth).
+  const focusProjectId = typeof body.focusProjectId === "string" && UUID_RE.test(body.focusProjectId) ? body.focusProjectId : null;
+  const page = typeof body.page === "string" ? body.page.slice(0, 40) : null;
 
   const { data: settings } = await supabase
     .from("user_settings")
@@ -42,18 +46,19 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const resolved = await resolveModel(supabase, settings);
+  const resolved = await resolveModel(supabase, settings, user.id);
   if (!resolved) return NextResponse.json({ error: "AI gateway is not configured." }, { status: 503 });
 
   const destructive = settings.ai_destructive === "confirm" ? "confirm" : "allow";
-  const system = await buildSystemPrompt(supabase, user.id, { destructive, focusProjectId });
-  const tools = makeTaskTools(supabase, user.id, { destructive });
+  const system = await buildSystemPrompt(supabase, user.id, { destructive, focusProjectId, page });
+  const tools = makeTaskTools(supabase, user.id, { destructive, surface: "chat" });
 
   const result = streamText({
     model: resolved.model,
     system,
     messages: await convertToModelMessages(messages),
     tools,
+    providerOptions: resolved.providerOptions,
     stopWhen: stepCountIs(cfg.maxSteps),
     onFinish: async ({ totalUsage }) => {
       if (!resolved.isOwnKey) {
@@ -64,5 +69,9 @@ export async function POST(req: NextRequest) {
     },
   });
 
-  return result.toUIMessageStreamResponse();
+  return result.toUIMessageStreamResponse({
+    // Default would mask every provider error as "An error occurred."
+    onError: (e) => friendlyAiError(e, { modelId: resolved.modelId }),
+    messageMetadata: ({ part }) => (part.type === "start" ? { model: resolved.modelId } : undefined),
+  });
 }
