@@ -163,10 +163,12 @@ export default function FocusPage() {
   }, [settings]);
 
   const handleSessionComplete = useCallback(async () => {
-    await timer.completeSession();
+    // Alert first: recording the session is several network round-trips, and
+    // the sound shouldn't wait on (or be lost to) a slow/failed request.
     const label = isBreak ? "Break complete — back to work!" : "Session complete! Great focus.";
-    notifyCompletion(label, activeTask?.title ?? "");
+    notifyCompletion(label, activeTask?.title ?? "", { kind: isBreak ? "break" : "focus" });
     toast.success(label);
+    await timer.completeSession();
 
     // Immediately update local task completed count so timeline reflects it
     if (!isBreak && activeTask) {

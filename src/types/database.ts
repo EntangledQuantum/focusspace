@@ -41,6 +41,9 @@ export type Database = {
           long_break_sec: number;
           long_break_every: number;
           completion_tone: string;
+          break_end_tone: string;
+          sound_enabled: boolean;
+          sound_volume: number;
           dnd_during_focus: boolean;
           browser_notifs_enabled: boolean;
           auto_start_breaks: boolean;
@@ -73,6 +76,9 @@ export type Database = {
           long_break_sec?: number;
           long_break_every?: number;
           completion_tone?: string;
+          break_end_tone?: string;
+          sound_enabled?: boolean;
+          sound_volume?: number;
           dnd_during_focus?: boolean;
           browser_notifs_enabled?: boolean;
           auto_start_breaks?: boolean;
@@ -104,6 +110,9 @@ export type Database = {
           long_break_sec?: number;
           long_break_every?: number;
           completion_tone?: string;
+          break_end_tone?: string;
+          sound_enabled?: boolean;
+          sound_volume?: number;
           dnd_during_focus?: boolean;
           browser_notifs_enabled?: boolean;
           auto_start_breaks?: boolean;

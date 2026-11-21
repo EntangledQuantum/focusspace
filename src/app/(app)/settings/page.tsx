@@ -10,8 +10,7 @@ import { MESH_WALLPAPERS } from "@/components/layout/WallpaperRenderer";
 import { AnimatedBackdrop } from "@/components/effects/AnimatedBackdrop";
 import { SliderRow } from "@/components/layout/TopNav";
 import { EFFECTS, effectSettingsFor, type EffectSettings } from "@/lib/effects";
-import { TONE_OPTIONS } from "@/lib/audio/tones";
-import { playTone } from "@/lib/audio/tones";
+import { SoundSettings } from "@/components/settings/SoundSettings";
 import { WallpaperEditModal, type CropResult } from "@/components/settings/WallpaperEditModal";
 import { clearSpotifyToken } from "@/lib/spotify/api";
 import { toast } from "sonner";
@@ -529,27 +528,7 @@ export default function SettingsPage() {
 
         {/* Notifications */}
         <Section icon={<Bell size={18} />} title="Notifications">
-          <Field label="Completion Tone" description="Sound played when a session completes.">
-            <select
-              value={local.completion_tone ?? "soft-chime"}
-              onChange={(e) => saveField("completion_tone", e.target.value)}
-              className="px-3 py-2 rounded-xl text-sm outline-none"
-              style={{
-                background: "var(--color-surface-container-high)",
-                color: "var(--color-on-surface)",
-                border: "1px solid var(--color-outline-variant)",
-              }}
-            >
-              {TONE_OPTIONS.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-            <button
-              onClick={() => playTone(local.completion_tone ?? "soft-chime")}
-              className="ml-2 px-3 py-2 rounded-xl text-xs font-medium"
-              style={{ background: "var(--color-surface-container-high)", color: "var(--color-on-surface-variant)", border: "1px solid var(--color-outline-variant)" }}
-            >
-              Preview
-            </button>
-          </Field>
+          <SoundSettings settings={settings} onSave={(patch) => save.mutate(patch)} />
 
           <Field label="Do Not Disturb" description="Mute all tones during active focus sessions.">
             <Toggle

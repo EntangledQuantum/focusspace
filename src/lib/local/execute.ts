@@ -5,7 +5,7 @@ import type { EmbedSpec, FilterOp, QueryResult, QuerySpec } from "./types";
 const BOOL_COLS = new Set([
   "dnd_during_focus", "browser_notifs_enabled", "auto_start_breaks", "auto_start_pomodoros",
   "spotify_auto_start", "spotify_takeover", "ai_enabled", "ai_use_own_key", "ai_has_own_key",
-  "projects_show_all", "done", "completed", "is_builtin",
+  "projects_show_all", "sound_enabled", "done", "completed", "is_builtin",
 ]);
 
 const JSON_COLS = new Set(["effect_settings", "projects_visible_ids", "parts"]);
