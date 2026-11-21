@@ -57,6 +57,12 @@ export type Database = {
           spotify_takeover: boolean;
           spotify_auto_pause: boolean;
           spotify_resume_on_focus: boolean;
+          /** Web Playback SDK device id of the user's FocusSpace tab (0015). */
+          spotify_web_device_id: string | null;
+          spotify_web_device_seen_at: string | null;
+          /** Music picked in FocusSpace's picker (0015). */
+          spotify_selected_uri: string | null;
+          spotify_selected_name: string | null;
           glass_tint: number;
           glass_blur: number;
           active_effect: string | null;
@@ -94,6 +100,10 @@ export type Database = {
           spotify_takeover?: boolean;
           spotify_auto_pause?: boolean;
           spotify_resume_on_focus?: boolean;
+          spotify_web_device_id?: string | null;
+          spotify_web_device_seen_at?: string | null;
+          spotify_selected_uri?: string | null;
+          spotify_selected_name?: string | null;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
@@ -130,6 +140,10 @@ export type Database = {
           spotify_takeover?: boolean;
           spotify_auto_pause?: boolean;
           spotify_resume_on_focus?: boolean;
+          spotify_web_device_id?: string | null;
+          spotify_web_device_seen_at?: string | null;
+          spotify_selected_uri?: string | null;
+          spotify_selected_name?: string | null;
           glass_tint?: number;
           glass_blur?: number;
           active_effect?: string | null;
