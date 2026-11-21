@@ -2,18 +2,22 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { resolveMcpContext } from "@/lib/mcp/auth";
-import { CommandError } from "@/lib/extension/service";
+import { CommandError, type StateHint } from "@/lib/extension/service";
+import { instrumentDb, serverTiming } from "@/lib/extension/timing";
 
 /**
  * Shared plumbing for /api/extension/*: Bearer-token auth (the same personal
  * access tokens as the hosted MCP endpoint) and CORS for chrome-extension://
  * origins. Extension pages with host_permissions bypass CORS anyway; the
  * headers keep self-hosted origins granted via optional permissions working too.
+ * Every response carries a Server-Timing header (auth / db round trips / total).
  */
 
 export interface ExtensionContext {
   db: SupabaseClient<Database>;
   userId: string;
+  /** Add a named entry (e.g. spotify) to this response's Server-Timing header. */
+  mark: (name: string, ms: number) => void;
 }
 
 export function corsHeaders(req: NextRequest): Record<string, string> {
@@ -23,6 +27,8 @@ export function corsHeaders(req: NextRequest): Record<string, string> {
     "Access-Control-Allow-Origin": origin,
     "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
     "Access-Control-Allow-Headers": "Authorization, Content-Type",
+    "Access-Control-Expose-Headers": "Server-Timing",
+    "Timing-Allow-Origin": origin,
     "Access-Control-Max-Age": "600",
     Vary: "Origin",
   };
@@ -40,15 +46,36 @@ export async function withExtension(
   req: NextRequest,
   fn: (ctx: ExtensionContext) => Promise<NextResponse>,
 ): Promise<NextResponse> {
-  const ctx = await resolveMcpContext(req.headers.get("authorization"));
-  if (!ctx) return json(req, { error: "Not signed in. Log in again from the extension." }, 401);
+  const t0 = performance.now();
+  const auth = await resolveMcpContext(req.headers.get("authorization"), { withSettings: false });
+  const authMs = performance.now() - t0;
+  if (!auth) return json(req, { error: "Not signed in. Log in again from the extension." }, 401);
+
+  const { db, stats } = instrumentDb(auth.supabase as SupabaseClient<Database>);
+  const marks: string[] = [];
+  const mark = (name: string, ms: number) => { marks.push(`${name};dur=${ms.toFixed(1)}`); };
+  let res: NextResponse;
   try {
-    return await fn({ db: ctx.supabase as SupabaseClient<Database>, userId: ctx.userId });
+    res = await fn({ db, userId: auth.userId, mark });
   } catch (e) {
-    if (e instanceof CommandError) return json(req, { error: e.message }, e.status);
-    console.error("[extension]", e);
-    return json(req, { error: "Something went wrong." }, 500);
+    if (e instanceof CommandError) {
+      res = json(req, { error: e.message }, e.status);
+    } else {
+      console.error("[extension]", e);
+      res = json(req, { error: "Something went wrong." }, 500);
+    }
   }
+  res.headers.set("Server-Timing", [serverTiming({ authMs, totalMs: performance.now() - t0, stats }), ...marks].join(", "));
+  return res;
+}
+
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** The caller's "what I'm showing" hint ({ taskId, projectId }); anything malformed is ignored. */
+export function readHint(raw: unknown): StateHint {
+  const o = (raw && typeof raw === "object" ? raw : {}) as Record<string, unknown>;
+  const id = (v: unknown) => (typeof v === "string" && UUID_RE.test(v) ? v : null);
+  return { taskId: id(o.taskId), projectId: id(o.projectId) };
 }
 
 export async function readBody(req: NextRequest): Promise<Record<string, unknown>> {

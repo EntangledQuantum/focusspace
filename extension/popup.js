@@ -1,4 +1,10 @@
-import { api, getConfig, clearSession, liveRemaining, paintBadge, MODE_LABEL, isBreak } from "./lib/api.js";
+import { api, getConfig, clearSession, liveRemaining, paintBadge, MODE_LABEL, isBreak, known, knownQuery } from "./lib/api.js";
+import { predictTimer, shouldApplyPoll, overlayPending, predictMusic, acceptMusic } from "./lib/optimistic.js";
+
+// Every click updates the UI immediately (optimistic), sends one request whose
+// response is the new state, and rolls back with a toast if the server says no.
+// Each area (timer, task, each subtask, music) is locked separately while its
+// own request is in flight — the popup as a whole never freezes.
 
 // Static, trusted SVG markup only (lucide-style). Everything user-provided goes through textContent.
 const svg = (body, fill = false) =>
@@ -16,12 +22,22 @@ const ICONS = {
 const $ = (id) => document.getElementById(id);
 const RING = 2 * Math.PI * 52;
 const POLL_MS = 5000;
+const MUSIC_HOLD_MS = 3000; // Spotify's /me/player can lag a command by ~0.3–2 s
 
 let cfg = null;
+/** What is on screen (server state + optimistic changes) and when its countdown was anchored. */
 let state = null;
 let receivedAt = 0;
+/** Last state confirmed by the server. */
+let serverState = null;
+const inflight = { timer: false, task: false };
+const pendingSubs = new Map(); // subtaskId → desired done, while its request is in flight
+let pendingDone; // { taskId, done } while a task-done request is in flight
+let lastAckAt = 0;
+let polling = false;
 let music = null;
-let busy = false;
+let musicHold = null;
+let musicBusy = false;
 let dueRefreshQueued = false;
 let timers = [];
 
@@ -47,22 +63,39 @@ function toast(message, kind = "info") {
   toastTimer = setTimeout(() => { el.hidden = true; }, 3800);
 }
 
-function iconButton(icon, title, onClick, extra = "") {
+function setOffline(message) {
+  const el = $("net-banner");
+  el.hidden = !message;
+  if (message) el.textContent = message;
+}
+
+/** 401 → the storage listener swaps to the login view; network → banner; anything else → toast (unless quiet). */
+function handleError(e, { quiet = false } = {}) {
+  if (e?.status === 401) return;
+  if (e?.offline) {
+    setOffline(`${e.message} Showing the last known state — retrying.`);
+    if (!quiet) toast(e.message, "error");
+    return;
+  }
+  if (!quiet) toast(e?.message || String(e), "error");
+}
+
+function iconButton(icon, title, onClick, extra = "", disabled = false) {
   const b = document.createElement("button");
   b.className = `icon-btn ${extra}`;
   b.title = title;
   b.setAttribute("aria-label", title);
   b.innerHTML = ICONS[icon];
-  b.disabled = busy;
+  b.disabled = disabled;
   b.addEventListener("click", onClick);
   return b;
 }
 
-function textButton(label, onClick, primary = false) {
+function textButton(label, onClick, primary = false, disabled = false) {
   const b = document.createElement("button");
   b.className = `btn ${primary ? "primary" : ""}`;
   b.textContent = label;
-  b.disabled = busy;
+  b.disabled = disabled;
   b.addEventListener("click", onClick);
   return b;
 }
@@ -78,54 +111,173 @@ function show(view) {
   $("account-menu").hidden = true;
 }
 
-const tellBackground = () => chrome.runtime.sendMessage({ type: "refresh" }).catch(() => {});
+// ---------- state ----------
 
-// ---------- data ----------
-
-function applyState(next) {
+function display(next, at) {
   state = next;
-  receivedAt = Date.now();
+  receivedAt = at;
   dueRefreshQueued = false;
-  chrome.storage.local.set({ lastState: state, lastStateAt: receivedAt });
-  void paintBadge(state, receivedAt);
-  if (state.justCompleted) toast(isBreak(state.timer.mode) ? "Break's over." : "Session complete — nice focus.");
   render();
 }
 
-async function guarded(fn) {
-  try {
-    return await fn();
-  } catch (e) {
-    // A 401 already cleared the token; the storage listener below swaps to the login view.
-    if (e?.status !== 401) toast(e?.message || String(e), "error");
-    return undefined;
-  }
+/** A server-confirmed state: show it (with still-pending clicks re-applied), cache it, hand it to the badge. */
+function applyServer(next, { taskOnly = false } = {}) {
+  const at = Date.now();
+  serverState = next;
+  const base = taskOnly && state ? { ...state, task: next.task, project: next.project } : next;
+  display(overlayPending(base, { subtasks: pendingSubs, taskDone: pendingDone }), taskOnly ? receivedAt : at);
+  setOffline(null);
+  void chrome.storage.local.set({ lastState: next, lastStateAt: at });
+  void paintBadge(next, at);
+  // The background reschedules its alarms from this — no extra request.
+  chrome.runtime.sendMessage({ type: "state", state: next, receivedAt: at }).catch(() => {});
+  if (next.justCompleted) toast(isBreak(next.timer.mode) ? "Break's over." : "Session complete — nice focus.");
 }
 
 async function refreshState() {
-  await guarded(async () => applyState(await api("/api/extension/state")));
+  if (polling) return;
+  polling = true;
+  const pollStartedAt = Date.now();
+  try {
+    const next = await api(`/api/extension/state${knownQuery(serverState ?? state)}`);
+    const inFlight = inflight.timer || inflight.task || pendingSubs.size > 0 || pendingDone !== undefined;
+    if (shouldApplyPoll({ inFlight, pollStartedAt, lastAckAt })) applyServer(next);
+    else setOffline(null);
+  } catch (e) {
+    handleError(e, { quiet: true });
+  } finally {
+    polling = false;
+  }
 }
 
 async function refreshMusic() {
-  await guarded(async () => {
-    music = await api("/api/extension/music");
+  try {
+    const next = await api("/api/extension/music");
+    if (acceptMusic(next, musicHold)) {
+      music = next;
+      musicHold = null;
+      renderMusic();
+    }
+  } catch (e) {
+    handleError(e, { quiet: true });
+  }
+}
+
+// ---------- commands ----------
+
+async function timerCmd(action, mode) {
+  if (inflight.timer || !state) return;
+  const predicted = predictTimer(state, receivedAt, action, mode);
+  if (!predicted) return; // e.g. "pause" on a timer that is no longer running
+  const before = { state, receivedAt };
+  inflight.timer = true;
+  display(predicted.state, predicted.receivedAt);
+  try {
+    const next = await api("/api/extension/timer", {
+      method: "POST",
+      body: { action, ...(mode ? { mode } : {}), known: known(serverState ?? before.state) },
+    });
+    inflight.timer = false;
+    lastAckAt = Date.now();
+    applyServer(next);
+  } catch (e) {
+    inflight.timer = false;
+    lastAckAt = Date.now();
+    display(before.state, before.receivedAt);
+    handleError(e);
+    void refreshState();
+  }
+}
+
+async function taskRequest(body, { taskOnly }) {
+  const next = await api("/api/extension/tasks", { method: "POST", body });
+  lastAckAt = Date.now();
+  // A timer click may be in flight: only take the task part so its optimistic timer state survives.
+  applyServer(next, { taskOnly: taskOnly || inflight.timer });
+}
+
+async function toggleSubtask(st) {
+  if (pendingSubs.has(st.id) || !state?.task) return;
+  const desired = !st.done;
+  pendingSubs.set(st.id, desired);
+  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }), receivedAt);
+  try {
+    // `done` is the desired value, so a retry can never double-toggle.
+    const req = taskRequest({ action: "toggle_subtask", subtaskId: st.id, done: desired, known: known(state) }, { taskOnly: true });
+    await req.finally(() => { pendingSubs.delete(st.id); render(); });
+  } catch (e) {
+    const task = state?.task;
+    if (task) display({ ...state, task: { ...task, subtasks: task.subtasks.map((s) => (s.id === st.id ? { ...s, done: !desired } : s)) } }, receivedAt);
+    handleError(e);
+  }
+}
+
+async function toggleDone() {
+  const task = state?.task;
+  if (!task || pendingDone !== undefined || inflight.task) return;
+  const desired = !task.done;
+  pendingDone = { taskId: task.id, done: desired };
+  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }), receivedAt);
+  try {
+    await taskRequest({ action: "toggle_done", taskId: task.id, done: desired, known: known(state) }, { taskOnly: true })
+      .finally(() => { pendingDone = undefined; render(); });
+  } catch (e) {
+    if (state?.task?.id === task.id) display({ ...state, task: { ...state.task, done: !desired } }, receivedAt);
+    handleError(e);
+  }
+}
+
+async function selectTask(pick) {
+  show("view-main");
+  if (inflight.task || !state) return;
+  const before = state;
+  inflight.task = true;
+  // Show the picked task straight away; its subtasks fill in with the response.
+  const project = pick && picker?.projects.find((p) => p.id === pick.projectId);
+  display({
+    ...state,
+    task: pick ? { id: pick.id, title: pick.title, done: false, estimatedPomodoros: pick.estimatedPomodoros, completedPomodoros: pick.completedPomodoros, subtasks: [] } : null,
+    project: project ? { id: project.id, name: project.name, color: project.color } : null,
+  }, receivedAt);
+  try {
+    await taskRequest(
+      { action: "select", taskId: pick?.id ?? null, known: { taskId: pick?.id ?? null, projectId: pick?.projectId ?? null } },
+      { taskOnly: false },
+    ).finally(() => { inflight.task = false; render(); });
+  } catch (e) {
+    display(before, receivedAt);
+    handleError(e);
+  }
+}
+
+async function musicCmd(kind) {
+  if (!music?.connected || musicBusy) return;
+  const action = kind === "toggle" ? (music.isPlaying ? "pause" : "play") : kind;
+  const before = music;
+  const predicted = predictMusic(music, action);
+  if (!predicted) return;
+  musicBusy = true;
+  music = predicted;
+  musicHold = {
+    until: Date.now() + MUSIC_HOLD_MS,
+    isPlaying: predicted.isPlaying,
+    ...(action === "next" || action === "previous" ? { fromTrack: before.track?.name ?? null } : {}),
+  };
+  renderMusic();
+  try {
+    await api("/api/extension/music", { method: "POST", body: { action } });
+    // Spotify shows the change after a short lag; reconcile then (the hold ignores stale reads meanwhile).
+    setTimeout(refreshMusic, 900);
+    setTimeout(refreshMusic, 2200);
+  } catch (e) {
+    musicHold = null;
+    music = before;
+    handleError(e);
+  } finally {
+    musicBusy = false;
     renderMusic();
-  });
+  }
 }
-
-async function command(path, body) {
-  if (busy) return;
-  busy = true;
-  render();
-  await guarded(async () => {
-    applyState(await api(path, { method: "POST", body }));
-    tellBackground();
-  });
-  busy = false;
-  render();
-}
-
-const timerCmd = (action, mode) => command("/api/extension/timer", mode ? { action, mode } : { action });
 
 // ---------- rendering ----------
 
@@ -149,7 +301,7 @@ function renderClock() {
   $("ring-bar").style.strokeDashoffset = String(RING * (1 - Math.min(1, Math.max(0, progress))));
 
   // Countdown hit zero: the site (if open) or the server records it — fetch the result shortly after.
-  if (t.status === "running" && secs <= 0 && !dueRefreshQueued) {
+  if (t.status === "running" && secs <= 0 && !dueRefreshQueued && !inflight.timer) {
     dueRefreshQueued = true;
     setTimeout(refreshState, 3500);
   }
@@ -157,6 +309,7 @@ function renderClock() {
 
 function renderTimer() {
   const t = state.timer;
+  const busy = inflight.timer;
   const pill = $("mode-pill");
   const shownMode = t.status === "idle" ? state.next.start.mode : t.mode;
   pill.textContent = MODE_LABEL[shownMode] ?? shownMode;
@@ -175,20 +328,20 @@ function renderTimer() {
   if (t.status === "running" || t.status === "paused") {
     const running = t.status === "running";
     c.append(
-      iconButton("stop", "Stop & reset", () => timerCmd("stop")),
-      iconButton(running ? "pause" : "play", running ? "Pause" : "Resume", () => timerCmd(running ? "pause" : "resume"), "big"),
-      iconButton("skip", isBreak(t.mode) ? "Skip break" : "Skip session", () => timerCmd("skip")),
+      iconButton("stop", "Stop & reset", () => timerCmd("stop"), "", busy),
+      iconButton(running ? "pause" : "play", running ? "Pause" : "Resume", () => timerCmd(running ? "pause" : "resume"), "big", busy),
+      iconButton("skip", isBreak(t.mode) ? "Skip break" : "Skip session", () => timerCmd("skip"), "", busy),
     );
   } else if (state.next.breakOption) {
     const br = state.next.breakOption;
     c.append(
-      textButton(`Start ${MODE_LABEL[br.mode].toLowerCase()} · ${fmtMin(br.durationSec)}`, () => timerCmd("start", br.mode), true),
-      textButton("Skip to focus", () => timerCmd("start", "pomodoro")),
+      textButton(`Start ${MODE_LABEL[br.mode].toLowerCase()} · ${fmtMin(br.durationSec)}`, () => timerCmd("start", br.mode), true, busy),
+      textButton("Skip to focus", () => timerCmd("start", "pomodoro"), false, busy),
     );
   } else {
     const s = state.next.start;
     const what = s.mode === "custom" ? "custom" : "focus";
-    c.append(textButton(`Start ${what} · ${fmtMin(s.durationSec)}`, () => timerCmd("start", s.mode), true));
+    c.append(textButton(`Start ${what} · ${fmtMin(s.durationSec)}`, () => timerCmd("start", s.mode), true, busy));
   }
   renderClock();
 }
@@ -208,7 +361,7 @@ function renderTask() {
   const locked = timer.status === "running" || timer.status === "paused";
   const change = $("change-task");
   change.textContent = task ? "Change" : "Choose task";
-  change.disabled = locked || busy;
+  change.disabled = locked || inflight.task;
   change.title = locked ? "Stop the timer to switch tasks" : "";
 
   $("task-empty").hidden = !!task;
@@ -223,7 +376,7 @@ function renderTask() {
   $("task-title").textContent = task.title;
   const done = $("task-done");
   done.checked = task.done;
-  done.disabled = busy;
+  done.disabled = pendingDone !== undefined || inflight.task;
   done.title = task.done ? "Mark as not done" : "Mark task complete";
 
   const total = Math.min(12, Math.ceil(task.estimatedPomodoros));
@@ -245,8 +398,8 @@ function renderTask() {
     const box = document.createElement("input");
     box.type = "checkbox";
     box.checked = st.done;
-    box.disabled = busy;
-    box.addEventListener("change", () => command("/api/extension/tasks", { action: "toggle_subtask", subtaskId: st.id }));
+    box.disabled = pendingSubs.has(st.id);
+    box.addEventListener("change", () => toggleSubtask(st));
     const span = document.createElement("span");
     span.textContent = st.title;
     label.append(box, span);
@@ -286,27 +439,14 @@ function renderMusic() {
     $("music-art-empty").hidden = false;
   }
   title.textContent = track ? track.name : "Nothing playing";
-  sub.textContent = track
-    ? [track.artists, music.device].filter(Boolean).join(" · ")
-    : music.message || (music.device ? `Paused on ${music.device}` : "Press play to resume Spotify");
+  sub.textContent = music.pending
+    ? (music.pending === "next" ? "Skipping…" : "Going back…")
+    : track
+      ? [track.artists, music.device].filter(Boolean).join(" · ")
+      : music.message || (music.device ? `Paused on ${music.device}` : "Press play to resume Spotify");
   toggle.innerHTML = ICONS[music.isPlaying ? "pause" : "play"];
   toggle.title = music.isPlaying ? "Pause" : "Play";
-  for (const b of controls.querySelectorAll("button")) b.disabled = busy || (!track && b !== toggle);
-}
-
-async function musicCmd(kind) {
-  if (!music?.connected) return;
-  const action = kind === "toggle" ? (music.isPlaying ? "pause" : "play") : kind;
-  if (kind === "toggle") {
-    music = { ...music, isPlaying: !music.isPlaying };
-    renderMusic();
-  }
-  const ok = await guarded(async () => {
-    music = await api("/api/extension/music", { method: "POST", body: { action } });
-    return true;
-  });
-  if (!ok) await refreshMusic(); // command failed (e.g. no device) → undo the optimistic flip
-  renderMusic();
+  for (const b of controls.querySelectorAll("button")) b.disabled = musicBusy || (!track && b !== toggle);
 }
 
 // ---------- account ----------
@@ -333,7 +473,7 @@ async function logout() {
   try { await api("/api/extension/token", { method: "DELETE" }); } catch { /* token may already be gone */ }
   await clearSession();
   await chrome.action.setBadgeText({ text: "" });
-  tellBackground();
+  chrome.runtime.sendMessage({ type: "refresh" }).catch(() => {});
   await boot();
 }
 
@@ -345,14 +485,17 @@ async function openPicker() {
   show("view-picker");
   const list = $("picker-list");
   list.replaceChildren(Object.assign(document.createElement("li"), { className: "muted", textContent: "Loading…" }));
-  await guarded(async () => {
+  try {
     picker = await api("/api/extension/tasks");
     const sel = $("picker-project");
     sel.replaceChildren(new Option("All projects", ""));
     for (const p of picker.projects) sel.append(new Option(p.name, p.id));
     sel.value = state?.project?.id && picker.projects.some((p) => p.id === state.project.id) ? state.project.id : "";
     renderPicker();
-  });
+  } catch (e) {
+    list.replaceChildren(Object.assign(document.createElement("li"), { className: "muted", textContent: e?.message || "Couldn't load tasks." }));
+    handleError(e, { quiet: true });
+  }
 }
 
 function renderPicker() {
@@ -378,7 +521,7 @@ function renderPicker() {
     count.className = "count";
     count.textContent = `${t.completedPomodoros}/${t.estimatedPomodoros}`;
     b.append(dot, title, count);
-    b.addEventListener("click", () => selectTask(t.id));
+    b.addEventListener("click", () => selectTask(t));
     const li = document.createElement("li");
     li.append(b);
     list.append(li);
@@ -391,11 +534,6 @@ function renderPicker() {
     li.append(none);
     list.append(li);
   }
-}
-
-async function selectTask(taskId) {
-  show("view-main");
-  await command("/api/extension/tasks", { action: "select", taskId });
 }
 
 // ---------- boot ----------
@@ -411,20 +549,23 @@ async function boot() {
   $("login-host").textContent = new URL(cfg.apiBase).host;
 
   if (!cfg.token) {
-    state = null;
+    state = serverState = null;
     show("view-login");
     return;
   }
 
   show("view-main");
   renderAccount(cfg.account);
+  // Paint the last known state instantly; the countdown is time-based, so it is right even if old.
   const { lastState, lastStateAt } = await chrome.storage.local.get(["lastState", "lastStateAt"]);
-  if (lastState && Date.now() - lastStateAt < 120_000) {
-    state = lastState;
-    receivedAt = lastStateAt;
-    render();
+  if (lastState && !state) {
+    serverState = lastState;
+    display(lastState, lastStateAt);
   }
 
+  // The countdown ticks locally from the snapshot — it never waits on polling.
+  timers.push(setInterval(renderClock, 250));
+  timers.push(setInterval(() => { void refreshState(); void refreshMusic(); }, POLL_MS));
   await Promise.all([refreshState(), refreshMusic()]);
   if (!cfg.account) {
     try {
@@ -433,8 +574,6 @@ async function boot() {
       renderAccount(account);
     } catch { /* header keeps the initial */ }
   }
-  timers.push(setInterval(() => { void refreshState(); void refreshMusic(); }, POLL_MS));
-  timers.push(setInterval(renderClock, 500));
 }
 
 function wire() {
@@ -458,18 +597,22 @@ function wire() {
   $("menu-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
   $("menu-logout").addEventListener("click", logout);
 
-  $("task-done").addEventListener("change", () => {
-    if (state?.task) void command("/api/extension/tasks", { action: "toggle_done", taskId: state.task.id });
-  });
+  $("task-done").addEventListener("change", toggleDone);
   $("change-task").addEventListener("click", openPicker);
   $("picker-back").addEventListener("click", () => show("view-main"));
   $("picker-project").addEventListener("change", renderPicker);
 
   for (const b of document.querySelectorAll("[data-music]")) b.addEventListener("click", () => musicCmd(b.dataset.music));
 
+  window.addEventListener("online", () => { void refreshState(); void refreshMusic(); });
+  window.addEventListener("offline", () => setOffline("You're offline. Showing the last known state."));
+
   // Signed in/out from elsewhere (connect page, options page).
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === "local" && ("token" in changes || "apiBase" in changes)) void boot();
+    if (area === "local" && ("token" in changes || "apiBase" in changes)) {
+      state = serverState = null;
+      void boot();
+    }
   });
 }
 
