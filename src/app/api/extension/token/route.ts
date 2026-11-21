@@ -2,7 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createClient as createJsClient } from "@supabase/supabase-js";
 import { createClient } from "@/lib/supabase/server";
 import { isLocalMode } from "@/lib/mode";
-import { hashToken, newMcpToken, tokenAuthConfigured, TOKEN_AUTH_MISSING } from "@/lib/mcp/auth";
+import { bearerFrom, forgetToken, hashToken, newMcpToken, tokenAuthConfigured, TOKEN_AUTH_MISSING } from "@/lib/mcp/auth";
 import { json, preflight } from "@/lib/extension/http";
 import type { Database } from "@/types/database";
 
@@ -38,12 +38,12 @@ export async function POST(req: NextRequest) {
 /** DELETE — the extension's "Log out": revokes the bearer token it was called with. */
 export async function DELETE(req: NextRequest) {
   if (isLocalMode()) return json(req, { ok: true });
-  const header = req.headers.get("authorization") ?? "";
-  const bearer = header.startsWith("Bearer ") ? header.slice(7).trim() : "";
+  const bearer = bearerFrom(req.headers.get("authorization"));
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!bearer || !url || !key) return json(req, { ok: false }, 401);
   const admin = createJsClient<Database>(url, key);
+  forgetToken(bearer);
   await admin.from("mcp_tokens").delete().eq("token_hash", hashToken(bearer));
   return json(req, { ok: true });
 }
