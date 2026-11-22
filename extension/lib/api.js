@@ -1,5 +1,5 @@
-// Shared by the popup, options page and background service worker.
-import { liveRemaining } from "./optimistic.js";
+// Shared by the popup, side panel, options page and background service worker.
+import { addSample, remainingAt, sampleOffset } from "./clock.js";
 
 export const DEFAULT_API_BASE = "https://focusspace.live";
 
@@ -21,6 +21,46 @@ export async function getConfig() {
 
 export async function clearSession() {
   await chrome.storage.local.remove(["token", "account", "lastState", "lastStateAt"]);
+}
+
+// ---------- server clock ----------
+// Timer timestamps are server epoch ms. Every response carries `serverNow`;
+// the offset (server − local) is estimated NTP-style and shared through
+// chrome.storage so the popup, side panel and badge all count the same.
+
+let clock = { samples: [], offset: 0, loaded: false };
+
+async function loadClock() {
+  if (clock.loaded) return clock;
+  try {
+    const { clockSamples } = await chrome.storage.local.get("clockSamples");
+    if (Array.isArray(clockSamples) && clockSamples.length) {
+      clock = { ...addSample(clockSamples.slice(0, -1), clockSamples.at(-1), Date.now()), loaded: true };
+      return clock;
+    }
+  } catch { /* storage unavailable: start fresh */ }
+  clock.loaded = true;
+  return clock;
+}
+
+function noteClock(serverNow, t0, t1) {
+  if (typeof serverNow !== "number") return;
+  const r = addSample(clock.samples, sampleOffset(serverNow, t0, t1));
+  clock = { ...r, loaded: true };
+  chrome.storage.local.set({ clockSamples: r.samples }).catch(() => {});
+}
+
+/** server clock − local clock, ms. */
+export async function clockOffset() {
+  return (await loadClock()).offset;
+}
+
+/** Current server time as best this context knows it (sync; call clockOffset() once first). */
+export const serverTime = () => Date.now() + clock.offset;
+
+/** Remaining whole seconds of a state's timer right now (server clock). */
+export function timerRemaining(state) {
+  return remainingAt(state?.timer, serverTime());
 }
 
 export class ApiError extends Error {
@@ -62,9 +102,12 @@ export async function api(path, { method = "GET", body, retry = method === "GET"
     },
     body: body !== undefined ? JSON.stringify(body) : undefined,
   };
+  await loadClock();
   let res;
+  let t0 = 0;
   for (let attempt = 0; ; attempt++) {
     try {
+      t0 = Date.now();
       res = await once(`${apiBase}${path}`, init);
       break;
     } catch (e) {
@@ -82,6 +125,7 @@ export async function api(path, { method = "GET", body, retry = method === "GET"
   }
   const isJson = (res.headers.get("content-type") || "").includes("application/json");
   const data = isJson ? await res.json().catch(() => ({})) : {};
+  noteClock(data?.serverNow, t0, Date.now());
   if (res.status === 401) {
     // Only sign out if the rejected token is still the stored one (not one replaced meanwhile).
     const { token: current } = await chrome.storage.local.get("token");
@@ -89,7 +133,12 @@ export async function api(path, { method = "GET", body, retry = method === "GET"
     throw new ApiError("Your session ended. Log in again.", 401);
   }
   if (!isJson) throw new ApiError(`Unexpected response from ${host} — is the server URL right?`, res.status);
-  if (!res.ok) throw new ApiError(data.error || `Request failed (${res.status}).`, res.status);
+  if (!res.ok) {
+    const err = new ApiError(data.error || `Request failed (${res.status}).`, res.status);
+    // A refused timer intent carries the authoritative state to show instead.
+    if (data.state?.timer) err.state = data.state;
+    throw err;
+  }
   return data;
 }
 
@@ -104,7 +153,6 @@ export function knownQuery(state) {
 
 export const known = (state) => ({ taskId: state?.task?.id ?? null, projectId: state?.project?.id ?? null });
 
-export { liveRemaining };
 
 export const MODE_LABEL = {
   pomodoro: "Focus",
@@ -116,12 +164,13 @@ export const MODE_LABEL = {
 export const isBreak = (mode) => mode === "short_break" || mode === "long_break";
 
 /** Toolbar badge: minutes left while a session runs (grey when paused, purple on breaks). */
-export async function paintBadge(state, receivedAt) {
+export async function paintBadge(state) {
+  await loadClock();
   const t = state?.timer;
   let text = "";
   let color = "#ff5fa2";
   if (t && (t.status === "running" || t.status === "paused")) {
-    const mins = Math.ceil(liveRemaining(state, receivedAt) / 60);
+    const mins = Math.ceil(timerRemaining(state) / 60);
     text = `${Math.max(mins, t.status === "running" ? 1 : 0)}m`;
     color = t.status === "paused" ? "#6b5f70" : isBreak(t.mode) ? "#b06bf6" : "#ff5fa2";
   } else if (t && t.status === "completed") {

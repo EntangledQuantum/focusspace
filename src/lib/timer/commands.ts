@@ -2,19 +2,32 @@ import type { TimerMode } from "@/lib/stores/timer";
 import type { TimerSnapshot } from "@/lib/timer/persist";
 
 /**
- * Pure timer state transitions for commands issued outside the browser tab
- * (Chrome extension). They mirror `useTimerStore` + the focus page so that a
- * session started/stopped remotely looks exactly like one driven from the UI.
+ * Pure timer state transitions — the ONLY place timer rules live.
+ *
+ * The `timer_state` row is the single source of truth. Every client (each
+ * website tab, the extension popup / side panel / badge, MCP, Focus AI) sends
+ * intents to the server, which applies these functions with the SERVER clock
+ * and stores the result; clients only render the row (corrected by a measured
+ * server-clock offset, see ./clock.ts). All timestamps are server epoch ms.
  */
 
-/** Sessions shorter than this are treated as accidental and deleted (same as useTimer). */
+/** Sessions shorter than this are treated as accidental and deleted. */
 export const MIN_RECORDED_SEC = 10;
+
+/**
+ * Auto-start the next phase only if the end was observed within this window.
+ * Past it (nobody was around — browser closed, laptop asleep) the timer just
+ * waits as "completed" instead of chaining phantom sessions through the absence.
+ */
+export const AUTO_START_WINDOW_MS = 2 * 60_000;
 
 export interface TimerSettings {
   focusSec: number;
   shortBreakSec: number;
   longBreakSec: number;
   longBreakEvery: number;
+  autoStartBreaks?: boolean;
+  autoStartPomodoros?: boolean;
 }
 
 export interface TaskProgress {
@@ -41,7 +54,7 @@ export function emptySnapshot(settings: TimerSettings): TimerSnapshot {
   };
 }
 
-/** Same as getElapsedSec in the store: a paused clock is frozen at pausedAt. */
+/** A paused clock is frozen at pausedAt. */
 export function elapsedSec(s: TimerSnapshot, now: number): number {
   if (!s.startedAt) return 0;
   const end = s.status === "paused" && s.pausedAt ? s.pausedAt : now;
@@ -54,11 +67,16 @@ export function remaining(s: TimerSnapshot, now: number): number {
   return Math.max(0, s.plannedDurationSec - elapsedSec(s, now));
 }
 
-/** A running session whose countdown hit zero more than `graceMs` ago and nobody recorded it yet. */
-export function isOverdue(s: TimerSnapshot | null, now: number, graceMs = 3000): boolean {
-  if (!s || s.status !== "running" || !s.startedAt) return false;
-  const endsAt = s.startedAt + s.accumulatedPausedMs + s.plannedDurationSec * 1000;
-  return now >= endsAt + graceMs;
+/** Server epoch ms at which a running session ends (null unless running). */
+export function endsAt(s: TimerSnapshot): number | null {
+  if (s.status !== "running" || !s.startedAt) return null;
+  return s.startedAt + s.accumulatedPausedMs + s.plannedDurationSec * 1000;
+}
+
+/** A running session whose countdown has reached zero (server clock). */
+export function isOverdue(s: TimerSnapshot | null, now: number, graceMs = 0): boolean {
+  const end = s ? endsAt(s) : null;
+  return end !== null && now >= end + graceMs;
 }
 
 /** Focus duration for the next pomodoro, halving the last session of a x.5 estimate (focus page rule). */
@@ -98,6 +116,25 @@ export function durationFor(mode: TimerMode, s: TimerSnapshot, settings: TimerSe
   }
 }
 
+/**
+ * Server-side auto-start (replaces the website's client-side chaining, so it
+ * behaves the same with no tab open). Called with the snapshot right after a
+ * session completed and the task progress AFTER counting it. Returns the next
+ * phase to start at the old session's end, or null to stay "completed".
+ */
+export function autoNext(
+  done: TimerSnapshot, settings: TimerSettings, task: TaskProgress | null, endMs: number, now: number,
+): { mode: TimerMode; durationSec: number } | null {
+  if (now - endMs > AUTO_START_WINDOW_MS) return null;
+  if (!isBreakMode(done.mode)) {
+    return settings.autoStartBreaks ? breakAfterFocus(done, settings, task) : null;
+  }
+  if (!settings.autoStartPomodoros || !task) return null;
+  // After a break, continue only while the task still has planned work left.
+  if (task.completedPomodoros >= Math.ceil(task.estimatedPomodoros)) return null;
+  return { mode: "pomodoro", durationSec: pomodoroDuration(settings, task) };
+}
+
 /** store.start() for the snapshot's current task (switching tasks goes through applySelectTask). */
 export function applyStart(
   prev: TimerSnapshot,
@@ -132,8 +169,8 @@ export function applyResume(s: TimerSnapshot, now: number): TimerSnapshot | null
   };
 }
 
-/** store.reset(): breaks flip back to pomodoro so the next start is focus. */
-export function applyReset(s: TimerSnapshot): TimerSnapshot {
+/** Reset: breaks flip back to pomodoro so the next start is focus. */
+export function applyReset(s: TimerSnapshot, opts: { resetCycle?: boolean } = {}): TimerSnapshot {
   return {
     ...s,
     mode: isBreakMode(s.mode) ? "pomodoro" : s.mode,
@@ -142,11 +179,12 @@ export function applyReset(s: TimerSnapshot): TimerSnapshot {
     pausedAt: null,
     accumulatedPausedMs: 0,
     currentSessionId: null,
+    pomodoroCount: opts.resetCycle ? 0 : s.pomodoroCount,
     source: "mcp",
   };
 }
 
-/** store.complete() + incrementPomodoroCount() for pomodoro mode. */
+/** Session completed; the cycle count goes up for pomodoro mode. */
 export function applyComplete(s: TimerSnapshot): TimerSnapshot {
   return {
     ...s,
@@ -154,6 +192,15 @@ export function applyComplete(s: TimerSnapshot): TimerSnapshot {
     pausedAt: null,
     pomodoroCount: s.mode === "pomodoro" ? s.pomodoroCount + 1 : s.pomodoroCount,
     source: "mcp",
+  };
+}
+
+/** Pick pomodoro / custom (and its length) while idle — shared, so every client shows the same next start. */
+export function applySetMode(s: TimerSnapshot, mode: TimerMode, durationSec: number): TimerSnapshot | null {
+  if (isActive(s)) return null;
+  return {
+    ...s, mode, plannedDurationSec: durationSec, status: "idle",
+    startedAt: null, pausedAt: null, accumulatedPausedMs: 0, currentSessionId: null, source: "mcp",
   };
 }
 
@@ -174,4 +221,15 @@ export function closeOut(s: TimerSnapshot, now: number): { kind: "delete" } | { 
   const e = elapsedSec(s, now);
   if (e < MIN_RECORDED_SEC) return { kind: "delete" };
   return { kind: "end", actualSec: Math.min(e, s.plannedDurationSec) };
+}
+
+/**
+ * Stale-intent guard. A pause/resume/stop/skip made while looking at session
+ * X must not act on a different session Y that another client started in the
+ * meantime. Returns an error message, or null when the intent still applies.
+ */
+export function staleIntent(s: TimerSnapshot, expectSessionId: string | null | undefined): string | null {
+  if (expectSessionId === undefined) return null; // caller didn't say (MCP / AI): act on whatever runs
+  if ((s.currentSessionId ?? null) === (expectSessionId ?? null)) return null;
+  return "The timer changed on another device — showing the latest state.";
 }

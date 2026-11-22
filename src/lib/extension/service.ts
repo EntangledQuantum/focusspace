@@ -4,9 +4,9 @@ import type { Database } from "@/types/database";
 import type { TimerMode } from "@/lib/stores/timer";
 import { readTimerState, type TimerSnapshot } from "@/lib/timer/persist";
 import {
-  applyComplete, applyPause, applyReset, applyResume, applySelectTask, applyStart,
-  breakAfterFocus, closeOut, defaultStart, durationFor, emptySnapshot, isActive, isBreakMode,
-  isOverdue, remaining, type TaskProgress, type TimerSettings,
+  applyComplete, applyPause, applyReset, applyResume, applySelectTask, applySetMode, applyStart,
+  autoNext, breakAfterFocus, closeOut, defaultStart, durationFor, emptySnapshot, endsAt, isActive,
+  isBreakMode, isOverdue, remaining, staleIntent, type TaskProgress, type TimerSettings,
 } from "@/lib/timer/commands";
 
 /**
@@ -23,6 +23,8 @@ import {
 type Db = SupabaseClient<Database>;
 
 export class CommandError extends Error {
+  /** The authoritative state at the time of the refusal, so the caller can reconcile at once. */
+  state?: ExtensionState;
   constructor(message: string, public status = 409) { super(message); }
 }
 
@@ -57,7 +59,7 @@ export function runAfter(fn: () => Promise<unknown>) {
 
 async function loadSettings(db: Db, userId: string): Promise<TimerSettings> {
   const { data } = await db.from("user_settings")
-    .select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every")
+    .select("focus_duration_sec, short_break_sec, long_break_sec, long_break_every, auto_start_breaks, auto_start_pomodoros")
     .eq("user_id", userId).maybeSingle();
   if (!data) return DEFAULT_SETTINGS;
   return {
@@ -65,6 +67,8 @@ async function loadSettings(db: Db, userId: string): Promise<TimerSettings> {
     shortBreakSec: data.short_break_sec ?? DEFAULT_SETTINGS.shortBreakSec,
     longBreakSec: data.long_break_sec ?? DEFAULT_SETTINGS.longBreakSec,
     longBreakEvery: data.long_break_every ?? DEFAULT_SETTINGS.longBreakEvery,
+    autoStartBreaks: !!data.auto_start_breaks,
+    autoStartPomodoros: !!data.auto_start_pomodoros,
   };
 }
 
@@ -129,37 +133,62 @@ async function commit(db: Db, userId: string, prev: TimerSnapshot | null, next: 
 }
 
 /**
- * Record a session whose countdown ran out while no focus page was open.
- * Idempotent with the web app's completeSession: only the writer that flips
- * ended_at from NULL counts the pomodoro, so it is never double-counted.
- * Returns whether this call counted it, and the snapshot now stored.
+ * Record a session whose countdown reached zero — exactly once, whoever (any
+ * site tab, the extension, its badge alarm, MCP) observes it first.
+ *
+ * The compare-and-set on timer_state picks the single winner: concurrent
+ * observers all read the same updated_at, only one write matches it, and only
+ * that caller then ends the focus_sessions row (still guarded by
+ * ended_at IS NULL) and counts the pomodoro. Losers re-read the new row.
+ *
+ * Auto-start is decided here too (user settings), so a break / next pomodoro
+ * starts at the exact end time whether or not a website tab is open.
  */
-async function finalize(db: Db, userId: string, snap: TimerSnapshot, task: TaskRow | null) {
-  const endMs = (snap.startedAt ?? 0) + snap.accumulatedPausedMs + snap.plannedDurationSec * 1000;
-  let won = !snap.currentSessionId;
-  if (snap.currentSessionId) {
-    const res = await db.from("focus_sessions").update({
-      ended_at: new Date(endMs).toISOString(),
-      actual_duration_sec: snap.plannedDurationSec,
-      completed: true,
-    }).eq("id", snap.currentSessionId).eq("user_id", userId).is("ended_at", null).select("id");
-    won = affected(res) > 0;
-  }
-  const next = won ? applyComplete(snap) : { ...snap, status: "completed" as const, pausedAt: null, source: "mcp" as const };
-  const countTask = won && snap.mode === "pomodoro" && snap.currentTaskId;
-  const counted = countTask ? (task?.id === snap.currentTaskId ? task : await loadTask(db, userId, snap.currentTaskId)) : null;
-  const [committed] = await Promise.all([
-    commit(db, userId, snap, next),
-    counted
-      ? db.from("tasks").update({ completed_pomodoros: (counted.completed_pomodoros ?? 0) + 1 }).eq("id", counted.id).eq("user_id", userId)
+async function finalize(db: Db, userId: string, snap: TimerSnapshot, task: TaskRow | null, settings: TimerSettings, now: number) {
+  const endMs = endsAt(snap) ?? now;
+  const counts = snap.mode === "pomodoro" && !!snap.currentTaskId;
+  const counted = counts ? (task?.id === snap.currentTaskId ? task : await loadTask(db, userId, snap.currentTaskId)) : null;
+  const progressAfter = progressOf(counted ?? (task?.id === snap.currentTaskId ? task : null));
+  if (progressAfter && counted) progressAfter.completedPomodoros += 1;
+
+  const done = applyComplete(snap);
+  const next = autoNext(snap, settings, progressAfter, endMs, now);
+  const nextSessionId = next ? crypto.randomUUID() : null;
+  const target = next ? applyStart(done, { ...next, sessionId: nextSessionId!, now: endMs }) : done;
+
+  const committed = await commit(db, userId, snap, target);
+  if (!committed) return { won: false, snap: await readTimerState(db, userId) };
+
+  const focusNext = next && !isBreakMode(next.mode);
+  const [ended] = await Promise.all([
+    snap.currentSessionId
+      ? db.from("focus_sessions").update({
+          ended_at: new Date(endMs).toISOString(),
+          actual_duration_sec: snap.plannedDurationSec,
+          completed: true,
+        }).eq("id", snap.currentSessionId).eq("user_id", userId).is("ended_at", null).select("id")
+      : Promise.resolve({ data: [{}], count: 1 }),
+    next
+      ? db.from("focus_sessions").insert({
+          id: nextSessionId!,
+          user_id: userId,
+          mode: next.mode,
+          planned_duration_sec: next.durationSec,
+          task_id: focusNext ? snap.currentTaskId : null,
+          project_id: focusNext ? snap.currentProjectId : null,
+          started_at: new Date(endMs).toISOString(),
+        })
       : Promise.resolve(null),
   ]);
-  if (counted && task && counted.id === task.id) task.completed_pomodoros = (task.completed_pomodoros ?? 0) + 1;
-  return { won, snap: committed ?? (await readTimerState(db, userId)) };
+  if (counted && affected(ended) > 0) {
+    await db.from("tasks").update({ completed_pomodoros: (counted.completed_pomodoros ?? 0) + 1 }).eq("id", counted.id).eq("user_id", userId);
+    if (task && task.id === counted.id) task.completed_pomodoros = (task.completed_pomodoros ?? 0) + 1;
+  }
+  return { won: true, snap: committed };
 }
 
-export async function finalizeOverdue(db: Db, userId: string, snap: TimerSnapshot): Promise<boolean> {
-  return (await finalize(db, userId, snap, null)).won;
+export async function finalizeOverdue(db: Db, userId: string, snap: TimerSnapshot, now = Date.now()): Promise<boolean> {
+  return (await finalize(db, userId, snap, null, await loadSettings(db, userId), now)).won;
 }
 
 interface Ctx {
@@ -206,9 +235,10 @@ async function loadCtx(db: Db, userId: string, now: number, hint: StateHint = {}
   // The row commands compare-and-set against: as read, or as finalize just stored it.
   let base = raw;
   let justCompleted = false;
-  if (raw && isOverdue(raw, now)) {
-    const out = await finalize(db, userId, raw, task);
-    justCompleted = out.won;
+  // Lazy finalisation on read; loops in case an auto-started phase is itself already over.
+  for (let i = 0; i < 3 && base && isOverdue(base, now); i++) {
+    const out = await finalize(db, userId, base, task, settings, now);
+    justCompleted ||= out.won;
     base = out.snap;
     if (out.snap) snap = out.snap;
   }
@@ -225,10 +255,21 @@ export interface ExtensionState {
     mode: TimerMode;
     status: TimerSnapshot["status"];
     plannedDurationSec: number;
+    /** Seconds left at serverNow (convenience; clients should render from the timestamps below). */
     remainingSec: number;
     pomodoroCount: number;
     source: string;
+    /** Version of the row — changes on every write. */
     updatedAt: string | null;
+    /** Server epoch ms. Render remaining = planned - (now - startedAt - accumulatedPausedMs) with now = local + offset. */
+    startedAt: number | null;
+    pausedAt: number | null;
+    accumulatedPausedMs: number;
+    /** When a running session ends (server ms), else null. */
+    endsAt: number | null;
+    sessionId: string | null;
+    taskId: string | null;
+    projectId: string | null;
   };
   task: {
     id: string; title: string; done: boolean;
@@ -255,6 +296,13 @@ function buildState(c: Ctx, now: number): ExtensionState {
       pomodoroCount: snap.pomodoroCount,
       source: snap.source,
       updatedAt: snap.updatedAt ?? null,
+      startedAt: snap.startedAt,
+      pausedAt: snap.pausedAt,
+      accumulatedPausedMs: snap.accumulatedPausedMs,
+      endsAt: endsAt(snap),
+      sessionId: snap.currentSessionId,
+      taskId: snap.currentTaskId,
+      projectId: snap.currentProjectId,
     },
     task: task
       ? {
@@ -278,20 +326,77 @@ export async function getExtensionState(db: Db, userId: string, now = Date.now()
   return buildState(await loadCtx(db, userId, now, hint), now);
 }
 
+/**
+ * Cheap version check for polling clients: one indexed read of timer_state.
+ * Returns null when the caller's version is still current (and nothing is due
+ * to be finalised), otherwise the full state.
+ */
+export async function peekState(
+  db: Db, userId: string, since: string, now = Date.now(), hint: StateHint = {},
+): Promise<ExtensionState | null> {
+  const snap = await readTimerState(db, userId);
+  // Compare as instants: PostgREST, Realtime and our own writes format the same timestamp differently.
+  if (snap?.updatedAt && Date.parse(snap.updatedAt) === Date.parse(since) && !isOverdue(snap, now)) return null;
+  return getExtensionState(db, userId, now, hint);
+}
+
 export type TimerAction = "start" | "pause" | "resume" | "stop" | "skip";
+/** Every intent the timer accepts (`set_mode` is idle-only: pick pomodoro / custom and its length). */
+export type TimerCommand = TimerAction | "set_mode";
 const TIMER_MODES: TimerMode[] = ["pomodoro", "custom", "short_break", "long_break"];
+
+export interface TimerCommandOptions {
+  mode?: string;
+  durationSec?: number;
+  hint?: StateHint;
+  /** Session the caller was looking at; pause/resume/stop/skip are refused if another one is running now. */
+  expectSessionId?: string | null;
+  /** start: focus on this task (selected in the same write). */
+  taskId?: string | null;
+  /** stop: also restart the pomodoro cycle (focus page "Reset task"). */
+  resetCycle?: boolean;
+}
 
 /** Runs a timer command and returns the resulting state (no follow-up read needed). */
 export async function runTimerCommand(
-  db: Db, userId: string, action: TimerAction,
-  opts: { mode?: string; durationSec?: number; hint?: StateHint } = {}, now = Date.now(),
+  db: Db, userId: string, action: TimerCommand, opts: TimerCommandOptions = {}, now = Date.now(),
 ): Promise<ExtensionState> {
-  const c = await loadCtx(db, userId, now, opts.hint);
-  const { snap, raw, settings, task } = c;
+  const switching = action === "start" && opts.taskId !== undefined;
+  const c = await loadCtx(db, userId, now, opts.hint, switching ? opts.taskId : undefined);
+  try {
+    return await timerCommand(db, userId, action, opts, now, c);
+  } catch (e) {
+    if (e instanceof CommandError && !e.state && e.status === 409) {
+      // Hand back the authoritative state so the caller can drop its optimistic guess.
+      e.state = await getExtensionState(db, userId, Date.now(), opts.hint).catch(() => undefined);
+    }
+    throw e;
+  }
+}
+
+async function timerCommand(
+  db: Db, userId: string, action: TimerCommand, opts: TimerCommandOptions, now: number, c: Ctx,
+): Promise<ExtensionState> {
+  const { raw, settings, task } = c;
+  let { snap } = c;
   const done = (committed: TimerSnapshot | null) => {
     if (!committed) throw new CommandError(CHANGED_ELSEWHERE);
     return buildState({ ...c, snap: committed, justCompleted: c.justCompleted }, now);
   };
+
+  if (action !== "start" && action !== "set_mode") {
+    const stale = staleIntent(snap, opts.expectSessionId);
+    if (stale) throw new CommandError(stale);
+  }
+
+  if (action === "set_mode") {
+    const mode = TIMER_MODES.includes(opts.mode as TimerMode) ? (opts.mode as TimerMode) : null;
+    if (!mode) throw new CommandError("Unknown mode.", 400);
+    const dur = opts.durationSec && opts.durationSec > 0 ? Math.round(opts.durationSec) : durationFor(mode, snap, settings, progressOf(task));
+    const next = applySetMode(snap, mode, dur);
+    if (!next) throw new CommandError("Stop the timer before changing the mode.");
+    return done(await commit(db, userId, raw, next));
+  }
 
   if (action === "pause" || action === "resume") {
     const next = action === "pause" ? applyPause(snap, now) : applyResume(snap, now);
@@ -309,12 +414,16 @@ export async function runTimerCommand(
         : db.from("focus_sessions").update({ ended_at: new Date(now).toISOString(), actual_duration_sec: out.actualSec, completed: false });
       close = q.eq("id", snap.currentSessionId).eq("user_id", userId).is("ended_at", null);
     }
-    const [committed] = await Promise.all([commit(db, userId, raw, applyReset(snap)), close]);
+    const [committed] = await Promise.all([commit(db, userId, raw, applyReset(snap, { resetCycle: opts.resetCycle })), close]);
     return done(committed);
   }
 
   // start
   if (isActive(snap)) throw new CommandError("A session is already in progress.");
+  if (opts.taskId !== undefined && (opts.taskId ?? null) !== (snap.currentTaskId ?? null)) {
+    if (opts.taskId && !task) throw new CommandError("Task not found.", 404);
+    snap = applySelectTask(snap, task?.id ?? null, task?.project_id ?? null) ?? snap;
+  }
   const progress = progressOf(task);
   const requested = TIMER_MODES.includes(opts.mode as TimerMode) ? (opts.mode as TimerMode) : null;
   const planned = requested

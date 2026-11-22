@@ -1,10 +1,20 @@
-import { api, getConfig, clearSession, liveRemaining, paintBadge, MODE_LABEL, isBreak, known, knownQuery } from "./lib/api.js";
+import { api, getConfig, clearSession, paintBadge, MODE_LABEL, isBreak, known, knownQuery, clockOffset, serverTime, timerRemaining } from "./lib/api.js";
 import { predictTimer, shouldApplyPoll, overlayPending, predictMusic, acceptMusic } from "./lib/optimistic.js";
 
-// Every click updates the UI immediately (optimistic), sends one request whose
-// response is the new state, and rolls back with a toast if the server says no.
+// Shared by the popup and the side panel (same element ids).
+//
+// The server row is the single source of truth. The countdown is rendered from
+// its SERVER timestamps + the measured server-clock offset, so it matches every
+// website tab to the second whatever this machine's clock says. While visible,
+// a one-query version check (`?since=`) runs every 2 s; a full refresh every
+// 30 s picks up task edits made elsewhere.
+//
+// Every click updates the UI immediately (optimistic), sends one intent whose
+// response is the new state, and is replaced by the server's current state (with
+// a toast) if refused, or rolled back if the network fails — commands are never
+// queued offline (replaying a "pause" minutes later would pause at the wrong time).
 // Each area (timer, task, each subtask, music) is locked separately while its
-// own request is in flight — the popup as a whole never freezes.
+// own request is in flight — the UI as a whole never freezes.
 
 // Static, trusted SVG markup only (lucide-style). Everything user-provided goes through textContent.
 const svg = (body, fill = false) =>
@@ -21,19 +31,21 @@ const ICONS = {
 
 const $ = (id) => document.getElementById(id);
 const RING = 2 * Math.PI * 52;
-const POLL_MS = 5000;
+const POLL_MS = 2000; // version check (one indexed query) while visible
+const FULL_EVERY_MS = 30_000; // full state, for task edits made elsewhere
+const MUSIC_POLL_MS = 4000;
 const MUSIC_HOLD_MS = 3000; // Spotify's /me/player can lag a command by ~0.3–2 s
 
 let cfg = null;
-/** What is on screen (server state + optimistic changes) and when its countdown was anchored. */
+/** What is on screen (server state + optimistic changes). */
 let state = null;
-let receivedAt = 0;
 /** Last state confirmed by the server. */
 let serverState = null;
 const inflight = { timer: false, task: false };
 const pendingSubs = new Map(); // subtaskId → desired done, while its request is in flight
 let pendingDone; // { taskId, done } while a task-done request is in flight
 let lastAckAt = 0;
+let lastFullAt = 0;
 let polling = false;
 let music = null;
 let musicHold = null;
@@ -113,36 +125,51 @@ function show(view) {
 
 // ---------- state ----------
 
-function display(next, at) {
+function display(next) {
   state = next;
-  receivedAt = at;
   dueRefreshQueued = false;
   render();
+  stateListeners.forEach((cb) => cb(state));
 }
 
+const stateListeners = new Set();
+/** For the side panel: called with every state shown. */
+export function onState(cb) {
+  stateListeners.add(cb);
+  return () => stateListeners.delete(cb);
+}
+export const currentState = () => serverState;
+
 /** A server-confirmed state: show it (with still-pending clicks re-applied), cache it, hand it to the badge. */
-function applyServer(next, { taskOnly = false } = {}) {
-  const at = Date.now();
+export function applyServer(next, { taskOnly = false } = {}) {
   serverState = next;
   const base = taskOnly && state ? { ...state, task: next.task, project: next.project } : next;
-  display(overlayPending(base, { subtasks: pendingSubs, taskDone: pendingDone }), taskOnly ? receivedAt : at);
+  display(overlayPending(base, { subtasks: pendingSubs, taskDone: pendingDone }));
   setOffline(null);
-  void chrome.storage.local.set({ lastState: next, lastStateAt: at });
-  void paintBadge(next, at);
+  void chrome.storage.local.set({ lastState: next, lastStateAt: Date.now() });
+  void paintBadge(next);
   // The background reschedules its alarms from this — no extra request.
-  chrome.runtime.sendMessage({ type: "state", state: next, receivedAt: at }).catch(() => {});
+  chrome.runtime.sendMessage({ type: "state", state: next }).catch(() => {});
   if (next.justCompleted) toast(isBreak(next.timer.mode) ? "Break's over." : "Session complete — nice focus.");
 }
 
-async function refreshState() {
+export async function refreshState({ full = false } = {}) {
   if (polling) return;
   polling = true;
   const pollStartedAt = Date.now();
   try {
-    const next = await api(`/api/extension/state${knownQuery(serverState ?? state)}`);
+    const shown = serverState ?? state;
+    const params = new URLSearchParams(knownQuery(shown).slice(1));
+    if (!full && shown?.timer?.updatedAt && pollStartedAt - lastFullAt < FULL_EVERY_MS) params.set("since", shown.timer.updatedAt);
+    else lastFullAt = pollStartedAt;
+    const next = await api(`/api/extension/state${params.size ? `?${params}` : ""}`);
+    setOffline(null);
+    if (next.unchanged) return;
     const inFlight = inflight.timer || inflight.task || pendingSubs.size > 0 || pendingDone !== undefined;
-    if (shouldApplyPoll({ inFlight, pollStartedAt, lastAckAt })) applyServer(next);
-    else setOffline(null);
+    if (shouldApplyPoll({
+      inFlight, pollStartedAt, lastAckAt,
+      currentUpdatedAt: serverState?.timer?.updatedAt, incomingUpdatedAt: next.timer?.updatedAt,
+    })) applyServer(next);
   } catch (e) {
     handleError(e, { quiet: true });
   } finally {
@@ -167,15 +194,22 @@ async function refreshMusic() {
 
 async function timerCmd(action, mode) {
   if (inflight.timer || !state) return;
-  const predicted = predictTimer(state, receivedAt, action, mode);
+  const predicted = predictTimer(state, action, mode, serverTime());
   if (!predicted) return; // e.g. "pause" on a timer that is no longer running
-  const before = { state, receivedAt };
+  const before = state;
+  const seen = serverState ?? before;
   inflight.timer = true;
-  display(predicted.state, predicted.receivedAt);
+  display(predicted);
   try {
     const next = await api("/api/extension/timer", {
       method: "POST",
-      body: { action, ...(mode ? { mode } : {}), known: known(serverState ?? before.state) },
+      body: {
+        action,
+        ...(mode ? { mode } : {}),
+        // Refused by the server if another device started a different session meanwhile.
+        ...(action !== "start" ? { expectSessionId: seen.timer.sessionId ?? null } : {}),
+        known: known(seen),
+      },
     });
     inflight.timer = false;
     lastAckAt = Date.now();
@@ -183,9 +217,14 @@ async function timerCmd(action, mode) {
   } catch (e) {
     inflight.timer = false;
     lastAckAt = Date.now();
-    display(before.state, before.receivedAt);
-    handleError(e);
-    void refreshState();
+    if (e?.state) {
+      applyServer(e.state); // refused: show what the server actually has
+      toast(e.message, "error");
+    } else {
+      display(before);
+      handleError(e);
+      void refreshState({ full: true });
+    }
   }
 }
 
@@ -200,14 +239,14 @@ async function toggleSubtask(st) {
   if (pendingSubs.has(st.id) || !state?.task) return;
   const desired = !st.done;
   pendingSubs.set(st.id, desired);
-  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }), receivedAt);
+  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }));
   try {
     // `done` is the desired value, so a retry can never double-toggle.
     const req = taskRequest({ action: "toggle_subtask", subtaskId: st.id, done: desired, known: known(state) }, { taskOnly: true });
     await req.finally(() => { pendingSubs.delete(st.id); render(); });
   } catch (e) {
     const task = state?.task;
-    if (task) display({ ...state, task: { ...task, subtasks: task.subtasks.map((s) => (s.id === st.id ? { ...s, done: !desired } : s)) } }, receivedAt);
+    if (task) display({ ...state, task: { ...task, subtasks: task.subtasks.map((s) => (s.id === st.id ? { ...s, done: !desired } : s)) } });
     handleError(e);
   }
 }
@@ -217,12 +256,12 @@ async function toggleDone() {
   if (!task || pendingDone !== undefined || inflight.task) return;
   const desired = !task.done;
   pendingDone = { taskId: task.id, done: desired };
-  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }), receivedAt);
+  display(overlayPending(state, { subtasks: pendingSubs, taskDone: pendingDone }));
   try {
     await taskRequest({ action: "toggle_done", taskId: task.id, done: desired, known: known(state) }, { taskOnly: true })
       .finally(() => { pendingDone = undefined; render(); });
   } catch (e) {
-    if (state?.task?.id === task.id) display({ ...state, task: { ...state.task, done: !desired } }, receivedAt);
+    if (state?.task?.id === task.id) display({ ...state, task: { ...state.task, done: !desired } });
     handleError(e);
   }
 }
@@ -238,14 +277,14 @@ async function selectTask(pick) {
     ...state,
     task: pick ? { id: pick.id, title: pick.title, done: false, estimatedPomodoros: pick.estimatedPomodoros, completedPomodoros: pick.completedPomodoros, subtasks: [] } : null,
     project: project ? { id: project.id, name: project.name, color: project.color } : null,
-  }, receivedAt);
+  });
   try {
     await taskRequest(
       { action: "select", taskId: pick?.id ?? null, known: { taskId: pick?.id ?? null, projectId: pick?.projectId ?? null } },
       { taskOnly: false },
     ).finally(() => { inflight.task = false; render(); });
   } catch (e) {
-    display(before, receivedAt);
+    display(before);
     handleError(e);
   }
 }
@@ -292,7 +331,7 @@ function renderClock() {
   const t = state.timer;
   const active = t.status === "running" || t.status === "paused";
   let secs;
-  if (active) secs = liveRemaining(state, receivedAt);
+  if (active) secs = timerRemaining(state);
   else if (t.status === "completed") secs = 0;
   else secs = state.next.start.durationSec;
   $("time").textContent = fmtClock(secs);
@@ -558,15 +597,19 @@ async function boot() {
   renderAccount(cfg.account);
   // Paint the last known state instantly; the countdown is time-based, so it is right even if old.
   const { lastState, lastStateAt } = await chrome.storage.local.get(["lastState", "lastStateAt"]);
+  await clockOffset();
   if (lastState && !state) {
     serverState = lastState;
-    display(lastState, lastStateAt);
+    display(lastState);
   }
+  void lastStateAt;
 
-  // The countdown ticks locally from the snapshot — it never waits on polling.
+  // The countdown ticks locally from the server timestamps — it never waits on polling.
   timers.push(setInterval(renderClock, 250));
-  timers.push(setInterval(() => { void refreshState(); void refreshMusic(); }, POLL_MS));
-  await Promise.all([refreshState(), refreshMusic()]);
+  const visible = () => document.visibilityState === "visible";
+  timers.push(setInterval(() => { if (visible()) void refreshState(); }, POLL_MS));
+  timers.push(setInterval(() => { if (visible()) void refreshMusic(); }, MUSIC_POLL_MS));
+  await Promise.all([refreshState({ full: true }), refreshMusic()]);
   if (!cfg.account) {
     try {
       const account = await api("/api/extension/me");

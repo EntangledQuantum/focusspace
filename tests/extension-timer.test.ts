@@ -27,11 +27,11 @@ describe("timer command transitions", () => {
     expect(applyResume(resumed, T0)).toBeNull();
   });
 
-  it("overdue only after the countdown (incl. paused time) ends plus grace", () => {
+  it("overdue exactly when the countdown (incl. paused time) reaches zero on the server clock", () => {
     const s = running({ accumulatedPausedMs: 10_000 });
     const end = T0 + 10_000 + 1_500_000;
-    expect(isOverdue(s, end)).toBe(false);
-    expect(isOverdue(s, end + 3_000)).toBe(true);
+    expect(isOverdue(s, end - 1)).toBe(false);
+    expect(isOverdue(s, end)).toBe(true);
     expect(isOverdue({ ...s, status: "paused", pausedAt: T0 + 1 }, end + 60_000)).toBe(false);
   });
 

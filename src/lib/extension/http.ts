@@ -2,6 +2,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import type { Database } from "@/types/database";
 import { resolveMcpContext } from "@/lib/mcp/auth";
+import { createClient } from "@/lib/supabase/server";
 import { CommandError, type StateHint } from "@/lib/extension/service";
 import { instrumentDb, serverTiming } from "@/lib/extension/timing";
 
@@ -42,12 +43,26 @@ export function json(req: NextRequest, body: unknown, status = 200) {
   return NextResponse.json(body, { status, headers: { ...corsHeaders(req), "Cache-Control": "no-store" } });
 }
 
+/**
+ * The website's own session (cookies → RLS-scoped client). Lets site tabs use
+ * the same server command path as the extension, so they can never diverge.
+ */
+async function cookieAuth(): Promise<{ supabase: SupabaseClient<Database>; userId: string } | null> {
+  const supabase = (await createClient()) as unknown as SupabaseClient<Database>;
+  const { data: { user } } = await supabase.auth.getUser();
+  return user ? { supabase, userId: user.id } : null;
+}
+
 export async function withExtension(
   req: NextRequest,
   fn: (ctx: ExtensionContext) => Promise<NextResponse>,
+  opts: { allowCookie?: boolean } = {},
 ): Promise<NextResponse> {
   const t0 = performance.now();
-  const auth = await resolveMcpContext(req.headers.get("authorization"), { withSettings: false });
+  const header = req.headers.get("authorization");
+  const auth = header || !opts.allowCookie
+    ? await resolveMcpContext(header, { withSettings: false })
+    : await cookieAuth();
   const authMs = performance.now() - t0;
   if (!auth) return json(req, { error: "Not signed in. Log in again from the extension." }, 401);
 
@@ -59,7 +74,7 @@ export async function withExtension(
     res = await fn({ db, userId: auth.userId, mark });
   } catch (e) {
     if (e instanceof CommandError) {
-      res = json(req, { error: e.message }, e.status);
+      res = json(req, { error: e.message, ...(e.state ? { state: e.state } : {}) }, e.status);
     } else {
       console.error("[extension]", e);
       res = json(req, { error: "Something went wrong." }, 500);

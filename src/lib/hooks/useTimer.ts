@@ -2,279 +2,87 @@
 
 import { useEffect, useRef, useCallback, useState } from "react";
 import { useTimerStore, getElapsedSec, getRemainingMs, type TimerMode } from "@/lib/stores/timer";
-import { createClient } from "@/lib/supabase/client";
-import { useQueryClient } from "@tanstack/react-query";
+import { fetchTimer, onSessionComplete, timerCommand } from "@/lib/timer/client";
 import { unlockAudio } from "@/lib/audio/tones";
 
-// Completion listeners shared across all useTimer instances (focus page +
-// pop-out miniplayer both mount the hook). Whichever instance's tick crosses
-// zero transitions the store exactly once and notifies every listener, so the
-// focus page's session-recording logic runs even if the miniplayer "won".
-const completionListeners = new Set<() => void>();
-
+/**
+ * The website's timer controls. Every action is an intent sent to the server
+ * (the single source of truth, see lib/timer/client.ts); this hook only
+ * renders the mirrored row and re-renders once per displayed second. A tab
+ * never completes a session itself — at zero it asks the server, which
+ * records it exactly once and (per user settings) auto-starts the next phase.
+ */
 export function useTimer() {
   const store = useTimerStore();
-  const onCompleteRef = useRef<(() => void) | null>(null);
-  const supabase = createClient();
-  const qc = useQueryClient();
+  const onCompleteRef = useRef<((info: { mode: TimerMode; claimed: boolean }) => void) | null>(null);
 
-  // Re-render only when the displayed second changes — a 60fps rAF loop here
-  // previously re-rendered the whole page tree every frame and made the app crawl.
+  // Re-render only when the displayed second changes.
   const [, setDisplayedSec] = useState(0);
 
-  /** Register the side-effect to run when a session completes (stable identity). */
-  const setOnComplete = useCallback((cb: (() => void) | null) => {
+  /** Register the side-effect to run when the server reports a completed session. */
+  const setOnComplete = useCallback((cb: ((info: { mode: TimerMode; claimed: boolean }) => void) | null) => {
     onCompleteRef.current = cb;
   }, []);
 
-  useEffect(() => {
-    const listener = () => onCompleteRef.current?.();
-    completionListeners.add(listener);
-    return () => { completionListeners.delete(listener); };
-  }, []);
+  useEffect(() => onSessionComplete((info) => onCompleteRef.current?.(info)), []);
 
   useEffect(() => {
     if (store.status !== "running") return;
-
+    let asked = false;
     const tick = () => {
       const state = useTimerStore.getState();
       if (state.status !== "running") return;
       const remaining = getRemainingMs(state);
-      if (remaining <= 0) {
-        useTimerStore.getState().complete();
-        completionListeners.forEach((cb) => cb());
-        return;
-      }
       setDisplayedSec(remaining);
+      // Hit zero: ask the server (useTimerSync also schedules this; harmless if both do).
+      if (remaining <= 0 && !asked) {
+        asked = true;
+        void fetchTimer();
+      }
     };
-
     tick();
-    // Browsers throttle hidden-tab intervals to ~1s, which still completes on time.
     const id = setInterval(tick, 250);
     return () => clearInterval(id);
-  }, [store.status]);
+  }, [store.status, store.updatedAt]);
 
   const startSession = useCallback(
-    async ({
-      mode,
-      durationSec,
-      taskId,
-      projectId,
-    }: {
+    async ({ mode, durationSec, taskId, projectId }: {
       mode: TimerMode;
       durationSec: number;
       taskId?: string | null;
       projectId?: string | null;
     }) => {
-      // Starting the timer is a user gesture: unlock audio now (synchronously,
-      // before any await) so the end-of-session sound can play later, even
-      // from a background tab.
+      // Starting the timer is a user gesture: unlock audio now so the end-of-session sound can play later.
       unlockAudio();
-      const { data: { user } } = await supabase.auth.getUser();
-      const { data: sessionData } = await supabase
-        .from("focus_sessions")
-        .insert({
-          user_id: user!.id,
-          mode,
-          planned_duration_sec: durationSec,
-          task_id: taskId ?? null,
-          project_id: projectId ?? null,
-          started_at: new Date().toISOString(),
-        })
-        .select("id")
-        .single();
-
-      store.start({
-        mode,
-        durationSec,
-        taskId: taskId ?? null,
-        projectId: projectId ?? null,
-        sessionId: sessionData?.id ?? null,
-      });
-      const next = useTimerStore.getState();
-      if (user) {
-        const { writeTimerState } = await import("@/lib/timer/persist");
-        await writeTimerState(supabase, user.id, {
-          mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
-          startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
-          currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
-          currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
-        });
-      }
+      await timerCommand("start", { mode, durationSec, taskId, projectId });
     },
-    [store, supabase]
+    [],
   );
 
-  const completeSession = useCallback(async () => {
-    const state = useTimerStore.getState();
-    if (!state.currentSessionId) return;
-
-    // Clamp: a session picked up late (e.g. started from the extension while this
-    // tab was closed) must not record more than its planned length.
-    const elapsed = Math.min(getElapsedSec(state), state.plannedDurationSec);
-    // Only the writer that flips ended_at from NULL counts the pomodoro — the
-    // extension API may already have recorded this session server-side.
-    const { data: ended, count } = await supabase
-      .from("focus_sessions")
-      .update({
-        ended_at: new Date().toISOString(),
-        actual_duration_sec: elapsed,
-        completed: true,
-      })
-      .eq("id", state.currentSessionId)
-      .is("ended_at", null)
-      .select("id");
-    const won = Array.isArray(ended) ? ended.length > 0 : (count ?? 0) > 0;
-    if (!won) {
-      qc.invalidateQueries({ queryKey: ["sessions"] });
-      qc.invalidateQueries({ queryKey: ["tasks"] });
-      return;
-    }
-
-    if (state.mode === "pomodoro" && state.currentTaskId) {
-      const { data: taskData } = await supabase
-        .from("tasks")
-        .select("completed_pomodoros")
-        .eq("id", state.currentTaskId)
-        .single();
-      if (taskData) {
-        await supabase
-          .from("tasks")
-          .update({ completed_pomodoros: taskData.completed_pomodoros + 1 })
-          .eq("id", state.currentTaskId);
-      }
-    }
-
-    if (state.mode === "pomodoro") {
-      store.incrementPomodoroCount();
-    }
-
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const next = useTimerStore.getState();
-      const { writeTimerState } = await import("@/lib/timer/persist");
-      await writeTimerState(supabase, user.id, {
-        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
-        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
-        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
-        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
-      });
-    }
-
-    qc.invalidateQueries({ queryKey: ["sessions"] });
-    qc.invalidateQueries({ queryKey: ["tasks"] });
-    qc.invalidateQueries({ queryKey: ["analytics"] });
-  }, [supabase, store, qc]);
-
-  // Sessions shorter than this are treated as accidental (start → immediate reset/skip)
-  // and removed entirely so they don't pollute analytics with 0m / Untitled noise.
-  const MIN_RECORDED_SEC = 10;
-
-  const skipSession = useCallback(async () => {
-    const state = useTimerStore.getState();
-    if (!state.currentSessionId) {
-      store.reset();
-      return;
-    }
-
-    const elapsed = getElapsedSec(state);
-    if (elapsed < MIN_RECORDED_SEC) {
-      await supabase.from("focus_sessions").delete().eq("id", state.currentSessionId);
-    } else {
-      await supabase
-        .from("focus_sessions")
-        .update({
-          ended_at: new Date().toISOString(),
-          actual_duration_sec: elapsed,
-          completed: false,
-        })
-        .eq("id", state.currentSessionId);
-    }
-
-    store.reset();
-    qc.invalidateQueries({ queryKey: ["sessions"] });
-    qc.invalidateQueries({ queryKey: ["analytics"] });
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const next = useTimerStore.getState();
-      const { writeTimerState } = await import("@/lib/timer/persist");
-      await writeTimerState(supabase, user.id, {
-        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
-        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
-        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
-        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
-      });
-    }
-  }, [supabase, store, qc]);
-
-  const resetSession = useCallback(async () => {
-    const state = useTimerStore.getState();
-    const elapsed = getElapsedSec(state);
-
-    if (state.currentSessionId) {
-      if (elapsed < MIN_RECORDED_SEC) {
-        await supabase.from("focus_sessions").delete().eq("id", state.currentSessionId);
-      } else {
-        await supabase
-          .from("focus_sessions")
-          .update({
-            ended_at: new Date().toISOString(),
-            actual_duration_sec: elapsed,
-            completed: false,
-          })
-          .eq("id", state.currentSessionId);
-      }
-      qc.invalidateQueries({ queryKey: ["sessions"] });
-      qc.invalidateQueries({ queryKey: ["analytics"] });
-    }
-
-    store.reset();
-    const { data: { user } } = await supabase.auth.getUser();
-    if (user) {
-      const next = useTimerStore.getState();
-      const { writeTimerState } = await import("@/lib/timer/persist");
-      await writeTimerState(supabase, user.id, {
-        mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
-        startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
-        currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
-        currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
-      });
-    }
-  }, [supabase, store, qc]);
+  const pause = useCallback(() => { void timerCommand("pause"); }, []);
+  const resume = useCallback(() => { unlockAudio(); void timerCommand("resume"); }, []);
+  const skipSession = useCallback(async () => { await timerCommand("skip"); }, []);
+  const resetSession = useCallback(async () => { await timerCommand("stop"); }, []);
+  /** Stop and restart the pomodoro cycle (focus page "Reset task"). */
+  const resetCycle = useCallback(async () => { await timerCommand("stop", { resetCycle: true }); }, []);
+  /** Choose pomodoro / custom (and its length) while idle — shared with every client. */
+  const setMode = useCallback((mode: TimerMode, durationSec: number) => {
+    void timerCommand("set_mode", { mode, durationSec });
+  }, []);
+  /** Make a task the timer's task (idle only), for every client. */
+  const selectTask = useCallback(async (taskId: string | null, projectId: string | null) => {
+    await timerCommand("select", { taskId, projectId });
+  }, []);
 
   const elapsed = getElapsedSec(store);
   const remaining = getRemainingMs(store);
-  const progress = store.plannedDurationSec > 0
-    ? Math.min(1, elapsed / store.plannedDurationSec)
-    : 0;
+  const progress = store.status === "completed"
+    ? 1
+    : store.plannedDurationSec > 0 ? Math.min(1, elapsed / store.plannedDurationSec) : 0;
 
   const minutes = Math.floor(remaining / 60);
   const seconds = remaining % 60;
   const displayTime = `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}`;
-
-  const persistUi = useCallback(async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
-    const next = useTimerStore.getState();
-    const { writeTimerState } = await import("@/lib/timer/persist");
-    await writeTimerState(supabase, user.id, {
-      mode: next.mode, status: next.status, plannedDurationSec: next.plannedDurationSec,
-      startedAt: next.startedAt, pausedAt: next.pausedAt, accumulatedPausedMs: next.accumulatedPausedMs,
-      currentSessionId: next.currentSessionId, currentTaskId: next.currentTaskId,
-      currentProjectId: next.currentProjectId, pomodoroCount: next.pomodoroCount, source: "ui",
-    });
-  }, [supabase]);
-
-  const pause = useCallback(() => {
-    store.pause();
-    void persistUi();
-  }, [store, persistUi]);
-
-  const resume = useCallback(() => {
-    unlockAudio();
-    store.resume();
-    void persistUi();
-  }, [store, persistUi]);
 
   return {
     ...store,
@@ -285,11 +93,11 @@ export function useTimer() {
     progress,
     displayTime,
     startSession,
-    completeSession,
     skipSession,
     resetSession,
+    resetCycle,
+    setMode,
+    selectTask,
     setOnComplete,
-    /** Mirror the store into timer_state so the extension / MCP see UI-side changes. */
-    persist: persistUi,
   };
 }
