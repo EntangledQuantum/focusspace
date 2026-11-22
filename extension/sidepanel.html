@@ -1,0 +1,164 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>FocusSpace</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body class="panel">
+  <header class="top">
+    <img src="icons/icon48.png" alt="" class="logo" />
+    <span class="brand">FocusSpace</span>
+    <span class="spacer"></span>
+    <button id="account-btn" class="avatar" hidden title="Account"></button>
+  </header>
+
+  <div id="account-menu" class="menu glass" hidden>
+    <div class="menu-head">
+      <div id="menu-name" class="menu-name"></div>
+      <div id="menu-email" class="menu-email"></div>
+    </div>
+    <button data-open="/focus">Open FocusSpace</button>
+    <button data-open="/settings">Settings, wallpapers &amp; effects</button>
+    <button id="menu-options">Extension options</button>
+    <button id="menu-logout" class="danger">Log out</button>
+  </div>
+
+  <!-- Signed out (driven by popup.js) -->
+  <section id="view-login" class="view" hidden>
+    <div class="login">
+      <img src="icons/icon128.png" alt="" class="login-logo" />
+      <h1>Your focus, one click away</h1>
+      <p class="muted">Timer, projects, Focus AI and music — synced live with FocusSpace.</p>
+      <button id="login-btn" class="btn primary wide">Log in with FocusSpace</button>
+      <p class="muted small">Uses the session you already have on <span id="login-host">focusspace.live</span>.</p>
+      <button id="login-options" class="link small">Server &amp; manual token…</button>
+    </div>
+  </section>
+
+  <div id="panel-app" hidden>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="timer" role="tab">Timer</button>
+      <button class="tab-btn" data-tab="projects" role="tab">Projects</button>
+      <button class="tab-btn" data-tab="chat" role="tab">Focus AI</button>
+      <button class="tab-btn" data-tab="music" role="tab">Music</button>
+    </nav>
+
+    <!-- Timer: same markup ids as the popup, driven by popup.js -->
+    <div id="tab-timer" class="tab-pane">
+      <section id="view-main" class="view" hidden>
+        <div id="net-banner" class="net-banner" role="status" hidden></div>
+        <div class="card timer-card">
+          <div class="mode-row">
+            <span id="mode-pill" class="pill">Focus</span>
+            <span id="status-label" class="muted small">Ready</span>
+          </div>
+          <div class="ring-wrap">
+            <svg class="ring" viewBox="0 0 120 120" aria-hidden="true">
+              <defs>
+                <linearGradient id="ring-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stop-color="#ff5fa2" />
+                  <stop offset="100%" stop-color="#b06bf6" />
+                </linearGradient>
+              </defs>
+              <circle cx="60" cy="60" r="52" class="ring-track" />
+              <circle cx="60" cy="60" r="52" class="ring-bar" id="ring-bar" />
+            </svg>
+            <div class="time" id="time">25:00</div>
+          </div>
+          <div class="controls" id="timer-controls"></div>
+        </div>
+
+        <div class="card task-card">
+          <div class="task-head">
+            <span id="project-chip" class="chip" hidden></span>
+            <span class="spacer"></span>
+            <button id="change-task" class="link small">Change</button>
+          </div>
+          <div id="task-empty" class="muted" hidden>No task selected.</div>
+          <label id="task-row" class="task-row" hidden>
+            <input type="checkbox" id="task-done" />
+            <span id="task-title" class="task-title"></span>
+          </label>
+          <div id="pomos" class="pomos"></div>
+          <ul id="subtasks" class="subtasks"></ul>
+        </div>
+      </section>
+
+      <section id="view-picker" class="view" hidden>
+        <div class="picker-head">
+          <button id="picker-back" class="link">← Back</button>
+          <select id="picker-project"></select>
+        </div>
+        <ul id="picker-list" class="picker-list"></ul>
+      </section>
+    </div>
+
+    <!-- Projects -->
+    <div id="tab-projects" class="tab-pane" hidden>
+      <form id="new-project" class="card inline-form">
+        <input id="new-project-name" placeholder="New project…" maxlength="80" autocomplete="off" />
+        <input id="new-project-color" type="color" value="#ff5fa2" title="Project colour" />
+        <button class="btn primary" type="submit">Add</button>
+      </form>
+      <div id="projects-list" class="projects-list"><div class="muted small">Loading…</div></div>
+    </div>
+
+    <!-- Focus AI -->
+    <div id="tab-chat" class="tab-pane chat-pane" hidden>
+      <div id="chat-gate" class="card muted" hidden></div>
+      <div id="chat-ui" class="chat-ui" hidden>
+        <div class="chat-bar">
+          <select id="chat-history" title="Previous chats"><option value="">History…</option></select>
+          <select id="chat-model" title="Model" hidden></select>
+          <button id="chat-new" class="btn small" title="New chat">New</button>
+        </div>
+        <div id="chat-log" class="chat-log" aria-live="polite"></div>
+        <div id="chat-error" class="chat-error" hidden></div>
+        <div class="chat-input-row">
+          <textarea id="chat-input" rows="1" placeholder="Ask Focus AI…"></textarea>
+          <button id="chat-send" class="btn primary">Send</button>
+          <button id="chat-stop" class="btn" hidden>Stop</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Music search -->
+    <div id="tab-music" class="tab-pane" hidden>
+      <form id="music-search" class="card inline-form">
+        <input id="music-q" placeholder="Search Spotify…" autocomplete="off" />
+        <select id="music-type">
+          <option value="track">Tracks</option>
+          <option value="playlist">Playlists</option>
+          <option value="album">Albums</option>
+          <option value="artist">Artists</option>
+        </select>
+        <button class="btn primary" type="submit">Search</button>
+      </form>
+      <ul id="music-results" class="music-results"></ul>
+    </div>
+
+    <!-- Now playing, always visible -->
+    <footer class="panel-music">
+      <div class="card music-card" id="music-card">
+        <img id="music-art" class="art" alt="" hidden />
+        <div class="art art-empty" id="music-art-empty" data-icon="music"></div>
+        <div class="music-meta">
+          <div id="music-title" class="music-title">Spotify</div>
+          <div id="music-sub" class="muted small truncate">Loading…</div>
+        </div>
+        <div class="music-controls" id="music-controls">
+          <button class="icon-btn" data-music="previous" data-icon="prev" title="Previous"></button>
+          <button class="icon-btn play" data-music="toggle" data-icon="play" id="music-toggle" title="Play"></button>
+          <button class="icon-btn" data-music="next" data-icon="next" title="Next"></button>
+        </div>
+      </div>
+    </footer>
+  </div>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="popup.js"></script>
+  <script type="module" src="sidepanel.js"></script>
+</body>
+</html>

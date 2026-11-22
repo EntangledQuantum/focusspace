@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 import { aiServerConfig } from "@/lib/ai/config";
 import { discoverModels, globalModelOptions, isAllowedGlobalModel } from "@/lib/ai/discovery";
 import { loadOwnCredentials } from "@/lib/ai/gateway";
@@ -8,9 +8,8 @@ import { isLocalMode } from "@/lib/mode";
 
 export const maxDuration = 30;
 
-async function authed() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+async function authed(req: NextRequest) {
+  const { supabase, user } = await aiAuth(req);
   return { supabase, user };
 }
 
@@ -19,8 +18,8 @@ async function authed() {
  *   own key  → live discovery from {base}/models (+ LiteLLM /model_group/info)
  *   shared   → the AI_ALLOWED_MODELS allow-list (enriched when it's LiteLLM)
  */
-export async function GET() {
-  const { supabase, user } = await authed();
+export async function GET(req: NextRequest) {
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const cfg = aiServerConfig();
@@ -44,7 +43,7 @@ export async function GET() {
  * settings form (before saving). Without apiKey, the stored key is used.
  */
 export async function POST(req: NextRequest) {
-  const { supabase, user } = await authed();
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json().catch(() => ({}));
@@ -59,7 +58,7 @@ export async function POST(req: NextRequest) {
 
 /** PUT { model } — persist the chosen model for the current mode. */
 export async function PUT(req: NextRequest) {
-  const { supabase, user } = await authed();
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { model } = await req.json().catch(() => ({}));

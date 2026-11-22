@@ -82,7 +82,20 @@ function notifyComplete(state) {
   });
 }
 
-chrome.runtime.onInstalled.addListener(() => { void ensureTick().then(() => refresh({ force: true })); });
+// Side panel: right-click the toolbar icon → "Open side panel", or Alt+Shift+F.
+// Both count as a user gesture, which chrome.sidePanel.open() requires.
+const PANEL_MENU = "focusspace-open-panel";
+function openPanel(tab) {
+  if (!chrome.sidePanel?.open || !tab?.windowId) return;
+  chrome.sidePanel.open({ windowId: tab.windowId }).catch(() => {});
+}
+chrome.contextMenus?.onClicked.addListener((info, tab) => { if (info.menuItemId === PANEL_MENU) openPanel(tab); });
+chrome.commands?.onCommand.addListener((command, tab) => { if (command === "open-side-panel") openPanel(tab); });
+
+chrome.runtime.onInstalled.addListener(() => {
+  chrome.contextMenus?.create({ id: PANEL_MENU, title: "Open side panel", contexts: ["action"] }, () => void chrome.runtime.lastError);
+  void ensureTick().then(() => refresh({ force: true }));
+});
 chrome.runtime.onStartup.addListener(() => { void ensureTick().then(() => refresh({ force: true })); });
 chrome.alarms.onAlarm.addListener((alarm) => {
   if (alarm.name === TICK) void refresh();

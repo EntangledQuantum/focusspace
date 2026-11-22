@@ -1,12 +1,12 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 
 // GET: the user's previous chats (most recent first). Chats are created
 // lazily by the first PUT to /conversations/[id], so opening the panel never
 // creates (or loads) anything. Legacy empty "New chat" placeholders are hidden.
-export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function GET(req: NextRequest) {
+  const { supabase, user } = await aiAuth(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { data: conversations, error } = await supabase

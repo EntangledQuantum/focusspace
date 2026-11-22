@@ -30,6 +30,9 @@ const ICONS = {
 };
 
 const $ = (id) => document.getElementById(id);
+/** True in the side panel (same module, bigger layout, never closes itself). */
+const IN_PANEL = document.body.classList.contains("panel");
+const closeIfPopup = () => { if (!IN_PANEL) window.close(); };
 const RING = 2 * Math.PI * 52;
 const POLL_MS = 2000; // version check (one indexed query) while visible
 const FULL_EVERY_MS = 30_000; // full state, for task edits made elsewhere
@@ -114,7 +117,7 @@ function textButton(label, onClick, primary = false, disabled = false) {
 
 function openSite(path) {
   chrome.tabs.create({ url: `${cfg.apiBase}${path}` });
-  window.close();
+  closeIfPopup();
 }
 
 function show(view) {
@@ -154,6 +157,7 @@ export function applyServer(next, { taskOnly = false } = {}) {
 }
 
 export async function refreshState({ full = false } = {}) {
+  if (!cfg?.token) return;
   if (polling) return;
   polling = true;
   const pollStartedAt = Date.now();
@@ -177,7 +181,7 @@ export async function refreshState({ full = false } = {}) {
   }
 }
 
-async function refreshMusic() {
+export async function refreshMusic() {
   try {
     const next = await api("/api/extension/music");
     if (acceptMusic(next, musicHold)) {
@@ -491,6 +495,10 @@ function renderMusic() {
 // ---------- account ----------
 
 function renderAccount(account) {
+  // Follow the FocusSpace theme setting ("system" → the OS preference, via CSS).
+  const theme = account?.theme;
+  if (theme === "light" || theme === "dark") document.documentElement.dataset.theme = theme;
+  else delete document.documentElement.dataset.theme;
   const btn = $("account-btn");
   btn.replaceChildren();
   const name = account?.name || "You";
@@ -610,13 +618,12 @@ async function boot() {
   timers.push(setInterval(() => { if (visible()) void refreshState(); }, POLL_MS));
   timers.push(setInterval(() => { if (visible()) void refreshMusic(); }, MUSIC_POLL_MS));
   await Promise.all([refreshState({ full: true }), refreshMusic()]);
-  if (!cfg.account) {
-    try {
-      const account = await api("/api/extension/me");
-      await chrome.storage.local.set({ account });
-      renderAccount(account);
-    } catch { /* header keeps the initial */ }
-  }
+  // Refresh name / avatar / theme (cheap; keeps the stored copy current).
+  try {
+    const account = await api("/api/extension/me");
+    await chrome.storage.local.set({ account });
+    renderAccount(account);
+  } catch { /* header keeps the stored copy */ }
 }
 
 function wire() {
@@ -625,9 +632,23 @@ function wire() {
   $("login-btn").addEventListener("click", async () => {
     const { apiBase } = await getConfig();
     chrome.tabs.create({ url: `${apiBase}/extension/connect?ext=${chrome.runtime.id}` });
-    window.close();
+    closeIfPopup();
   });
   $("login-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
+
+  // Popup → side panel. sidePanel.open() must run inside the click (user
+  // gesture), so the window id is looked up beforehand.
+  const panelBtn = $("open-panel");
+  if (panelBtn && chrome.sidePanel?.open) {
+    let windowId;
+    chrome.windows.getCurrent().then((w) => { windowId = w.id; }).catch(() => {});
+    panelBtn.hidden = false;
+    panelBtn.addEventListener("click", () => {
+      chrome.sidePanel.open(windowId !== undefined ? { windowId } : { windowId: chrome.windows.WINDOW_ID_CURRENT })
+        .then(() => window.close())
+        .catch((e) => toast(e?.message || "Couldn't open the side panel.", "error"));
+    });
+  }
 
   $("account-btn").addEventListener("click", (e) => {
     e.stopPropagation();

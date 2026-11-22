@@ -39,8 +39,8 @@ export function ExtensionShowcase() {
         </h2>
         <p style={{ fontSize: 15, lineHeight: 1.65, color: "var(--color-on-surface-variant)", maxWidth: 520 }}>
           The timer, your task and its subtasks, and what&apos;s playing — right in the toolbar.
-          Start, pause, skip, tick things off or switch tasks without opening a tab. Synced live
-          with the site, both ways.
+          Open the side panel for your projects, Focus AI and Spotify search. One shared clock:
+          every tab and the extension show the same time, even with the site closed.
         </p>
 
         <div className="flex flex-wrap items-center" style={{ gap: 10, marginTop: 4 }}>

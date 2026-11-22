@@ -545,6 +545,56 @@ export async function runTaskCommand(
   return buildState(nudge(db, userId, c), now);
 }
 
+const PROJECT_COLORS = ["#ff5fa2", "#b06bf6", "#8fb6ff", "#5fd3a5", "#ffb35f", "#ff7a7a"];
+
+/** Side panel: add a project (appended to the end of the list). */
+export async function createProject(db: Db, userId: string, input: { name: string; color?: string | null }) {
+  const name = input.name.trim().slice(0, 80);
+  if (!name) throw new CommandError("Give the project a name.", 400);
+  const { data: last } = await db.from("projects").select("sort_order").eq("user_id", userId).order("sort_order", { ascending: false }).limit(1);
+  const color = input.color && /^#[0-9a-f]{6}$/i.test(input.color)
+    ? input.color
+    : PROJECT_COLORS[Math.floor(Math.random() * PROJECT_COLORS.length)];
+  const { data, error } = await db.from("projects")
+    .insert({ user_id: userId, name, color, sort_order: ((last?.[0]?.sort_order as number | undefined) ?? 0) + 1 })
+    .select("id, name, color").single();
+  if (error || !data) throw new CommandError(`Couldn't create the project: ${error?.message ?? "unknown error"}`, 500);
+  return { id: data.id, name: data.name, color: data.color };
+}
+
+/** Side panel: add a task (optionally with subtasks) to one of the user's projects. */
+export async function createTask(
+  db: Db, userId: string,
+  input: { title: string; projectId?: string | null; estimatedPomodoros?: number; subtasks?: string[] },
+) {
+  const title = input.title.trim().slice(0, 200);
+  if (!title) throw new CommandError("Give the task a title.", 400);
+  const est = Math.min(24, Math.max(0.5, Math.round((input.estimatedPomodoros ?? 1) * 2) / 2));
+  const [{ data: project }, { data: last }] = await Promise.all([
+    input.projectId
+      ? db.from("projects").select("id").eq("id", input.projectId).eq("user_id", userId).maybeSingle()
+      : Promise.resolve({ data: null }),
+    db.from("tasks").select("sort_order").eq("user_id", userId).order("sort_order", { ascending: false }).limit(1),
+  ]);
+  if (input.projectId && !project) throw new CommandError("Project not found.", 404);
+  const { data: task, error } = await db.from("tasks").insert({
+    user_id: userId,
+    project_id: project?.id ?? null,
+    title,
+    estimated_pomodoros: est,
+    sort_order: ((last?.[0]?.sort_order as number | undefined) ?? 0) + 1,
+  }).select("id, title, project_id, estimated_pomodoros, completed_pomodoros").single();
+  if (error || !task) throw new CommandError(`Couldn't create the task: ${error?.message ?? "unknown error"}`, 500);
+  const subs = (input.subtasks ?? []).map((s) => s.trim().slice(0, 200)).filter(Boolean).slice(0, 30);
+  if (subs.length) {
+    await db.from("subtasks").insert(subs.map((t, i) => ({ user_id: userId, task_id: task.id, title: t, sort_order: i })));
+  }
+  return {
+    id: task.id, title: task.title, projectId: task.project_id,
+    estimatedPomodoros: Number(task.estimated_pomodoros ?? 1), completedPomodoros: task.completed_pomodoros ?? 0,
+  };
+}
+
 export async function listTasks(db: Db, userId: string) {
   const [{ data: projects }, { data: tasks }] = await Promise.all([
     db.from("projects").select("id, name, color").eq("user_id", userId).is("archived_at", null).order("sort_order"),

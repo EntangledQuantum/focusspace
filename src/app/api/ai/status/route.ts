@@ -1,13 +1,13 @@
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 import { aiServerConfig, AI_GLOBALLY_ENABLED, globalGatewayConfigured } from "@/lib/ai/config";
 import { getUsage } from "@/lib/ai/usage";
 
 // Single source of truth for the client: feature flags, the model allow-list,
 // the user's own-key status, and their monthly usage. Never returns secrets.
-export async function GET() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+export async function GET(req: NextRequest) {
+  const { supabase, user } = await aiAuth(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const cfg = aiServerConfig();
