@@ -1,22 +1,21 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 import { UUID_RE } from "@/lib/ai/resolve";
 import { saveConversation } from "@/lib/ai/chat-store";
 
 type Ctx = { params: Promise<{ id: string }> };
 
-async function authed() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+async function authed(req: NextRequest) {
+  const { supabase, user } = await aiAuth(req);
   return { supabase, user };
 }
 
 // GET: load a conversation's messages + run state (the chat route saves turns
 // server-side; a reconnecting client polls this). PUT: create-or-replace it
 // (used when the user stops a reply, to keep what they saw). DELETE: remove it.
-export async function GET(_req: NextRequest, { params }: Ctx) {
+export async function GET(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const { supabase, user } = await authed();
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
@@ -37,7 +36,7 @@ export async function GET(_req: NextRequest, { params }: Ctx) {
 
 export async function PUT(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const { supabase, user } = await authed();
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "Bad id" }, { status: 400 });
 
@@ -48,9 +47,9 @@ export async function PUT(req: NextRequest, { params }: Ctx) {
   return NextResponse.json({ ok: true });
 }
 
-export async function DELETE(_req: NextRequest, { params }: Ctx) {
+export async function DELETE(req: NextRequest, { params }: Ctx) {
   const { id } = await params;
-  const { supabase, user } = await authed();
+  const { supabase, user } = await authed(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   if (!UUID_RE.test(id)) return NextResponse.json({ error: "Not found" }, { status: 404 });
 

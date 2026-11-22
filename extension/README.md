@@ -1,8 +1,9 @@
 # FocusSpace for Chrome
 
-A small Manifest V3 extension: your FocusSpace timer, current task and Spotify
-playback in the toolbar, synced both ways with the website. Plain HTML/CSS/JS,
-so there is no build step.
+A Manifest V3 extension: your FocusSpace timer, current task and Spotify
+playback in the toolbar, plus a side panel with your projects, Focus AI and
+music search. Everything is synced with the website through one server-side
+timer. Plain HTML/CSS/JS, so there is no build step.
 
 ## Install from a release (beta)
 
@@ -10,6 +11,8 @@ so there is no build step.
    [GitHub releases](https://github.com/EntangledQuantum/focusspace/releases) (tags `extension-v*`) and unzip it.
 2. Open `chrome://extensions`, turn on **Developer mode**, click **Load unpacked** and pick the unzipped folder.
 3. Click the FocusSpace icon → **Log in**.
+
+Needs Chrome 116 or newer (side panel API).
 
 Releases are built by `.github/workflows/extension-release.yml`: bump `version` in `manifest.json`, then push a
 tag like `extension-v0.9.0-beta`, or run the workflow from the Actions tab.
@@ -45,6 +48,8 @@ Paste it under **Options → Paste a token**.
 
 ## What it does
 
+**Popup** (toolbar icon):
+
 - **Timer:** shows mode (focus, short or long break, custom), a live countdown
   and the status. You can start, pause, resume, stop and skip. After a focus
   session it offers the matching break, or **Skip to focus**.
@@ -53,40 +58,75 @@ Paste it under **Options → Paste a token**.
   it moves on to the next to-do, as the site does), and **Change** to another
   project or task. Switching tasks is disabled while a session runs.
 - **Music:** shows the Spotify track, artist and album art, with
-  previous/play-pause/next. If Spotify has no active device, play wakes your
-  first available device, or explains what to do.
+  previous/play-pause/next.
 - **Badge:** the minutes left while a session runs. It is pink for focus,
-  purple for a break and grey when paused. When a session ends while no
-  FocusSpace tab is open, you get a notification.
+  purple for a break and grey when paused. When a session ends with no
+  FocusSpace tab open, you get a notification.
 
-## How sync works
+**Side panel.** Open it with the panel button in the popup, by right-clicking
+the icon → **Open side panel**, or with **Alt+Shift+F**
+(`chrome://extensions/shortcuts` to change it):
 
-- The site and the extension share the `timer_state` row (migration `0010`).
-  The extension's commands write it with `source = 'mcp'` (the same path as MCP
-  and Ask AI). Any open FocusSpace tab applies it within about 1.2 s
-  (`useTimerSync`), so the ring, the task and the music-follows-focus behaviour
-  update there too. Changes made on the site are written with `source = 'ui'`
-  and appear in the popup on its next poll.
-- Commands are compare-and-set on `timer_state.updated_at`. If the site changed
-  the timer at the same moment, the extension gets "Timer changed elsewhere —
-  try again" instead of overwriting it.
-- **Recording sessions:** a session that ends while a focus page is open is
-  recorded by the site as before. If no focus page is open, the extension API
-  records it when it next reads the state, about 4 s after the end (a
-  background alarm fires then). Both sides only count a pomodoro when they move
-  `focus_sessions.ended_at` from NULL, so a session is never counted twice.
-  Stopping or skipping within 10 s deletes the session, as on the site.
-- **Polling:** the popup polls about every 5 s while open. The background
-  service worker makes one request a minute, plus one when a session is due.
-- **Speed:** clicks update the popup immediately (optimistic) and roll back
-  with a toast if the server refuses. Each command is one request whose
-  response is the new state: one parallel DB round to read (the popup sends
-  the task/project it shows as a hint), one to write. Music clicks are held
-  for ~3 s against Spotify's lagging reads, then reconciled. Requests time
-  out after 8 s; reads retry once. Every `/api/extension/*` response has a
-  `Server-Timing` header (`auth`, `db` with query and round-trip counts,
-  `spotify_*`, `total`). In dev, `FOCUSSPACE_DEV_DB_LATENCY_MS=30` adds
-  per-query latency to local SQLite for realistic measurements.
+- **Timer:** the same controls, large and centred, with the task and subtasks.
+- **Projects:** every project with its open tasks. You can add a project, add a
+  task (estimate and optional subtasks, one per line), mark tasks done, and
+  **Focus** on one.
+- **Focus AI:** the same assistant as the website, with streaming replies,
+  reasoning, tool activity, history, **New** chat, a model picker and **Stop**.
+  Conversations are saved on the server and also appear on the website.
+  Destructive actions ask for confirmation when that's on in Settings.
+- **Music:** search Spotify tracks, playlists, albums and artists and play them
+  on your active (or best available) device. The now-playing bar stays at the
+  bottom of every tab.
+- Wallpapers, effects and settings stay on the website (account menu →
+  **Settings**).
+
+The popup and side panel follow your FocusSpace theme (light, dark or system).
+
+## How sync works (one source of truth)
+
+- **The server row is the timer.** `timer_state` is written only by the server
+  (`src/lib/extension/service.ts` applying the rules in
+  `src/lib/timer/commands.ts`), using the server clock. Every client sends
+  *intents*: website tabs via `/api/timer` (cookie session), the extension via
+  `/api/extension/*` (token), and MCP / Focus AI through the same service.
+- **Same clock everywhere.** Clients render the server timestamps
+  (`startedAt`, `pausedAt`, accumulated pause, `endsAt`). Each response
+  carries `serverNow`; clients estimate the server-clock offset NTP-style
+  (`lib/clock.js`, `src/lib/timer/clock.ts`), so a machine whose clock is
+  minutes off still shows the same countdown.
+- **Completion is recorded exactly once.** When a countdown reaches zero, every
+  client (each tab, the popup, the badge alarm) simply asks the server. The
+  first to arrive wins a compare-and-set on `timer_state`, records the session
+  and counts the pomodoro; the rest read the result. This also works with no
+  website tab open.
+- **Auto-start** of breaks and pomodoros is decided on the server from your
+  settings, and the next phase starts exactly at the old one's end. If nobody
+  was around when it ended (more than 2 minutes before anyone looked), the
+  timer just shows "completed" instead of chaining sessions through your
+  absence.
+- **Stale clicks are refused.** A pause, stop or skip aimed at a session that
+  another device has already replaced gets the current state back, and the
+  popup shows it with a toast.
+- **Propagation:**
+  - Website tabs use Supabase Realtime on their own row (migration `0016`).
+    Tabs in the same browser also share each update over a BroadcastChannel,
+    and a light poll is the fallback.
+  - The popup and side panel do a one-query version check (`?since=`) every
+    2 s while visible, plus a full refresh every 30 s.
+  - The badge repaints locally every 30 s and checks the server about once a
+    minute.
+- **Offline:** the countdown keeps going from the last server timestamps, with
+  an offline banner. Commands are not queued: they fail with a clear message
+  and roll back, because replaying a "pause" minutes later would pause at the
+  wrong time. Reconnecting refreshes everything.
+- **Music:** Spotify's own player is the source of truth. The music route keeps
+  a short per-user cache with a version, so many clients polling don't
+  multiply Spotify calls. Clicks are optimistic and held for about 3 s against
+  Spotify's lagging reads.
+- Every click updates the UI immediately and reconciles with the server's
+  answer. Requests time out after 8 s; reads retry once. Every
+  `/api/extension/*` response has a `Server-Timing` header.
 
 ## Options / development
 
@@ -107,23 +147,39 @@ user.
 
 | Method & path | Purpose |
 | --- | --- |
-| `GET /api/extension/state` | timer, task + subtasks, project, next start/break suggestion |
-| `POST /api/extension/timer` `{action: start\|pause\|resume\|stop\|skip, mode?}` | timer commands, returns state |
-| `GET /api/extension/tasks` | projects + open tasks for the picker |
-| `POST /api/extension/tasks` `{action: select\|toggle_done\|toggle_subtask, …}` | task commands, returns state |
-| `GET/POST /api/extension/music` `{action: play\|pause\|next\|previous}` | Spotify state / transport |
-| `GET /api/extension/me` | name, email, avatar |
+| `GET /api/extension/state[?since=&task=&project=]` | timer (server timestamps + `serverNow`), task + subtasks, project, next start/break; `{unchanged:true}` when `since` is current |
+| `POST /api/extension/timer` `{action: start\|pause\|resume\|stop\|skip\|set_mode, mode?, durationSec?, expectSessionId?}` | timer intents → new state; refused intents return 409 `{error, state}` |
+| `GET /api/extension/tasks` | projects + open tasks |
+| `POST /api/extension/tasks` `{action: create\|select\|toggle_done\|toggle_subtask, …}` | task commands |
+| `POST /api/extension/projects` `{name, color?}` | add a project |
+| `GET/POST /api/extension/music` `{action: play\|pause\|next\|previous}` | Spotify state (`?since=<version>`) / transport |
+| `GET /api/extension/music/search?q=&type=` · `POST {uri}` | Spotify search / play a uri |
+| `/api/ai/{chat,conversations,models,status,confirm}` | Focus AI, same routes as the website (token or cookie) |
+| `GET /api/extension/me` | name, email, avatar, theme |
 | `POST /api/extension/token` | (site session cookie, same-origin only) mint a token |
 | `DELETE /api/extension/token` | revoke the calling token |
 
-Server code: `src/lib/extension/*`, with the pure timer rules in
-`src/lib/timer/commands.ts`. Tests: `tests/extension-*.test.ts`.
+The website uses `GET/POST /api/timer` (cookie session) with the same request
+and response shapes as `/api/extension/state` and `/api/extension/timer`.
+
+Server code: `src/lib/extension/*` and `src/lib/timer/*`. Tests:
+`tests/extension-*.test.ts` and `tests/timer-sync.test.ts`.
 
 ### Files
 
-`manifest.json`, `background.js` (badge, alarms, token hand-off),
-`popup.html/js`, `options.html/js`, `styles.css`, `lib/api.js` (shared fetch,
-config and badge), `icons/` (resized from `src/app/icon.png`).
+- `manifest.json`
+- `background.js`: badge, alarms, token hand-off, side-panel menu and shortcut.
+- `popup.html` / `popup.js`: the timer, task and music UI, shared with the side
+  panel.
+- `sidepanel.html` / `sidepanel.js`: tabs, projects, music search.
+- `chat.js`: Focus AI.
+- `options.html` / `options.js`
+- `styles.css`: dark and light themes.
+- `lib/api.js`: fetch, config, server clock and badge.
+- `lib/clock.js`: clock-offset maths.
+- `lib/optimistic.js`: optimistic-UI rules.
+- `lib/markdown.js`: safe Markdown rendering.
+- `icons/`
 
 ### Publishing to the Chrome Web Store
 

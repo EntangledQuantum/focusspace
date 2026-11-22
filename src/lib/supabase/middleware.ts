@@ -12,9 +12,11 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  // Bearer-token APIs (hosted MCP + Chrome extension) authenticate themselves;
-  // redirecting them to the landing page would break every non-browser client.
-  if (pathname === "/api/mcp" || pathname.startsWith("/api/extension/")) {
+  // Bearer-token APIs (hosted MCP + Chrome extension, incl. its Focus AI side
+  // panel) authenticate themselves; redirecting them to the landing page would
+  // break every non-browser client. Routes still check the token themselves.
+  const bearer = /^\s*bearer\s+\S/i.test(request.headers.get("authorization") ?? "");
+  if (pathname === "/api/mcp" || pathname.startsWith("/api/extension/") || (bearer && pathname.startsWith("/api/"))) {
     return NextResponse.next({ request });
   }
 

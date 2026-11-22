@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 import { DESTRUCTIVE_ACTIONS, performDelete, type DestructiveAction } from "@/lib/ai/confirm";
 import { scopeToUser } from "@/lib/ai/scoped";
 import { UUID_RE } from "@/lib/ai/resolve";
@@ -7,8 +7,7 @@ import { UUID_RE } from "@/lib/ai/resolve";
 // Performs a destructive action the agent deferred (confirm mode) after the
 // user pressed Confirm on the tool card. Scoped to the user's own rows.
 export async function POST(req: NextRequest) {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await aiAuth(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const { action, id } = await req.json();

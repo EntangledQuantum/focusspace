@@ -57,7 +57,10 @@ describe("agent guide", () => {
 const baseState = (over: Partial<ExtensionState> = {}): ExtensionState => ({
   serverNow: Date.parse("2026-11-21T10:23:28.000Z"),
   justCompleted: false,
-  timer: { mode: "pomodoro", status: "running", plannedDurationSec: 1500, remainingSec: 1122, pomodoroCount: 1, source: "mcp", updatedAt: null },
+  timer: {
+    mode: "pomodoro", status: "running", plannedDurationSec: 1500, remainingSec: 1122, pomodoroCount: 1, source: "mcp", updatedAt: null,
+    startedAt: null, pausedAt: null, accumulatedPausedMs: 0, endsAt: null, sessionId: null, taskId: "t1", projectId: null,
+  },
   task: {
     id: "t1", title: "Write report", done: false, estimatedPomodoros: 3, completedPomodoros: 1,
     subtasks: [{ id: "s1", title: "Outline", done: true }, { id: "s2", title: "Draft", done: false }],

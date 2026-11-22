@@ -8,6 +8,9 @@ vi.mock("@supabase/supabase-js", () => ({
     from(table: string) {
       const filters: Record<string, unknown> = {};
       const q = {
+        filters,
+        inserted: undefined as unknown,
+        insert: (v: unknown) => { q.inserted = v; return q; },
         select: () => q,
         update: () => q,
         delete: () => q,
@@ -81,5 +84,20 @@ describe("extension API auth", () => {
     const fromExtension = await POST(req("/api/extension/token", { method: "POST", headers: { origin: EXT_ORIGIN } }));
     expect(fromExtension.status).toBe(403);
     expect(cross.headers.get("access-control-allow-origin")).toBeNull();
+  });
+
+  it("Focus AI routes resolve a bearer token to its user with a client scoped to that user", async () => {
+    const { aiAuth } = await import("@/lib/ai/request-auth");
+    const none = await aiAuth(req("/api/ai/chat", { method: "POST", headers: { authorization: "Bearer fs_nope" } }));
+    expect(none.user).toBeNull();
+
+    const { supabase, user } = await aiAuth(req("/api/ai/chat", { method: "POST", headers: { authorization: "Bearer fs_good" } }));
+    expect(user).toEqual({ id: "u1" });
+    // Every read is filtered to the token's user and every insert is stamped with it,
+    // even if a shared helper forgets — the service-role client bypasses RLS.
+    const read = supabase.from("ai_conversations").select("id") as unknown as { filters: Record<string, unknown> };
+    expect(read.filters.user_id).toBe("u1");
+    const write = supabase.from("ai_messages").insert({ role: "user", user_id: "someone-else" } as never) as unknown as { inserted: { user_id: string } };
+    expect(write.inserted.user_id).toBe("u1");
   });
 });

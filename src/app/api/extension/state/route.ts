@@ -1,17 +1,14 @@
 import type { NextRequest } from "next/server";
-import { json, preflight, readHint, withExtension } from "@/lib/extension/http";
-import { getExtensionState } from "@/lib/extension/service";
+import { preflight, withExtension } from "@/lib/extension/http";
+import { timerGet } from "@/lib/extension/timer-route";
 
 /**
- * Live timer + current task/project for the extension popup and badge.
- * `?task=&project=` (what the caller already shows) lets everything load in one round trip.
+ * Live timer + current task/project for the extension popup, side panel and badge.
+ * `?task=&project=` (what the caller already shows) lets everything load in one round trip;
+ * `?since=<updatedAt>` makes it a one-query version check ({ unchanged: true }).
  */
 export async function GET(req: NextRequest) {
-  return withExtension(req, async ({ db, userId }) => {
-    const q = req.nextUrl.searchParams;
-    const hint = readHint({ taskId: q.get("task"), projectId: q.get("project") });
-    return json(req, await getExtensionState(db, userId, Date.now(), hint));
-  });
+  return withExtension(req, (ctx) => timerGet(req, ctx));
 }
 
 export const OPTIONS = preflight;

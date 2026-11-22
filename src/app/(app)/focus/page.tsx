@@ -4,7 +4,7 @@ import { useEffect, useCallback, useState, useRef } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { createClient } from "@/lib/supabase/client";
 import { useTimer } from "@/lib/hooks/useTimer";
-import { useTimerStore } from "@/lib/stores/timer";
+import { useTimerStore, type TimerMode } from "@/lib/stores/timer";
 import { useUiStore } from "@/lib/stores/ui";
 import { useNotifications } from "@/lib/hooks/useNotifications";
 import { useKeyboardShortcuts } from "@/lib/hooks/useKeyboardShortcuts";
@@ -25,8 +25,6 @@ export default function FocusPage() {
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [customMinutes, setCustomMinutes] = useState(45);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  // Prevents duplicate auto-start on settings load when timer was already completed
-  const autoStartHandled = useRef(false);
 
   useEffect(() => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -65,10 +63,6 @@ export default function FocusPage() {
     },
   });
 
-  // Always-fresh ref — avoids stale closures inside timer callbacks
-  const settingsRef = useRef(settings);
-  useEffect(() => { settingsRef.current = settings; }, [settings]);
-
   const timer = useTimer();
   const { requestPermission, notifyCompletion } = useNotifications(settings ?? null);
 
@@ -91,8 +85,8 @@ export default function FocusPage() {
     const id = task?.id ?? null;
     if (s.status === "running" || s.status === "paused" || s.currentTaskId === id) return;
     syncedTaskRef.current = id;
-    useTimerStore.setState({ currentTaskId: id, currentProjectId: project?.id ?? task?.project_id ?? null, pomodoroCount: 0 });
-    void timer.persist();
+    // Through the server, so every tab and the extension switch too.
+    void timer.selectTask(id, project?.id ?? task?.project_id ?? null);
   }
 
   const pomoDurationSec = settings?.focus_duration_sec ?? 25 * 60;
@@ -167,82 +161,21 @@ export default function FocusPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // On settings load: if timer was completed when browser closed and auto_start_breaks
-  // is enabled, kick off the break that never fired (settings weren't loaded at the time).
-  useEffect(() => {
-    if (!settings || autoStartHandled.current) return;
-    autoStartHandled.current = true;
-    const state = useTimerStore.getState();
-    if (
-      state.status === "completed" &&
-      state.mode !== "short_break" &&
-      state.mode !== "long_break" &&
-      settings.auto_start_breaks
-    ) {
-      const isLong = state.pomodoroCount % (settings.long_break_every ?? 4) === 0;
-      const nextMode = isLong ? "long_break" : "short_break";
-      const nextDur = isLong
-        ? (settings.long_break_sec ?? 15 * 60)
-        : (settings.short_break_sec ?? 5 * 60);
-      setTimeout(() => {
-        timer.startSession({ mode: nextMode, durationSec: nextDur });
-      }, 400);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [settings]);
-
-  const handleSessionComplete = useCallback(async () => {
-    // Alert first: recording the session is several network round-trips, and
-    // the sound shouldn't wait on (or be lost to) a slow/failed request.
-    const label = isBreak ? "Break complete — back to work!" : "Session complete! Great focus.";
-    notifyCompletion(label, activeTask?.title ?? "", { kind: isBreak ? "break" : "focus" });
+  // The server records completions (once, whoever sees it first) and auto-starts
+  // the next phase per user settings; this page only celebrates. Every tab
+  // toasts, but only the tab that claims the session plays the sound/notification.
+  const handleSessionComplete = useCallback(({ mode, claimed }: { mode: TimerMode; claimed: boolean }) => {
+    const wasBreak = mode === "short_break" || mode === "long_break";
+    const label = wasBreak ? "Break complete — back to work!" : "Session complete! Great focus.";
+    if (claimed) notifyCompletion(label, activeTask?.title ?? "", { kind: wasBreak ? "break" : "focus" });
     toast.success(label);
-    await timer.completeSession();
-
-    // Immediately update local task completed count so timeline reflects it
-    if (!isBreak && activeTask) {
+    // Reflect the server's new pomodoro count on the timeline right away.
+    if (mode === "pomodoro" && activeTask) {
       setActiveTask((prev) =>
         prev ? { ...prev, completed_pomodoros: (prev.completed_pomodoros ?? 0) + 1 } : prev
       );
     }
-
-    // Use ref so we always read the latest settings even if query hadn't resolved at tick time
-    const s = settingsRef.current;
-    if (!isBreak && s?.auto_start_breaks) {
-      const lbe = s.long_break_every ?? 4;
-      // Cycle position is task-relative when a task is active (matches the
-      // timeline); otherwise use the global session count from the store.
-      const completedInCycle = activeTask
-        ? (activeTask.completed_pomodoros ?? 0) + 1
-        : useTimerStore.getState().pomodoroCount;
-      const isLong = completedInCycle % lbe === 0;
-      const nextMode = isLong ? "long_break" : "short_break";
-      const nextDur = isLong ? (s.long_break_sec ?? 15 * 60) : (s.short_break_sec ?? 5 * 60);
-      setTimeout(() => {
-        timer.startSession({ mode: nextMode, durationSec: nextDur });
-      }, 600);
-    } else if (isBreak && s?.auto_start_pomodoros && activeTask) {
-      // After a break, auto-start the next pomodoro if the task still has work left
-      const estimated = activeTask.estimated_pomodoros ?? 1;
-      const completed = activeTask.completed_pomodoros ?? 0;
-      if (completed < Math.ceil(estimated)) {
-        const totalSessions = Math.ceil(estimated);
-        const isHalfLast = estimated % 1 === 0.5;
-        const isLastSession = completed === totalSessions - 1;
-        const dur = isLastSession && isHalfLast
-          ? Math.round(pomoDurationSec / 2)
-          : pomoDurationSec;
-        setTimeout(() => {
-          timer.startSession({
-            mode: "pomodoro",
-            durationSec: dur,
-            taskId: activeTask.id,
-            projectId: activeProject?.id,
-          });
-        }, 600);
-      }
-    }
-  }, [timer, isBreak, activeTask, activeProject, notifyCompletion, pomoDurationSec]);
+  }, [activeTask, notifyCompletion]);
 
   useEffect(() => {
     timer.setOnComplete(handleSessionComplete);
@@ -338,8 +271,7 @@ export default function FocusPage() {
     if (!activeTask) return;
     await supabase.from("subtasks").update({ done: false }).eq("task_id", activeTask.id);
     await supabase.from("tasks").update({ completed_pomodoros: 0 }).eq("id", activeTask.id);
-    await timer.resetSession();
-    useTimerStore.setState({ pomodoroCount: 0 });
+    await timer.resetCycle();
     setActiveTask((prev) => prev ? { ...prev, completed_pomodoros: 0, subtasks: (prev.subtasks ?? []).map((s) => ({ ...s, done: false })) } : prev);
     qc.invalidateQueries({ queryKey: ["subtasks", activeTask.id] });
     qc.invalidateQueries({ queryKey: ["tasks"] });

@@ -1,6 +1,6 @@
 import { NextResponse, after, type NextRequest } from "next/server";
 import { streamText, convertToModelMessages, stepCountIs, smoothStream, createIdGenerator, createUIMessageStreamResponse, type UIMessage } from "ai";
-import { createClient } from "@/lib/supabase/server";
+import { aiAuth } from "@/lib/ai/request-auth";
 import { aiServerConfig, AI_GLOBALLY_ENABLED } from "@/lib/ai/config";
 import { resolveModel, sessionIdFor } from "@/lib/ai/gateway";
 import { makeTaskTools } from "@/lib/ai/tools";
@@ -21,8 +21,7 @@ const CHUNK_TIMEOUT_MS = 90_000;
 export async function POST(req: NextRequest) {
   if (!AI_GLOBALLY_ENABLED) return NextResponse.json({ error: "AI is disabled." }, { status: 403 });
 
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  const { supabase, user } = await aiAuth(req);
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
   const body = await req.json();

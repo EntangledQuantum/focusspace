@@ -1,42 +1,42 @@
-// Pure optimistic-UI rules for the popup (no chrome.* / DOM), unit-tested in
-// tests/extension-optimistic.test.ts. The popup applies a predicted state the
-// moment a button is clicked, then reconciles with the server's answer.
+// Pure optimistic-UI rules for the popup / side panel (no chrome.* / DOM),
+// unit-tested in tests/extension-optimistic.test.ts. Timer guesses use the
+// same rules as the server (src/lib/timer/commands.ts) on SERVER timestamps,
+// so the guess and the answer agree to the millisecond in the common case.
+import { remainingAt } from "./clock.js";
 
-/** Whole seconds left on a snapshot, counting down locally since it was received. */
-export function liveRemaining(state, receivedAt, now = Date.now()) {
-  const t = state?.timer;
-  if (!t) return 0;
-  if (t.status !== "running") return t.remainingSec;
-  return Math.max(0, Math.ceil(t.remainingSec - (now - receivedAt) / 1000));
+const isBreakMode = (m) => m === "short_break" || m === "long_break";
+
+function withTimes(timer, patch, now) {
+  const t = { ...timer, ...patch };
+  t.endsAt = t.status === "running" && t.startedAt ? t.startedAt + t.accumulatedPausedMs + t.plannedDurationSec * 1000 : null;
+  t.remainingSec = remainingAt(t, now);
+  return t;
 }
 
 /**
- * What the server will (almost certainly) answer to a timer command, so the UI
- * can show it immediately. Returns null when the action makes no sense in the
- * current state (the click is then ignored instead of sent).
+ * What the server will (almost certainly) answer to a timer command, at server
+ * time `now`. Returns null when the action makes no sense in the current state
+ * (the click is then ignored instead of sent).
  */
-export function predictTimer(state, receivedAt, action, mode, now = Date.now()) {
+export function predictTimer(state, action, mode, now) {
   const t = state?.timer;
   if (!t) return null;
-  const left = liveRemaining(state, receivedAt, now);
   const active = t.status === "running" || t.status === "paused";
-  const timer = { ...t };
   const next = { ...state.next };
+  let timer;
 
   if (action === "pause") {
     if (t.status !== "running") return null;
-    Object.assign(timer, { status: "paused", remainingSec: left });
+    timer = withTimes(t, { status: "paused", pausedAt: now }, now);
   } else if (action === "resume") {
-    if (t.status !== "paused") return null;
-    Object.assign(timer, { status: "running", remainingSec: left });
+    if (t.status !== "paused" || !t.pausedAt) return null;
+    timer = withTimes(t, { status: "running", pausedAt: null, accumulatedPausedMs: t.accumulatedPausedMs + (now - t.pausedAt) }, now);
   } else if (action === "stop" || action === "skip") {
-    const isBreakMode = t.mode === "short_break" || t.mode === "long_break";
-    Object.assign(timer, {
-      status: "idle",
-      mode: isBreakMode ? "pomodoro" : t.mode,
-      remainingSec: next.start.durationSec,
+    timer = withTimes(t, {
+      status: "idle", mode: isBreakMode(t.mode) ? "pomodoro" : t.mode,
+      startedAt: null, pausedAt: null, accumulatedPausedMs: 0, sessionId: null,
       plannedDurationSec: next.start.durationSec,
-    });
+    }, now);
     next.breakOption = null;
   } else if (action === "start") {
     if (active) return null;
@@ -46,24 +46,28 @@ export function predictTimer(state, receivedAt, action, mode, now = Date.now()) 
       : breakOption && breakOption.mode === mode
         ? breakOption
         : { mode, durationSec: start.durationSec }; // unusual; the server's answer corrects the length
-    Object.assign(timer, { status: "running", mode: chosen.mode, remainingSec: chosen.durationSec, plannedDurationSec: chosen.durationSec });
+    timer = withTimes(t, {
+      status: "running", mode: chosen.mode, plannedDurationSec: chosen.durationSec,
+      startedAt: now, pausedAt: null, accumulatedPausedMs: 0, sessionId: "pending",
+    }, now);
     next.breakOption = null;
   } else {
     return null;
   }
-  return { state: { ...state, justCompleted: false, timer, next }, receivedAt: now };
+  return { ...state, justCompleted: false, timer, next };
 }
 
 /**
- * Should a polled snapshot replace what the popup shows? Polls are dropped
- * while a command is in flight and when they were requested before the latest
- * command was acknowledged (they may predate it), so a slow poll can never
- * undo a click. (updated_at is not compared: the website stamps it with the
- * browser's clock, which may lag the server's.)
+ * Should a polled snapshot replace what is shown? Dropped while a command is
+ * in flight, when requested before the latest command was acknowledged (it may
+ * predate it), or when it is an older version than the one shown (all versions
+ * are stamped by the server, so they order correctly).
  */
-export function shouldApplyPoll({ inFlight, pollStartedAt, lastAckAt }) {
+export function shouldApplyPoll({ inFlight, pollStartedAt, lastAckAt, currentUpdatedAt, incomingUpdatedAt }) {
   if (inFlight) return false;
-  return !(lastAckAt && pollStartedAt < lastAckAt);
+  if (lastAckAt && pollStartedAt < lastAckAt) return false;
+  if (currentUpdatedAt && incomingUpdatedAt && Date.parse(incomingUpdatedAt) < Date.parse(currentUpdatedAt)) return false;
+  return true;
 }
 
 /**
