@@ -69,22 +69,23 @@ function SubtasksCol({ activeTask, subtasks, onToggleSubtask }: Pick<Props, "act
       </div>
       <div
         className="relative flex flex-col overflow-y-auto dock-subtasks"
-        style={{ gap: 2, maxHeight: 104, paddingRight: 4 }}
+        style={{ gap: 2, maxHeight: 128, paddingRight: 4 }}
       >
         {subtasks.map((st) => (
           <button
             key={st.id}
             onClick={() => onToggleSubtask(st)}
-            className="flex items-center text-left rounded-lg transition-colors hover:bg-white/5"
+            className="flex items-start text-left rounded-lg transition-colors btn-hover-surface"
             style={{ gap: 10, padding: "7px 8px" }}
           >
             {st.done
-              ? <CheckCircle2 size={16} className="shrink-0" style={{ color: "var(--color-primary)" }} />
-              : <Circle size={16} className="shrink-0" style={{ color: "var(--color-on-surface-variant)" }} />}
+              ? <CheckCircle2 size={16} className="shrink-0" style={{ color: "var(--color-primary)", marginTop: 1 }} />
+              : <Circle size={16} className="shrink-0" style={{ color: "var(--color-on-surface-variant)", marginTop: 1 }} />}
+            {/* Full title, wrapped — subtasks are the point of the dock, never truncate them. */}
             <span
-              className="truncate"
+              className="min-w-0"
               style={{
-                fontSize: 13,
+                fontSize: 13, lineHeight: 1.4, whiteSpace: "normal", overflowWrap: "anywhere",
                 color: st.done ? "var(--color-on-surface-variant)" : "var(--color-on-surface)",
                 textDecoration: st.done ? "line-through" : "none",
               }}
@@ -266,7 +267,7 @@ export function FocusDock(props: Props) {
           className="glass relative"
           style={{
             borderRadius: 22, padding: "16px 18px",
-            width: "min(880px, calc(100vw - 36px))",
+            width: "min(1160px, calc(100vw - 36px))",
             transform: focusMode ? "translateY(160%)" : "none",
             opacity: focusMode ? 0 : 1,
             transition: "transform .5s var(--ease), opacity .4s",
@@ -276,11 +277,11 @@ export function FocusDock(props: Props) {
           <div
             className="grid focus-dock-grid"
             style={{
-              // minmax(0, …) so long subtask titles can't steal width; music keeps a usable minimum.
+              // Subtasks get the most room (titles wrap); session + music keep usable minimums.
               // Narrow screens stack the columns (globals.css .focus-dock-grid).
               ["--dock-cols" as string]: isConnected
-                ? "minmax(0, 1fr) 1px minmax(0, 0.8fr) 1px minmax(250px, 1.2fr) auto"
-                : "minmax(0, 1.2fr) 1px minmax(0, 1fr) auto",
+                ? "minmax(0, 1.75fr) 1px minmax(190px, 0.7fr) 1px minmax(270px, 1fr) auto"
+                : "minmax(0, 1.8fr) 1px minmax(190px, 0.8fr) auto",
               gap: 18, minHeight: 108,
             } as React.CSSProperties}
           >
