@@ -15,6 +15,7 @@ import { toast } from "sonner";
 import { useAIPanel } from "@/lib/stores/ai";
 import type { Project, Subtask, Task, Tag as TagType, TaskWithTags, UserSettings } from "@/types/database";
 import { PomodoroRating } from "@/components/timer/PomodoroRating";
+import { TaskNotes } from "@/components/timer/TaskNotes";
 
 const PROJECT_COLORS = [
   "#ff5fa2", "#b06bf6", "#5fb0ff", "#46c98b",
@@ -152,11 +153,6 @@ function TaskRow({
                   · {subsDone}/{subtasks.length} subtasks
                 </span>
               )}
-              {task.notes && (
-                <span className="truncate" style={{ fontSize: 11.5, color: "var(--color-on-surface-variant)", opacity: 0.6, maxWidth: 200 }}>
-                  · {task.notes}
-                </span>
-              )}
               {task.tags?.map((tag) => (
                 <span
                   key={tag.id}
@@ -170,6 +166,7 @@ function TaskRow({
                 </span>
               ))}
             </div>
+            {task.notes && <TaskNotes text={task.notes} style={{ marginTop: 6, opacity: 0.85 }} />}
           </div>
         </button>
 
