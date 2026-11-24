@@ -12,6 +12,7 @@ import { TimerRing } from "@/components/timer/TimerRing";
 import { TimerControls } from "@/components/timer/TimerControls";
 import { TaskPicker } from "@/components/timer/TaskPicker";
 import { FocusDock } from "@/components/timer/FocusDock";
+import { TaskNotes } from "@/components/timer/TaskNotes";
 import { Pencil } from "lucide-react";
 import { toast } from "sonner";
 import type { Project, Subtask, TaskWithTags } from "@/types/database";
@@ -21,6 +22,10 @@ export default function FocusPage() {
   const qc = useQueryClient();
 
   const [taskPickerOpen, setTaskPickerOpen] = useState(false);
+  // Task description under the title: shown on hover, or pinned by double-click.
+  const [notesHover, setNotesHover] = useState(false);
+  const [notesPinned, setNotesPinned] = useState(false);
+  const titleClickTimer = useRef<number | null>(null);
   const [activeTask, setActiveTask] = useState<TaskWithTags | null>(null);
   const [activeProject, setActiveProject] = useState<Project | null>(null);
   const [customMinutes, setCustomMinutes] = useState(45);
@@ -347,8 +352,23 @@ export default function FocusPage() {
             </span>
           )}
 
+          {/* Title: click = pick a task; hover shows the description; double-click pins it open. */}
+          <div
+            className="flex flex-col items-center"
+            onMouseEnter={() => setNotesHover(true)}
+            onMouseLeave={() => setNotesHover(false)}
+          >
           <button
-            onClick={() => setTaskPickerOpen(true)}
+            onClick={() => {
+              // Wait a beat so a double-click (toggle notes) doesn't also open the picker.
+              if (titleClickTimer.current) window.clearTimeout(titleClickTimer.current);
+              titleClickTimer.current = window.setTimeout(() => setTaskPickerOpen(true), activeTask?.notes ? 240 : 0);
+            }}
+            onDoubleClick={() => {
+              if (titleClickTimer.current) window.clearTimeout(titleClickTimer.current);
+              if (activeTask?.notes) setNotesPinned((v) => !v);
+            }}
+            title={activeTask?.notes ? "Click to change task · double-click to show the description" : undefined}
             className="hover-lift flex items-center"
             style={{ gap: 10, padding: "4px 8px", borderRadius: 12 }}
           >
@@ -364,6 +384,10 @@ export default function FocusPage() {
             </span>
             <Pencil size={15} className="shrink-0" style={{ color: "var(--color-on-surface-variant)", opacity: 0.6 }} />
           </button>
+          {activeTask?.notes && (notesHover || notesPinned) && (
+            <TaskNotes key={activeTask.id} text={activeTask.notes} align="center" style={{ maxWidth: 460, padding: "0 8px", marginTop: 2 }} />
+          )}
+          </div>
 
           {activeTask && activeTask.tags && activeTask.tags.length > 0 && (
             <div className="flex items-center gap-1.5 flex-wrap justify-center">
